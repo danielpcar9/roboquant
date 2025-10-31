@@ -17,6 +17,22 @@ print("Archivo post_mortem.py creado - REEMPLAZAR con codigo del compendio")
     'alerts.py': '''# Ver seccion 16 del compendio
 # Copiar codigo completo de alerts.py
 print("Archivo alerts.py creado - REEMPLAZAR con codigo del compendio")
+''',
+    'donchian_strategy.py': '''# Estrategia Donchian Breakout
+# Copiar codigo completo de donchian_strategy.py
+print("Archivo donchian_strategy.py creado - REEMPLAZAR con codigo del compendio")
+''',
+    'webhook_receiver.py': '''# Webhook receiver for trading signals
+# Copiar codigo completo de webhook_receiver.py
+print("Archivo webhook_receiver.py creado - REEMPLAZAR con codigo del compendio")
+''',
+    'export_mt5_data.py': '''# Export historical data from MT5
+# Copiar codigo completo de export_mt5_data.py
+print("Archivo export_mt5_data.py creado - REEMPLAZAR con codigo del compendio")
+''',
+    'backtest_apex_vectorbt.py': '''# Backtest using vectorbt
+# Copiar codigo completo de backtest_apex_vectorbt.py
+print("Archivo backtest_apex_vectorbt.py creado - REEMPLAZAR con codigo del compendio")
 '''
 }
 
