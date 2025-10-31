@@ -1,0 +1,34 @@
+# Entorno virtual
+venv/
+env/
+.venv/
+
+# Archivo de credenciales
+.env
+
+# Logs y datos temporales
+logs/
+*.log
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-*
+
+# Base de datos local
+*.db
+*.sqlite3
+
+# Archivos de sistema
+Thumbs.db
+.DS_Store
