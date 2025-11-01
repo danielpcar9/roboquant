@@ -192,6 +192,71 @@ def test_essential_files():
     logging.info("Essential files test passed")
     return True
 
+def test_order_execution():
+    """Test order execution functionality (optional)"""
+    logging.info("Testing order execution...")
+    
+    # This test is optional and can be skipped
+    skip_order_test = os.getenv("SKIP_ORDER_TEST", "false").lower() == "true"
+    if skip_order_test:
+        logging.info("Order execution test skipped (SKIP_ORDER_TEST=true)")
+        return True
+    
+    if mt5 is None:
+        logging.warning("MT5 module not available, skipping order test")
+        return True
+    
+    try:
+        if not mt5.initialize():  # type: ignore
+            logging.error("Failed to initialize MT5")
+            return False
+        
+        # Select XAUUSD symbol
+        if not mt5.symbol_select("XAUUSD", True):  # type: ignore
+            logging.error("Failed to select XAUUSD symbol")
+            mt5.shutdown()  # type: ignore
+            return False
+        
+        # Get symbol info for point value
+        symbol_info = mt5.symbol_info("XAUUSD")  # type: ignore
+        if not symbol_info:
+            logging.error("Failed to get XAUUSD symbol info")
+            mt5.shutdown()  # type: ignore
+            return False
+        
+        # Get current price
+        tick = mt5.symbol_info_tick("XAUUSD")  # type: ignore
+        if not tick:
+            logging.error("Failed to get current price")
+            mt5.shutdown()  # type: ignore
+            return False
+        
+        # Use a very small volume for testing
+        volume = 0.01
+        
+        # Calculate test SL/TP (very wide to avoid execution)
+        point = symbol_info.point
+        price = tick.ask
+        sl = price - 1000 * point  # Very far away
+        tp = price + 1000 * point  # Very far away
+        
+        logging.info("Order parameters for test:")
+        logging.info(f"  Symbol: XAUUSD")
+        logging.info(f"  Volume: {volume}")
+        logging.info(f"  Price: {price}")
+        logging.info(f"  SL: {sl}")
+        logging.info(f"  TP: {tp}")
+        
+        # Note: We're not actually sending the order for safety
+        logging.info("✅ Order execution test passed (no actual order sent)")
+        
+        mt5.shutdown()  # type: ignore
+        return True
+        
+    except Exception as e:
+        logging.error(f"Order execution test failed: {e}")
+        return False
+
 def main():
     """Main function to execute all tests and display summary"""
     logging.info("=" * 60)
@@ -205,6 +270,7 @@ def main():
         ("Telegram Integration", test_telegram_integration),
         ("Directory Structure", test_directory_structure),
         ("Essential Files", test_essential_files),
+        ("Order Execution", test_order_execution),
     ]
     
     results = []

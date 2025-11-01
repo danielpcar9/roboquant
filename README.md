@@ -60,6 +60,16 @@ The strategy uses the following optimized parameters (can be adjusted in [donchi
 - Trading Hours: 13-22 (London and NY sessions)
 - Magic Number: 234000
 
+## Broker Setup - Exness Pro
+
+Optimized for Exness Pro accounts:
+- Account Type: Pro (ECN execution)
+- Minimum Deposit: $500 (for 0.01 lot)
+- Typical Spread: 1.5-2.5 pips on XAUUSD
+- Free VPS with $500+ balance
+
+Testing: Run test_complete_setup.py before live trading
+
 ## Requirements
 
 - MetaTrader 5

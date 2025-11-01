@@ -76,14 +76,19 @@ def test_exness_symbols():
                 logging.warning(f"Failed to get tick data for symbol {symbol.name}")
                 continue
             
-            # Display key information
+            # Display key information including description
             logging.info(f"Symbol: {symbol.name}")
+            logging.info(f"  Description: {getattr(symbol_info, 'description', 'N/A')}")
             logging.info(f"  Spread: {getattr(symbol_info, 'spread', 'N/A')} points")
             logging.info(f"  Minimum Volume: {getattr(symbol_info, 'volume_min', 'N/A')}")
             logging.info(f"  Point Value: {getattr(symbol_info, 'point', 'N/A')}")
             logging.info(f"  Bid Price: {getattr(tick, 'bid', 'N/A')}")
             logging.info(f"  Ask Price: {getattr(tick, 'ask', 'N/A')}")
             logging.info("-" * 40)
+            
+            # Exness-specific information
+            if 'EXNESS' in getattr(symbol_info, 'description', '').upper():
+                logging.info(f"  ⚡ Exness-specific symbol detected")
         
         return True
         
