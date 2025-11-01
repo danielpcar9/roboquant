@@ -19,6 +19,7 @@ TAKE_PROFIT_POINTS = 300      # Maintains 1:2 ratio
 TIMEFRAME = mt5.TIMEFRAME_M5  # Reduced noise, more reliable signals
 TRADING_HOUR_START = 13       # London session (better liquidity)
 TRADING_HOUR_END = 22         # NY session
+MAGIC_NUMBER = 123456         # Magic number to identify bot trades
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
