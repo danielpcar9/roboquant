@@ -5,11 +5,11 @@ env/
 
 # Archivo de credenciales
 .env
+.env.example
 
 # Logs y datos temporales
 logs/
 *.log
-data/
 
 # Backtest results
 backtest_results.html
@@ -17,11 +17,18 @@ backtest_trades.csv
 backtest_stats.csv
 optimization_results.csv
 
+# Empty directories (include .gitkeep files)
+.gitkeep
+
 # Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.pyi
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -34,6 +41,11 @@ __pycache__/
 # Base de datos local
 *.db
 *.sqlite3
+
+# Setup and distribution
+build/
+dist/
+*.egg-info/
 
 # Archivos de sistema
 Thumbs.db
