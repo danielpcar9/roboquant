@@ -11,6 +11,12 @@ logs/
 *.log
 data/
 
+# Backtest results
+backtest_results.html
+backtest_trades.csv
+backtest_stats.csv
+optimization_results.csv
+
 # Python cache
 __pycache__/
 *.pyc
