@@ -30,6 +30,22 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - [run_backtest.bat](file:///C:/Users/edgar/roboquant/run_backtest.bat) - Batch file to run backtesting
 - [test_mt5_connection.py](file:///C:/Users/edgar/roboquant/test_mt5_connection.py) - Script to test MT5 connection
 
+## Configuración Actualizada
+
+Los parámetros de trading han sido optimizados para operar eficazmente con el oro (XAUUSD), considerando su volatilidad y sesiones de mayor liquidez:
+
+- **Período Donchian**: 50 (anteriormente 20) - Aumentado para reducir señales falsas
+- **Stop Loss**: 150 puntos (anteriormente 50 puntos) - Ajustado críticamente para la volatilidad del oro
+- **Take Profit**: 300 puntos (anteriormente 100 puntos) - Mantiene el ratio 1:2
+- **Timeframe**: M5 (anteriormente M1) - Reduce el ruido del mercado
+- **Horas de Trading**: 13:00-22:00 GMT (anteriormente 24/7) - Sesiones de Londres y NY para mejor liquidez
+
+### Configuración de Seguridad Webhook
+
+El webhook receiver ahora requiere autenticación HMAC para prevenir señales de trading no autorizadas:
+
+- **WEBHOOK_SECRET_KEY**: Variable de entorno que debe añadirse al archivo [.env](file:///C:/Users/edgar/roboquant/.env) con una clave secreta larga y aleatoria
+
 ## Configuration
 
 The strategy uses the following optimized parameters (can be adjusted in [donchian_strategy.py](file:///C:/Users/edgar/roboquant/donchian_strategy.py)):
