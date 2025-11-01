@@ -5,7 +5,6 @@ env/
 
 # Archivo de credenciales
 .env
-.env.example
 
 # Logs y datos temporales
 logs/
