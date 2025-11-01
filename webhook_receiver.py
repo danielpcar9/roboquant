@@ -2,7 +2,11 @@ import json
 import logging
 from datetime import datetime
 from flask import Flask, request, jsonify
-import metatrader5 as mt5
+# Try to import metatrader5, fallback to MetaTrader5 if needed
+try:
+    import metatrader5 as mt5
+except ImportError:
+    import MetaTrader5 as mt5  # type: ignore
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
 
@@ -25,7 +29,7 @@ def initialize_mt5():
     """Initialize MT5 connection"""
     global mt5_connected
     try:
-        if not mt5.initialize():
+        if not mt5.initialize():  # type: ignore
             logging.error("Failed to initialize MT5")
             return False
         
@@ -39,7 +43,7 @@ def initialize_mt5():
         server = os.getenv('MT5_SERVER', '')
         
         if login and password and server:
-            authorized = mt5.login(login, password=password, server=server)
+            authorized = mt5.login(login, password=password, server=server)  # type: ignore
             if not authorized:
                 logging.error("Failed to login to MT5")
                 return False
@@ -78,18 +82,18 @@ def process_trade_signal(signal_data):
                 return False
         
         # Select symbol
-        if not mt5.symbol_select(symbol, True):
+        if not mt5.symbol_select(symbol, True):  # type: ignore
             logging.error(f"Failed to select symbol {symbol}")
             return False
         
         # Get current price
-        tick = mt5.symbol_info_tick(symbol)
+        tick = mt5.symbol_info_tick(symbol)  # type: ignore
         if tick is None:
             logging.error(f"Failed to get tick data for {symbol}")
             return False
             
         price = tick.ask if order_type == 'BUY' else tick.bid
-        point = mt5.symbol_info(symbol).point
+        point = mt5.symbol_info(symbol).point  # type: ignore
         
         # Calculate SL and TP
         if order_type == 'BUY':

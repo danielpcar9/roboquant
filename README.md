@@ -44,7 +44,7 @@ The strategy uses the following parameters (can be adjusted in [donchian_strateg
 1. Clone this repository
 2. Install required packages:
    ```
-   pip install MetaTrader5 python-dotenv
+   pip install metatrader5 python-dotenv
    ```
 3. Configure your MT5 credentials in the [.env](file:///C:/Users/edgar/roboquant/.env) file
 

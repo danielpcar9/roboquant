@@ -1,16 +1,36 @@
 import os
 import pandas as pd
-import metatrader5 as mt5
+# Try to import metatrader5, fallback to MetaTrader5 if needed
+try:
+    import metatrader5 as mt5
+except ImportError:
+    import MetaTrader5 as mt5  # type: ignore
+
 from datetime import datetime, timedelta
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
+def timeframe_to_string(timeframe):
+    """Convert MT5 timeframe constant to string representation"""
+    timeframe_map = {
+        mt5.TIMEFRAME_M1: 'M1',
+        mt5.TIMEFRAME_M5: 'M5',
+        mt5.TIMEFRAME_M15: 'M15',
+        mt5.TIMEFRAME_M30: 'M30',
+        mt5.TIMEFRAME_H1: 'H1',
+        mt5.TIMEFRAME_H4: 'H4',
+        mt5.TIMEFRAME_D1: 'D1',
+        mt5.TIMEFRAME_W1: 'W1',
+        mt5.TIMEFRAME_MN1: 'MN1'
+    }
+    return timeframe_map.get(timeframe, 'H1')  # Default to H1 if not found
+
 def initialize_mt5():
     """Initialize MT5 connection"""
     try:
-        if not mt5.initialize():
+        if not mt5.initialize():  # type: ignore
             logging.error("Failed to initialize MT5")
             return False
             
@@ -28,7 +48,7 @@ def get_historical_data(symbol, timeframe, days_back=365):
         from_date = to_date - timedelta(days=days_back)
         
         # Get rates
-        rates = mt5.copy_rates_range(symbol, timeframe, from_date, to_date)
+        rates = mt5.copy_rates_range(symbol, timeframe, from_date, to_date)  # type: ignore
         
         if rates is None or len(rates) == 0:
             logging.error(f"Failed to get rates for {symbol}")
@@ -66,14 +86,15 @@ def export_data(symbol="XAUUSD", timeframe=mt5.TIMEFRAME_H1, days_back=1825):
             return False
             
         # Save to CSV
-        filename = f"{data_dir}/{symbol}_{mt5.TimeFrameToString(timeframe)}.csv"
+        timeframe_str = timeframe_to_string(timeframe)
+        filename = f"{data_dir}/{symbol}_{timeframe_str}.csv"
         df.to_csv(filename)
         logging.info(f"Data saved to {filename}")
         
         # Display basic info
         print(f"\nData Summary:")
         print(f"Symbol: {symbol}")
-        print(f"Timeframe: {mt5.TimeFrameToString(timeframe)}")
+        print(f"Timeframe: {timeframe_str}")
         print(f"Rows: {len(df)}")
         print(f"Date Range: {df.index[0]} to {df.index[-1]}")
         print(f"File: {filename}")
@@ -102,7 +123,7 @@ def main():
         logging.error(f"Error in main: {e}")
     finally:
         # Shutdown MT5
-        mt5.shutdown()
+        mt5.shutdown()  # type: ignore
         logging.info("MT5 connection closed")
 
 if __name__ == "__main__":

@@ -3,7 +3,11 @@ import os
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
-import metatrader5 as mt5
+# Try to import metatrader5, fallback to MetaTrader5 if needed
+try:
+    import metatrader5 as mt5
+except ImportError:
+    import MetaTrader5 as mt5  # type: ignore
 from safety import Safety
 from mt5_utils import build_and_send_order, estimate_lots_by_risk
 from post_mortem import log_trade
@@ -13,7 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 # Inicializar MT5
-if not mt5.initialize():
+if not mt5.initialize():  # type: ignore
     logging.error("No se pudo inicializar MT5")
     quit()
 
@@ -21,9 +25,9 @@ LOGIN = int(os.getenv("MT5_LOGIN", "0"))
 PASSWORD = os.getenv("MT5_PASSWORD", "")
 SERVER = os.getenv("MT5_SERVER", "")
 
-if not mt5.login(LOGIN, password=PASSWORD, server=SERVER):
+if not mt5.login(LOGIN, password=PASSWORD, server=SERVER):  # type: ignore
     logging.error("Login fallido")
-    mt5.shutdown()
+    mt5.shutdown()  # type: ignore
     quit()
 
 # Inicializar modulo de seguridad
@@ -39,12 +43,12 @@ ok, reason = safety.check_all(new_symbol=symbol)
 if not ok:
     alert_safety_violation(reason)
     logging.error("Safety check failed: %s", reason)
-    mt5.shutdown()
+    mt5.shutdown()  # type: ignore
     quit()
 
 # Obtener precios actuales
-tick = mt5.symbol_info_tick(symbol)
-sym_info = mt5.symbol_info(symbol)
+tick = mt5.symbol_info_tick(symbol)  # type: ignore
+sym_info = mt5.symbol_info(symbol)  # type: ignore
 point = sym_info.point
 
 # Calcular entry y stops
@@ -84,7 +88,7 @@ try:
         'entry_price': result.price,
         'sl': sl_price,
         'tp': tp_price,
-        'balance_before': mt5.account_info().balance,
+        'balance_before': mt5.account_info().balance,  # type: ignore
         'hour_of_day': datetime.utcnow().hour,
         'day_of_week': datetime.utcnow().weekday()
     })
@@ -99,4 +103,4 @@ except Exception as e:
     from alerts import telegram_alert
     telegram_alert("Error al ejecutar orden: " + str(e))
 
-mt5.shutdown()
+mt5.shutdown()  # type: ignore

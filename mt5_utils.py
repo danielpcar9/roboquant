@@ -1,14 +1,18 @@
 # mt5_utils.py
 import time
 import logging
-import metatrader5 as mt5
+# Try to import metatrader5, fallback to MetaTrader5 if needed
+try:
+    import metatrader5 as mt5
+except ImportError:
+    import MetaTrader5 as mt5  # type: ignore
 
 
 def get_filling_mode(symbol, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
     
-    sym = mt5_module.symbol_info(symbol)
+    sym = mt5_module.symbol_info(symbol)  # type: ignore
     if not sym:
         logging.warning("Symbol %s info not available", symbol)
         return mt5_module.ORDER_FILLING_RETURN
@@ -39,7 +43,7 @@ def normalize_volume(symbol, requested_volume, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
     
-    info = mt5_module.symbol_info(symbol)
+    info = mt5_module.symbol_info(symbol)  # type: ignore
     if not info:
         logging.error("Symbol %s info not available", symbol)
         return requested_volume
@@ -60,16 +64,16 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
     if mt5_module is None:
         mt5_module = mt5
     
-    account_info = mt5_module.account_info()
+    account_info = mt5_module.account_info()  # type: ignore  # type: ignore
     if not account_info:
         logging.error("No se pudo obtener informacion de cuenta")
-        sym_info = mt5_module.symbol_info(symbol)
+        sym_info = mt5_module.symbol_info(symbol)  # type: ignore
         return sym_info.volume_min if sym_info else 0.01
     
     balance = float(account_info.balance)
     risk_amount = balance * (risk_pct / 100.0)
     
-    sym_info = mt5_module.symbol_info(symbol)
+    sym_info = mt5_module.symbol_info(symbol)  # type: ignore
     if not sym_info:
         logging.error("Symbol %s info not available", symbol)
         return 0.01
@@ -116,11 +120,11 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     if mt5_module is None:
         mt5_module = mt5
     
-    if not mt5_module.symbol_select(symbol, True):
+    if not mt5_module.symbol_select(symbol, True):  # type: ignore  # type: ignore
         raise RuntimeError("No se pudo seleccionar simbolo " + symbol)
     
-    info = mt5_module.symbol_info(symbol)
-    tick = mt5_module.symbol_info_tick(symbol)
+    info = mt5_module.symbol_info(symbol)  # type: ignore
+    tick = mt5_module.symbol_info_tick(symbol)  # type: ignore  # type: ignore
     
     if not info or not tick:
         raise RuntimeError("No se pudo obtener info/tick de " + symbol)
@@ -154,7 +158,7 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     last_result = None
     for attempt in range(1, retries + 1):
         try:
-            result = mt5_module.order_send(request)
+            result = mt5_module.order_send(request)  # type: ignore  # type: ignore
         except Exception as e:
             logging.exception("Exception en order_send (intento %d)", attempt)
             result = None
@@ -181,7 +185,7 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
     
-    positions = mt5_module.positions_get(ticket=ticket)
+    positions = mt5_module.positions_get(ticket=ticket)  # type: ignore  # type: ignore
     if not positions:
         logging.warning("Posicion %s no encontrada o ya cerrada", ticket)
         return False
@@ -192,10 +196,10 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
     
     if pos.type == mt5_module.POSITION_TYPE_BUY:
         close_type = mt5_module.ORDER_TYPE_SELL
-        price = mt5_module.symbol_info_tick(symbol).bid
+        price = mt5_module.symbol_info_tick(symbol).bid  # type: ignore
     else:
         close_type = mt5_module.ORDER_TYPE_BUY
-        price = mt5_module.symbol_info_tick(symbol).ask
+        price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
     
     request = {
         'action': mt5_module.TRADE_ACTION_DEAL,
@@ -211,7 +215,7 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
         'type_filling': get_filling_mode(symbol, mt5_module)
     }
     
-    result = mt5_module.order_send(request)
+    result = mt5_module.order_send(request)  # type: ignore
     
     if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:
         logging.info("Posicion %s cerrada exitosamente", ticket)

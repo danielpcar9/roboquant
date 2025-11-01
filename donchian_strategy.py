@@ -1,7 +1,11 @@
 import time
 import logging
 from datetime import datetime
-import metatrader5 as mt5
+# Try to import metatrader5, fallback to MetaTrader5 if needed
+try:
+    import metatrader5 as mt5
+except ImportError:
+    import MetaTrader5 as mt5  # type: ignore
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
 
@@ -16,13 +20,17 @@ MAGIC_NUMBER = 234000
 TRADING_HOUR_START = 0
 TRADING_HOUR_END = 23
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+# Set up logging with more detailed level
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
 
 def initialize_mt5():
     """Initialize MT5 connection"""
-    if not mt5.initialize():
+    # Add more detailed initialization info
+    logging.info("Attempting to initialize MT5...")
+    if not mt5.initialize():  # type: ignore
         logging.error("Failed to initialize MT5")
+        error = mt5.last_error()  # type: ignore
+        logging.error(f"MT5 initialization error: {error}")
         return False
     logging.info("MT5 initialized successfully")
     return True
@@ -30,13 +38,16 @@ def initialize_mt5():
 def in_trading_hours():
     """Check if current time is within trading hours"""
     current_hour = datetime.now().hour
-    return TRADING_HOUR_START <= current_hour <= TRADING_HOUR_END
+    in_hours = TRADING_HOUR_START <= current_hour <= TRADING_HOUR_END
+    logging.debug(f"Current hour: {current_hour}, Trading hours: {TRADING_HOUR_START}-{TRADING_HOUR_END}, In hours: {in_hours}")
+    return in_hours
 
 def get_donchian_channels(symbol, period):
     """Calculate Donchian channels"""
-    rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 1, period)
+    logging.debug(f"Calculating Donchian channels for {symbol} with period {period}")
+    rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 1, period)  # type: ignore
     if rates is None or len(rates) < period:
-        logging.error("Failed to get rate data for Donchian calculation")
+        logging.error(f"Failed to get rate data for Donchian calculation. Rates: {rates}, Length: {len(rates) if rates else 0}")
         return None, None
     
     highs = [rate['high'] for rate in rates]
@@ -45,13 +56,15 @@ def get_donchian_channels(symbol, period):
     upper_channel = max(highs)
     lower_channel = min(lows)
     
+    logging.debug(f"Calculated channels - Upper: {upper_channel}, Lower: {lower_channel}")
     return upper_channel, lower_channel
 
 def calculate_avg_momentum(symbol, lookback):
     """Calculate average momentum over a lookback period"""
-    rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 1, lookback)
+    logging.debug(f"Calculating momentum for {symbol} with lookback {lookback}")
+    rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 1, lookback)  # type: ignore
     if rates is None or len(rates) < lookback:
-        logging.error("Failed to get rate data for momentum calculation")
+        logging.error(f"Failed to get rate data for momentum calculation. Rates: {rates}, Length: {len(rates) if rates else 0}")
         return 0
     
     sum_momentum = 0
@@ -59,27 +72,38 @@ def calculate_avg_momentum(symbol, lookback):
         body = abs(rate['close'] - rate['open'])
         sum_momentum += body
     
-    return sum_momentum / lookback if lookback > 0 else 0
+    momentum = sum_momentum / lookback if lookback > 0 else 0
+    logging.debug(f"Calculated momentum: {momentum}")
+    return momentum
 
 def get_current_price(symbol, order_type):
     """Get current price based on order type"""
-    tick = mt5.symbol_info_tick(symbol)
+    logging.debug(f"Getting current price for {symbol}, order type: {order_type}")
+    tick = mt5.symbol_info_tick(symbol)  # type: ignore
     if tick is None:
+        logging.error(f"Failed to get tick data for {symbol}")
         return None
     
-    if order_type == "BUY":
-        return tick.ask
-    else:
-        return tick.bid
+    price = tick.ask if order_type == "BUY" else tick.bid
+    logging.debug(f"Current price for {symbol}: {price}")
+    return price
 
 def execute_trade(symbol, order_type, lots, sl_points, tp_points):
     """Execute a trade with given parameters"""
+    logging.info(f"Attempting to execute {order_type} trade for {symbol}")
     price = get_current_price(symbol, order_type)
     if price is None:
         logging.error("Failed to get current price")
         return False
     
-    point = mt5.symbol_info(symbol).point
+    # Get symbol info for point value
+    symbol_info = mt5.symbol_info(symbol)  # type: ignore
+    if symbol_info is None:
+        logging.error(f"Failed to get symbol info for {symbol}")
+        return False
+        
+    point = symbol_info.point
+    logging.debug(f"Symbol point value: {point}")
     
     if order_type == "BUY":
         sl = price - sl_points * point
@@ -88,10 +112,16 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
         sl = price + sl_points * point
         tp = price - tp_points * point
     
+    logging.info(f"Trade parameters - Price: {price}, SL: {sl}, TP: {tp}, Volume: {lots}")
+    
     try:
         # Normalize volume to ensure it meets broker requirements
+        original_lots = lots
         lots = normalize_volume(symbol, lots)
+        if lots != original_lots:
+            logging.info(f"Volume normalized from {original_lots} to {lots}")
         
+        logging.info(f"Calling build_and_send_order with parameters: symbol={symbol}, side={order_type}, volume={lots}, sl={sl}, tp={tp}")
         result = build_and_send_order(
             symbol=symbol,
             side=order_type,
@@ -103,24 +133,28 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
         
         if result:
             logging.info(f"{order_type} executed: Price={price:.5f} SL={sl:.5f} TP={tp:.5f}")
+            logging.info(f"Order result: {result}")
             return True
         else:
-            logging.error("Failed to execute trade")
+            logging.error("Failed to execute trade - build_and_send_order returned None")
             return False
             
     except Exception as e:
-        logging.error(f"Error executing trade: {e}")
+        logging.error(f"Error executing trade: {e}", exc_info=True)
         return False
 
 def run_strategy(symbol="XAUUSD"):
     """Main strategy function"""
+    logging.info(f"Running strategy for symbol: {symbol}")
+    
     # Check if we're in trading hours
     if not in_trading_hours():
         logging.info("Outside trading hours")
         return
     
     # Check if we already have open positions
-    positions = mt5.positions_get(symbol=symbol)
+    positions = mt5.positions_get(symbol=symbol)  # type: ignore
+    logging.debug(f"Current positions for {symbol}: {positions}")
     if positions is not None and len(positions) > 0:
         logging.info("Position already open, skipping")
         return
@@ -131,59 +165,112 @@ def run_strategy(symbol="XAUUSD"):
         logging.error("Failed to calculate Donchian channels")
         return
     
-    # Get current price
-    tick = mt5.symbol_info_tick(symbol)
+    # Get current price - FIXED: Use bid/ask instead of last
+    tick = mt5.symbol_info_tick(symbol)  # type: ignore
     if tick is None:
         logging.error("Failed to get current tick data")
         return
     
-    current_close = tick.last
+    # Use bid price for analysis (more reliable than 'last')
+    current_close = tick.bid
+    logging.info(f"Current close price (bid): {current_close}")
+    logging.info(f"Upper channel: {upper_channel}, Lower channel: {lower_channel}")
     
     # Calculate momentum values
     current_momentum = calculate_avg_momentum(symbol, MOMENTUM_PERIOD)
     historical_momentum = calculate_avg_momentum(symbol, SAMPLE_PERIOD)
     
+    logging.info(f"Momentum values - Current: {current_momentum}, Historical: {historical_momentum}")
+    
     # Check for breakout conditions
-    if current_close > upper_channel and current_momentum > historical_momentum:
+    bullish_breakout = current_close > upper_channel
+    bearish_breakout = current_close < lower_channel
+    momentum_filter = current_momentum > historical_momentum
+    
+    logging.info(f"Breakout conditions - Bullish: {bullish_breakout}, Bearish: {bearish_breakout}, Momentum filter: {momentum_filter}")
+    
+    if bullish_breakout and momentum_filter:
         # Bullish breakout
         logging.info("Bullish breakout detected")
-        execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
+        success = execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
+        if success:
+            logging.info("BUY trade executed successfully")
+        else:
+            logging.error("Failed to execute BUY trade")
         
-    elif current_close < lower_channel and current_momentum > historical_momentum:
+    elif bearish_breakout and momentum_filter:
         # Bearish breakout
         logging.info("Bearish breakout detected")
-        execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
+        success = execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
+        if success:
+            logging.info("SELL trade executed successfully")
+        else:
+            logging.error("Failed to execute SELL trade")
+    else:
+        logging.info("No breakout conditions met")
+        # Show gap analysis for debugging
+        upper_gap = current_close - upper_channel
+        lower_gap = lower_channel - current_close
+        momentum_diff = current_momentum - historical_momentum
+        logging.debug(f"Gap analysis - Upper gap: {upper_gap:.5f}, Lower gap: {lower_gap:.5f}, Momentum diff: {momentum_diff:.5f}")
 
 def main():
     """Main function to run the strategy"""
+    logging.info("Starting Donchian Breakout Strategy")
+    
     # Initialize MT5
     if not initialize_mt5():
         return
     
     # Select symbol
     symbol = "XAUUSD"
-    if not mt5.symbol_select(symbol, True):
+    logging.info(f"Selecting symbol: {symbol}")
+    if not mt5.symbol_select(symbol, True):  # type: ignore
         logging.error(f"Failed to select symbol {symbol}")
-        mt5.shutdown()
+        mt5.shutdown()  # type: ignore
         return
+    
+    # Initialize safety module
+    safety = Safety(mt5_module=mt5)
     
     logging.info("Donchian Breakout Strategy started")
     logging.info(f"Parameters: Donchian Period={DONCHIAN_PERIOD}, Momentum Period={MOMENTUM_PERIOD}")
     
     try:
+        # Run once immediately for testing
+        logging.info("Running strategy immediately for testing...")
+        
+        # Check safety before running strategy
+        ok, reason = safety.check_all(new_symbol=symbol)
+        if not ok:
+            logging.error(f"Safety check failed: {reason}")
+            logging.info("Skipping strategy execution due to safety check failure")
+        else:
+            logging.info("Safety checks passed")
+            run_strategy(symbol)
+        
+        # Then continue with the loop
         while True:
             # Run strategy
-            run_strategy(symbol)
+            # Check safety before running strategy
+            ok, reason = safety.check_all(new_symbol=symbol)
+            if not ok:
+                logging.error(f"Safety check failed: {reason}")
+                logging.info("Skipping strategy execution due to safety check failure")
+            else:
+                logging.info("Safety checks passed")
+                run_strategy(symbol)
             
             # Wait before next check (60 seconds)
+            logging.debug("Waiting 60 seconds before next check...")
             time.sleep(60)
             
     except KeyboardInterrupt:
         logging.info("Strategy stopped by user")
     except Exception as e:
-        logging.error(f"Error in main loop: {e}")
+        logging.error(f"Error in main loop: {e}", exc_info=True)
     finally:
-        mt5.shutdown()
+        mt5.shutdown()  # type: ignore
         logging.info("MT5 connection closed")
 
 if __name__ == "__main__":

@@ -5,7 +5,11 @@ import logging
 from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
-import metatrader5 as mt5
+# Try to import metatrader5, fallback to MetaTrader5 if needed
+try:
+    import metatrader5 as mt5
+except ImportError:
+    import MetaTrader5 as mt5  # type: ignore
 
 KILL_SWITCH_FILE = os.path.join(os.path.dirname(__file__), 'config', 'kill_switch.flag')
 
@@ -48,7 +52,7 @@ class Safety:
             json.dump(data, f)
     
     def check_global_drawdown(self):
-        info = self.mt5.account_info()
+        info = self.mt5.account_info()  # type: ignore
         if info is None:
             logging.warning("No se pudo obtener account_info")
             return False, 'no_account_info'
@@ -69,7 +73,7 @@ class Safety:
         return True, None
     
     def check_daily_loss(self):
-        info = self.mt5.account_info()
+        info = self.mt5.account_info()  # type: ignore
         if info is None:
             return False, 'no_account_info'
         
@@ -102,7 +106,7 @@ class Safety:
         return True, None
     
     def check_concurrent_positions(self):
-        positions = self.mt5.positions_get()
+        positions = self.mt5.positions_get()  # type: ignore  # type: ignore
         count = len(positions) if positions else 0
         
         if count >= self.max_concurrent:
@@ -115,7 +119,7 @@ class Safety:
         end = datetime.utcnow()
         start = end - timedelta(days=days)
         
-        rates = self.mt5.copy_rates_range(symbol, self.mt5.TIMEFRAME_D1, start, end)
+        rates = self.mt5.copy_rates_range(symbol, self.mt5.TIMEFRAME_D1, start, end)  # type: ignore  # type: ignore
         
         if rates is None or len(rates) == 0:
             logging.debug("No se obtuvieron rates para %s", symbol)
@@ -129,7 +133,7 @@ class Safety:
     def correlation_ok(self, new_symbol, threshold=None):
         threshold = threshold or self.corr_threshold
         
-        open_positions = self.mt5.positions_get()
+        open_positions = self.mt5.positions_get()  # type: ignore  # type: ignore
         if not open_positions:
             return True, None, None
         
