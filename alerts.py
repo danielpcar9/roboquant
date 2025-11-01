@@ -96,3 +96,71 @@ Remove config/kill_switch.flag to resume.
 Time: {}
 """.format(reason, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
     return telegram_alert(msg)
+
+
+def alert_daily_summary():
+    """Envía resumen diario automático al final del día"""
+    try:
+        from post_mortem import analyze_recent_trades
+        # Try to import metatrader5, fallback to MetaTrader5 if needed
+        try:
+            import metatrader5 as mt5
+        except ImportError:
+            import MetaTrader5 as mt5  # type: ignore
+        
+        # Inicializar MT5 para obtener balance
+        if not mt5.initialize():  # type: ignore
+            logging.error("No se pudo inicializar MT5 para resumen diario")
+            return False
+        
+        account_info = mt5.account_info()  # type: ignore
+        
+        # Analizar trades del día (últimos 999 = todos del día típicamente)
+        metrics = analyze_recent_trades(n=999)
+        
+        if not metrics or metrics.get('n_trades', 0) == 0:
+            msg = """
+📊 RESUMEN DIARIO
+
+Sin trades hoy.
+Balance: ${:.2f}
+
+Fecha: {}
+""".format(account_info.balance if account_info else 0, 
+           datetime.utcnow().strftime('%Y-%m-%d'))
+        else:
+            msg = """
+📊 RESUMEN DIARIO
+
+Trades: {}
+✅ Ganadores: {} ({:.1f}%)
+❌ Perdedores: {}
+
+💰 P&L: ${:.2f}
+📊 Profit Factor: {:.2f}
+  
+📉 Max Racha Perdedora: {}
+
+Balance: ${:.2f}
+
+Fecha: {}
+""".format(
+    metrics.get('n_trades', 0),
+    metrics.get('wins', 0),
+    metrics.get('win_rate', 0) * 100,
+    metrics.get('losses', 0),
+    metrics.get('total_pnl', 0),
+    metrics.get('profit_factor', 0),
+    metrics.get('max_losing_streak', 0),
+    account_info.balance if account_info else 0,
+    datetime.utcnow().strftime('%Y-%m-%d')
+)
+        
+        # Cerrar MT5
+        mt5.shutdown()  # type: ignore
+        
+        return telegram_alert(msg)
+        
+    except Exception as e:
+        logging.error(f"Error generando resumen diario: {e}")
+        return False

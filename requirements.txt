@@ -1,0 +1,9 @@
+metatrader5==5.0.45
+python-dotenv==1.0.0
+pandas==2.1.0
+numpy==1.24.3
+requests==2.31.0
+flask==3.0.0
+vectorbt==0.26.0
+ta-lib==0.4.28
+plotly==5.17.0

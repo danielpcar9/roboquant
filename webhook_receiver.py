@@ -2,6 +2,9 @@ import json
 import logging
 from datetime import datetime
 from flask import Flask, request, jsonify
+import hmac
+import hashlib
+import os
 # Try to import metatrader5, fallback to MetaTrader5 if needed
 try:
     import metatrader5 as mt5
@@ -25,6 +28,9 @@ app = Flask(__name__)
 # Global variables for MT5 connection
 mt5_connected = False
 
+# Get webhook secret key from environment
+SECRET_KEY = os.getenv('WEBHOOK_SECRET_KEY', '')
+
 def initialize_mt5():
     """Initialize MT5 connection"""
     global mt5_connected
@@ -34,7 +40,6 @@ def initialize_mt5():
             return False
         
         # Try to login with credentials from .env
-        import os
         from dotenv import load_dotenv
         load_dotenv()
         
@@ -62,8 +67,8 @@ def process_trade_signal(signal_data):
         symbol = signal_data.get('symbol', 'XAUUSD')
         order_type = signal_data.get('order_type', '').upper()
         volume = float(signal_data.get('volume', 0.01))
-        sl_points = float(signal_data.get('sl_points', 50))
-        tp_points = float(signal_data.get('tp_points', 100))
+        sl_points = float(signal_data.get('sl_points', 150))  # Updated default
+        tp_points = float(signal_data.get('tp_points', 300))  # Updated default
         magic = int(signal_data.get('magic', 234000))
         
         # Validate signal
@@ -129,8 +134,32 @@ def process_trade_signal(signal_data):
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    """Webhook endpoint to receive trading signals"""
+    """Webhook endpoint with HMAC authentication"""
     try:
+        # Verify HMAC signature
+        signature = request.headers.get('X-Webhook-Signature')
+        if not signature:
+            logging.warning("Webhook without signature from %s", request.remote_addr)
+            return jsonify({'error': 'Missing signature'}), 401
+        
+        # Check if SECRET_KEY is configured
+        if not SECRET_KEY:
+            logging.error("WEBHOOK_SECRET_KEY not configured in environment")
+            return jsonify({'error': 'Server not configured for webhook authentication'}), 500
+        
+        # Calculate expected signature
+        body = request.get_data()
+        expected_signature = hmac.new(
+            SECRET_KEY.encode() if SECRET_KEY else b'',
+            body,
+            hashlib.sha256
+        ).hexdigest()
+        
+        # Secure comparison against timing attacks
+        if not hmac.compare_digest(signature, expected_signature):
+            logging.warning("Invalid signature from %s", request.remote_addr)
+            return jsonify({'error': 'Invalid signature'}), 401
+        
         # Get JSON data from request
         data = request.get_json()
         
@@ -138,7 +167,7 @@ def webhook():
             logging.error("No data received in webhook")
             return jsonify({'error': 'No data received'}), 400
         
-        logging.info(f"Webhook received: {data}")
+        logging.info(f"Authenticated webhook received: {data}")
         
         # Process the trade signal
         success = process_trade_signal(data)

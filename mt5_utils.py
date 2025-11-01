@@ -15,28 +15,28 @@ def get_filling_mode(symbol, mt5_module=None):
     sym = mt5_module.symbol_info(symbol)  # type: ignore
     if not sym:
         logging.warning("Symbol %s info not available", symbol)
-        return mt5_module.ORDER_FILLING_RETURN
+        return mt5_module.ORDER_FILLING_RETURN  # type: ignore
     
     try:
         filling_mode = getattr(sym, 'filling_mode', None)
     except AttributeError:
-        return mt5_module.ORDER_FILLING_RETURN
+        return mt5_module.ORDER_FILLING_RETURN  # type: ignore
     
     if filling_mode is None:
-        return mt5_module.ORDER_FILLING_RETURN
+        return mt5_module.ORDER_FILLING_RETURN  # type: ignore
     
     try:
-        if hasattr(mt5_module, 'ORDER_FILLING_FOK'):
-            if filling_mode & mt5_module.ORDER_FILLING_FOK:
-                return mt5_module.ORDER_FILLING_FOK
+        if hasattr(mt5_module, 'ORDER_FILLING_FOK'):  # type: ignore
+            if filling_mode & mt5_module.ORDER_FILLING_FOK:  # type: ignore
+                return mt5_module.ORDER_FILLING_FOK  # type: ignore
         
-        if hasattr(mt5_module, 'ORDER_FILLING_IOC'):
-            if filling_mode & mt5_module.ORDER_FILLING_IOC:
-                return mt5_module.ORDER_FILLING_IOC
+        if hasattr(mt5_module, 'ORDER_FILLING_IOC'):  # type: ignore
+            if filling_mode & mt5_module.ORDER_FILLING_IOC:  # type: ignore
+                return mt5_module.ORDER_FILLING_IOC  # type: ignore
     except Exception as e:
         logging.debug("Error checking filling mode: %s", e)
     
-    return mt5_module.ORDER_FILLING_RETURN
+    return mt5_module.ORDER_FILLING_RETURN  # type: ignore
 
 
 def normalize_volume(symbol, requested_volume, mt5_module=None):
@@ -64,7 +64,7 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
     if mt5_module is None:
         mt5_module = mt5
     
-    account_info = mt5_module.account_info()  # type: ignore  # type: ignore
+    account_info = mt5_module.account_info()  # type: ignore
     if not account_info:
         logging.error("No se pudo obtener informacion de cuenta")
         sym_info = mt5_module.symbol_info(symbol)  # type: ignore
@@ -93,13 +93,25 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
     logging.info("DEBUG: tick_value=%s, point=%s, contract_size=%s", 
                  tick_value, point, getattr(sym_info, 'trade_contract_size', 'N/A'))
     
+    # CORRECTION: More accurate tick values for different instruments
     if tick_value is None or tick_value == 0:
-        logging.warning("tick_value no disponible, usando estimacion conservadora")
+        logging.warning("tick_value no disponible del broker, usando valores conocidos")
         
+        # Valores correctos por tipo de instrumento
         if 'XAU' in symbol or 'GOLD' in symbol:
-            tick_value = 1.0
+            # Oro: 1 lote = 100 oz troy, $1 movimiento = $100
+            tick_value = 100.0
+        elif 'JPY' in symbol:
+            # Pares con JPY (ej: USDJPY)
+            tick_value = 1000.0
+        elif any(curr in symbol for curr in ['EUR', 'GBP', 'AUD', 'NZD']):
+            # Pares major forex
+            tick_value = 10.0
         else:
-            tick_value = 1.0
+            # Default conservador
+            tick_value = 10.0
+        
+        logging.info("Usando tick_value estimado: %.2f para %s", tick_value, symbol)
     
     lots = risk_amount / (stop_distance_points * tick_value)
     
@@ -120,11 +132,11 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     if mt5_module is None:
         mt5_module = mt5
     
-    if not mt5_module.symbol_select(symbol, True):  # type: ignore  # type: ignore
+    if not mt5_module.symbol_select(symbol, True):  # type: ignore
         raise RuntimeError("No se pudo seleccionar simbolo " + symbol)
     
     info = mt5_module.symbol_info(symbol)  # type: ignore
-    tick = mt5_module.symbol_info_tick(symbol)  # type: ignore  # type: ignore
+    tick = mt5_module.symbol_info_tick(symbol)  # type: ignore
     
     if not info or not tick:
         raise RuntimeError("No se pudo obtener info/tick de " + symbol)
@@ -135,10 +147,10 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     
     filling = get_filling_mode(symbol, mt5_module)
     
-    order_type = mt5_module.ORDER_TYPE_BUY if side == "BUY" else mt5_module.ORDER_TYPE_SELL
+    order_type = mt5_module.ORDER_TYPE_BUY if side == "BUY" else mt5_module.ORDER_TYPE_SELL  # type: ignore
     
     request = {
-        'action': mt5_module.TRADE_ACTION_DEAL,
+        'action': mt5_module.TRADE_ACTION_DEAL,  # type: ignore
         'symbol': symbol,
         'volume': volume,
         'type': order_type,
@@ -146,7 +158,7 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
         'deviation': deviation,
         'magic': magic,
         'comment': 'bot_order',
-        'type_time': mt5_module.ORDER_TIME_GTC,
+        'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
         'type_filling': filling
     }
     
@@ -158,12 +170,12 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     last_result = None
     for attempt in range(1, retries + 1):
         try:
-            result = mt5_module.order_send(request)  # type: ignore  # type: ignore
+            result = mt5_module.order_send(request)  # type: ignore
         except Exception as e:
             logging.exception("Exception en order_send (intento %d)", attempt)
             result = None
         
-        if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:
+        if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
             logging.info("Orden enviada exitosamente. Ticket: %s", getattr(result, 'order', 'N/A'))
             return result
         
@@ -185,7 +197,7 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
     
-    positions = mt5_module.positions_get(ticket=ticket)  # type: ignore  # type: ignore
+    positions = mt5_module.positions_get(ticket=ticket)  # type: ignore
     if not positions:
         logging.warning("Posicion %s no encontrada o ya cerrada", ticket)
         return False
@@ -194,15 +206,15 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
     symbol = pos.symbol
     volume = float(pos.volume)
     
-    if pos.type == mt5_module.POSITION_TYPE_BUY:
-        close_type = mt5_module.ORDER_TYPE_SELL
+    if pos.type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
+        close_type = mt5_module.ORDER_TYPE_SELL  # type: ignore
         price = mt5_module.symbol_info_tick(symbol).bid  # type: ignore
     else:
-        close_type = mt5_module.ORDER_TYPE_BUY
+        close_type = mt5_module.ORDER_TYPE_BUY  # type: ignore
         price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
     
     request = {
-        'action': mt5_module.TRADE_ACTION_DEAL,
+        'action': mt5_module.TRADE_ACTION_DEAL,  # type: ignore
         'symbol': symbol,
         'volume': volume,
         'type': close_type,
@@ -211,13 +223,13 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
         'deviation': deviation,
         'magic': int(getattr(pos, 'magic', 0)),
         'comment': 'close_by_bot',
-        'type_time': mt5_module.ORDER_TIME_GTC,
+        'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
         'type_filling': get_filling_mode(symbol, mt5_module)
     }
     
     result = mt5_module.order_send(request)  # type: ignore
     
-    if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:
+    if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
         logging.info("Posicion %s cerrada exitosamente", ticket)
         return True
     else:

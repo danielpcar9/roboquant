@@ -9,16 +9,16 @@ except ImportError:
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
 
-# Configuration parameters
-DONCHIAN_PERIOD = 20
-MOMENTUM_PERIOD = 25
-SAMPLE_PERIOD = 800
+# Configuration parameters - OPTIMIZED VALUES
+DONCHIAN_PERIOD = 50          # Increased to reduce false signals
+MOMENTUM_PERIOD = 40
+SAMPLE_PERIOD = 1000
 LOTS = 0.01
-STOP_LOSS_POINTS = 50
-TAKE_PROFIT_POINTS = 100
-MAGIC_NUMBER = 234000
-TRADING_HOUR_START = 0
-TRADING_HOUR_END = 23
+STOP_LOSS_POINTS = 150        # CRITICAL: Adjusted to gold's volatility
+TAKE_PROFIT_POINTS = 300      # Maintains 1:2 ratio
+TIMEFRAME = mt5.TIMEFRAME_M5  # Reduced noise, more reliable signals
+TRADING_HOUR_START = 13       # London session (better liquidity)
+TRADING_HOUR_END = 22         # NY session
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -45,7 +45,8 @@ def in_trading_hours():
 def get_donchian_channels(symbol, period):
     """Calculate Donchian channels"""
     logging.debug(f"Calculating Donchian channels for {symbol} with period {period}")
-    rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 1, period)  # type: ignore
+    # UPDATED: Use configurable timeframe
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, period)  # type: ignore
     if rates is None or len(rates) < period:
         logging.error(f"Failed to get rate data for Donchian calculation. Rates: {rates}, Length: {len(rates) if rates else 0}")
         return None, None
@@ -62,7 +63,8 @@ def get_donchian_channels(symbol, period):
 def calculate_avg_momentum(symbol, lookback):
     """Calculate average momentum over a lookback period"""
     logging.debug(f"Calculating momentum for {symbol} with lookback {lookback}")
-    rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 1, lookback)  # type: ignore
+    # UPDATED: Use configurable timeframe
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, lookback)  # type: ignore
     if rates is None or len(rates) < lookback:
         logging.error(f"Failed to get rate data for momentum calculation. Rates: {rates}, Length: {len(rates) if rates else 0}")
         return 0
@@ -261,9 +263,9 @@ def main():
                 logging.info("Safety checks passed")
                 run_strategy(symbol)
             
-            # Wait before next check (60 seconds)
-            logging.debug("Waiting 60 seconds before next check...")
-            time.sleep(60)
+            # UPDATED: Sleep interval adjusted for M5 timeframe (300 seconds = 5 minutes)
+            logging.debug("Waiting 300 seconds (5 minutes) before next check...")
+            time.sleep(300)
             
     except KeyboardInterrupt:
         logging.info("Strategy stopped by user")
