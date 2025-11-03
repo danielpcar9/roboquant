@@ -70,6 +70,14 @@ Optimized for Exness Pro accounts:
 
 Testing: Run test_complete_setup.py before live trading
 
+## Event Detection System
+
+The bot uses Forex Factory's economic calendar to detect high-impact events:
+- Automatically scrapes upcoming events every 30 minutes
+- No API key required (web scraping with caching)
+- Filters for High Impact events only
+- Respects rate limits with intelligent caching
+
 ## Requirements
 
 - MetaTrader 5

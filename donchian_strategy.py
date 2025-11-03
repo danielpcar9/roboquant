@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Import caching system
-from api_cache import fetch_upcoming_high_impact_cached, fetch_fred_series_cached
+from forex_factory_scraper import fetch_upcoming_events_cached
 # Try to import metatrader5, fallback to MetaTrader5 if needed
 try:
     import metatrader5 as mt5
@@ -225,12 +225,15 @@ def get_volume_stats(symbol, lookback=20):
     return current_volume, avg_volume
 
 def fetch_upcoming_high_impact(minutes_window=120):
-    """Fetch upcoming high impact events with caching."""
-    return fetch_upcoming_high_impact_cached(minutes_window)
+    """Fetch upcoming high impact events from Forex Factory with caching."""
+    # Convert minutes to hours for the new function
+    hours_ahead = int(minutes_window / 60)
+    return fetch_upcoming_events_cached(hours_ahead)
 
 def fetch_fred_series(series_id, observations=1):
-    """Fetch FRED series data with caching."""
-    return fetch_fred_series_cached(series_id, observations)
+    """Fetch FRED series data - OBSOLETE, using Forex Factory instead."""
+    # This function is obsolete, return None to indicate no data
+    return None
 
 def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     """Calculate lot size based on risk percentage and stop loss distance"""
@@ -420,14 +423,7 @@ def run_strategy(symbol="XAUUSD"):
     bearish_breakout = current_close < lower_channel
     momentum_filter = current_momentum > historical_momentum
     
-    # Macro veto
-    if os.getenv('FRED_KEY'):
-        try:
-            real_yield = fetch_fred_series("DFII10")
-            if real_yield and bullish_breakout and real_yield > 1.5:
-                logging.info(f"Macro veto: real_yield={real_yield:.2f}% blocks BUY")
-                return
-        except: pass
+    # Macro veto - REMOVED: Using Forex Factory instead of FRED
     
     if is_event_mode:
         norm_bull = calculate_normalized_breakout(current_close, upper_channel, atr)
