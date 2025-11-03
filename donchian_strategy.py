@@ -8,6 +8,9 @@ import math
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
+
+# Import caching system
+from api_cache import fetch_upcoming_high_impact_cached, fetch_fred_series_cached
 # Try to import metatrader5, fallback to MetaTrader5 if needed
 try:
     import metatrader5 as mt5
@@ -222,37 +225,12 @@ def get_volume_stats(symbol, lookback=20):
     return current_volume, avg_volume
 
 def fetch_upcoming_high_impact(minutes_window=120):
-    te_key = os.getenv('TRADINGECONOMICS_KEY')
-    if not te_key: return False, None
-    try:
-        url = f"https://api.tradingeconomics.com/calendar?c={te_key}"
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        events = r.json()
-        now = datetime.now(timezone.utc)
-        window_end = now + timedelta(minutes=minutes_window)
-        for ev in events:
-            impact = str(ev.get("Importance",""))
-            date_str = ev.get("Date")
-            if not date_str: continue
-            try: ev_time = datetime.fromisoformat(date_str.replace("Z","+00:00"))
-            except: continue
-            if impact in ["High","3"] and now <= ev_time <= window_end:
-                return True, f"{ev.get('Event','')} at {ev_time.strftime('%H:%M UTC')}"
-        return False, None
-    except: return False, None
+    """Fetch upcoming high impact events with caching."""
+    return fetch_upcoming_high_impact_cached(minutes_window)
 
 def fetch_fred_series(series_id, observations=1):
-    key = os.getenv('FRED_KEY')
-    if not key: return None
-    try:
-        url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={key}&file_type=json&limit={observations}&sort_order=desc"
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        obs = r.json().get("observations",[])
-        if obs and obs[0].get("value") != ".": return float(obs[0]["value"])
-    except: pass
-    return None
+    """Fetch FRED series data with caching."""
+    return fetch_fred_series_cached(series_id, observations)
 
 def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     """Calculate lot size based on risk percentage and stop loss distance"""
