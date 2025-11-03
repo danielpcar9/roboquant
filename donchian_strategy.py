@@ -17,8 +17,10 @@ LOTS = 0.01
 STOP_LOSS_POINTS = 150        # CRITICAL: Adjusted to gold's volatility
 TAKE_PROFIT_POINTS = 300      # Maintains 1:2 ratio
 TIMEFRAME = mt5.TIMEFRAME_M5  # Reduced noise, more reliable signals
-TRADING_HOUR_START = 13       # London session (better liquidity)
-TRADING_HOUR_END = 22         # NY session
+from datetime import timezone
+
+TRADING_HOUR_START = 13  # GMT
+TRADING_HOUR_END = 22    # GMT
 MAGIC_NUMBER = 123456         # Magic number to identify bot trades
 
 # Set up logging with more detailed level
@@ -37,10 +39,15 @@ def initialize_mt5():
     return True
 
 def in_trading_hours():
-    """Check if current time is within trading hours"""
-    current_hour = datetime.now().hour
-    in_hours = TRADING_HOUR_START <= current_hour <= TRADING_HOUR_END
-    logging.debug(f"Current hour: {current_hour}, Trading hours: {TRADING_HOUR_START}-{TRADING_HOUR_END}, In hours: {in_hours}")
+    """Check if current time is within trading hours (GMT)"""
+    # Obtener hora UTC correctamente
+    current_hour_utc = datetime.now(timezone.utc).hour
+    current_hour_local = datetime.now().hour
+    
+    in_hours = TRADING_HOUR_START <= current_hour_utc <= TRADING_HOUR_END
+    
+    logging.debug(f"México: {current_hour_local}:00 | UTC: {current_hour_utc}:00 | Trading: {TRADING_HOUR_START}-{TRADING_HOUR_END} UTC | Active: {in_hours}")
+    
     return in_hours
 
 def get_donchian_channels(symbol, period):
