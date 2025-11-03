@@ -31,6 +31,7 @@ class EventState:
     event_detected_at: Optional[datetime] = None
     candles_waited: int = 0
     last_event_trade_at: Optional[datetime] = None
+    event_info: Optional[str] = None
 
 # Global event state for persistence between loops
 event_state = EventState()
@@ -221,21 +222,37 @@ def get_volume_stats(symbol, lookback=20):
     return current_volume, avg_volume
 
 def fetch_upcoming_high_impact(minutes_window=120):
-    """Fetch upcoming high impact events from TradingEconomics API"""
-    # This would require a TradingEconomics API key
     te_key = os.getenv('TRADINGECONOMICS_KEY')
-    if not te_key:
-        logging.debug("No TradingEconomics API key found, skipping event check")
-        return []
-    
+    if not te_key: return False, None
     try:
-        # This is a placeholder implementation - actual implementation would depend on TradingEconomics API
-        logging.debug(f"Checking for high impact events in next {minutes_window} minutes")
-        # In a real implementation, you would call the TradingEconomics API here
-        return []
-    except Exception as e:
-        logging.error(f"Error fetching economic events: {e}")
-        return []
+        url = f"https://api.tradingeconomics.com/calendar?c={te_key}"
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        events = r.json()
+        now = datetime.now(timezone.utc)
+        window_end = now + timedelta(minutes=minutes_window)
+        for ev in events:
+            impact = str(ev.get("Importance",""))
+            date_str = ev.get("Date")
+            if not date_str: continue
+            try: ev_time = datetime.fromisoformat(date_str.replace("Z","+00:00"))
+            except: continue
+            if impact in ["High","3"] and now <= ev_time <= window_end:
+                return True, f"{ev.get('Event','')} at {ev_time.strftime('%H:%M UTC')}"
+        return False, None
+    except: return False, None
+
+def fetch_fred_series(series_id, observations=1):
+    key = os.getenv('FRED_KEY')
+    if not key: return None
+    try:
+        url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={key}&file_type=json&limit={observations}&sort_order=desc"
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        obs = r.json().get("observations",[])
+        if obs and obs[0].get("value") != ".": return float(obs[0]["value"])
+    except: pass
+    return None
 
 def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     """Calculate lot size based on risk percentage and stop loss distance"""
@@ -330,54 +347,32 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
 def handle_event_state(symbol):
     """Handle event state transitions"""
     global event_state
-    
-    current_time = datetime.now()
+    current_time = datetime.now(timezone.utc)
     
     if event_state.mode == TradingMode.NORMAL:
-        # Check for high impact events
-        events = fetch_upcoming_high_impact()
-        if events:
-            logging.info(f"High impact event detected: {len(events)} events upcoming")
+        has_event, info = fetch_upcoming_high_impact()
+        if has_event:
             event_state.mode = TradingMode.EVENT_DETECTED
             event_state.event_detected_at = current_time
-            return
-    
+            event_state.event_info = info
+            logging.info(f"Event detected: {info}")
     elif event_state.mode == TradingMode.EVENT_DETECTED:
-        # Transition to wait mode
-        event_state.mode = TradingMode.EVENT_WAIT
-        event_state.candles_waited = 0
-        return
-    
+        if event_state.event_detected_at and (current_time - event_state.event_detected_at).seconds >= 60:
+            event_state.mode = TradingMode.EVENT_WAIT
+            event_state.candles_waited = 0
     elif event_state.mode == TradingMode.EVENT_WAIT:
-        # Count candles
         event_state.candles_waited += 1
-        logging.debug(f"Event wait mode: {event_state.candles_waited}/{EVENT_WAIT_CANDLES} candles waited")
-        
         if event_state.candles_waited >= EVENT_WAIT_CANDLES:
             event_state.mode = TradingMode.EVENT_ACTIVE
-            logging.info("Event trading activated")
-        return
-    
+            return True
     elif event_state.mode == TradingMode.EVENT_ACTIVE:
-        # Check if we should exit event mode
-        if event_state.last_event_trade_at:
-            cooldown_period = timedelta(minutes=30)  # 30 minute cooldown
-            if current_time - event_state.last_event_trade_at > cooldown_period:
-                event_state.mode = TradingMode.EVENT_COOLDOWN
-                logging.info("Entering event cooldown period")
-        return
-    
-    elif event_state.mode == TradingMode.EVENT_COOLDOWN:
-        # Cooldown for 1 hour after event trading
-        cooldown_period = timedelta(hours=1)
-        if event_state.last_event_trade_at and \
-           current_time - event_state.last_event_trade_at > cooldown_period:
+        if event_state.last_event_trade_at and (current_time - event_state.last_event_trade_at).seconds/60 >= 30:
             event_state.mode = TradingMode.NORMAL
             event_state.event_detected_at = None
             event_state.candles_waited = 0
             event_state.last_event_trade_at = None
-            logging.info("Returned to normal trading mode")
-        return
+        return True
+    return False
 
 def run_strategy(symbol="XAUUSD"):
     """Main strategy function"""
@@ -400,8 +395,7 @@ def run_strategy(symbol="XAUUSD"):
         logging.info(f"Spread too high: {spread:.2f} points > {MAX_SPREAD_POINTS} points, skipping")
         return
     
-    # Handle event state transitions
-    handle_event_state(symbol)
+    is_event_mode = handle_event_state(symbol)
     
     # Check if we already have open positions
     positions = mt5.positions_get(symbol=symbol)  # type: ignore
@@ -430,7 +424,8 @@ def run_strategy(symbol="XAUUSD"):
     # Calculate ATR for event-driven trading
     atr = calculate_atr(symbol)
     if atr is None:
-        atr = 1.0  # fallback
+        logging.error("ATR failed")
+        return
     
     # Calculate momentum values
     current_momentum = calculate_avg_momentum(symbol, MOMENTUM_PERIOD)
@@ -447,82 +442,41 @@ def run_strategy(symbol="XAUUSD"):
     bearish_breakout = current_close < lower_channel
     momentum_filter = current_momentum > historical_momentum
     
-    # Calculate normalized breakouts for event mode
-    normalized_bullish_breakout = calculate_normalized_breakout(current_close, upper_channel, atr)
-    normalized_bearish_breakout = calculate_normalized_breakout(current_close, lower_channel, atr)
+    # Macro veto
+    if os.getenv('FRED_KEY'):
+        try:
+            real_yield = fetch_fred_series("DFII10")
+            if real_yield and bullish_breakout and real_yield > 1.5:
+                logging.info(f"Macro veto: real_yield={real_yield:.2f}% blocks BUY")
+                return
+        except: pass
     
-    # Event-driven trading logic
-    if event_state.mode in [TradingMode.EVENT_ACTIVE, TradingMode.EVENT_WAIT]:
-        # In event mode, use different criteria
-        event_bullish = bullish_breakout and normalized_bullish_breakout > EVENT_BREAKOUT_ATR_THRESHOLD
-        event_bearish = bearish_breakout and normalized_bearish_breakout > EVENT_BREAKOUT_ATR_THRESHOLD
-        
-        logging.info(f"Event mode breakout conditions - Bullish: {event_bullish}, Bearish: {event_bearish}, Volume spike: {volume_spike}")
-        
-        if (event_bullish or event_bearish) and volume_spike:
-            # Event-driven trade
-            order_type = "BUY" if event_bullish else "SELL"
-            
-            # Calculate dynamic lot size
+    if is_event_mode:
+        norm_bull = calculate_normalized_breakout(current_close, upper_channel, atr)
+        norm_bear = calculate_normalized_breakout(current_close, lower_channel, atr)
+        if (bullish_breakout and norm_bull > EVENT_BREAKOUT_ATR_THRESHOLD and volume_spike and momentum_filter):
             account_info = mt5.account_info()  # type: ignore
             if account_info:
-                balance = account_info.balance
-                # For events, risk 1.5% of account
-                risk_pct = 1.5
-                
-                # Calculate SL based on ATR
                 sl_distance = atr * EVENT_SL_ATR_MULTIPLIER
-                
-                # Calculate TP (2x SL for 2:1 ratio)
-                tp_distance = sl_distance * 2
-                
-                # Calculate lot size
-                lots = compute_lots_from_risk(balance, risk_pct, sl_distance, symbol)
-                
-                # Convert distances to points
-                symbol_info = mt5.symbol_info(symbol)  # type: ignore
-                if symbol_info:
-                    point = symbol_info.point
-                    sl_points = sl_distance / point if point > 0 else STOP_LOSS_POINTS
-                    tp_points = tp_distance / point if point > 0 else TAKE_PROFIT_POINTS
-                    
-                    logging.info(f"Event-driven {order_type} trade detected")
-                    success = execute_trade(symbol, order_type, lots, sl_points, tp_points)
-                    if success:
-                        logging.info(f"Event-driven {order_type} trade executed successfully")
-                        event_state.last_event_trade_at = datetime.now()
-                    else:
-                        logging.error(f"Failed to execute event-driven {order_type} trade")
-            else:
-                logging.error("Failed to get account info for event-driven trade")
+                lots = compute_lots_from_risk(account_info.balance, 1.5, sl_distance, symbol)
+                sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
+                tp_points = sl_points * 2
+                if execute_trade(symbol, "BUY", lots, sl_points, tp_points):
+                    event_state.last_event_trade_at = datetime.now(timezone.utc)
+        elif (bearish_breakout and norm_bear > EVENT_BREAKOUT_ATR_THRESHOLD and volume_spike and momentum_filter):
+            account_info = mt5.account_info()  # type: ignore
+            if account_info:
+                sl_distance = atr * EVENT_SL_ATR_MULTIPLIER
+                lots = compute_lots_from_risk(account_info.balance, 1.5, sl_distance, symbol)
+                sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
+                tp_points = sl_points * 2
+                if execute_trade(symbol, "SELL", lots, sl_points, tp_points):
+                    event_state.last_event_trade_at = datetime.now(timezone.utc)
     else:
-        # Normal trading logic
-        logging.info(f"Normal breakout conditions - Bullish: {bullish_breakout}, Bearish: {bearish_breakout}, Momentum filter: {momentum_filter}")
-        
         if bullish_breakout and momentum_filter:
-            # Bullish breakout
-            logging.info("Bullish breakout detected")
-            success = execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
-            if success:
-                logging.info("BUY trade executed successfully")
-            else:
-                logging.error("Failed to execute BUY trade")
-        
+            execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
         elif bearish_breakout and momentum_filter:
-            # Bearish breakout
-            logging.info("Bearish breakout detected")
-            success = execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
-            if success:
-                logging.info("SELL trade executed successfully")
-            else:
-                logging.error("Failed to execute SELL trade")
-        else:
-            logging.info("No breakout conditions met")
-            # Show gap analysis for debugging
-            upper_gap = current_close - upper_channel
-            lower_gap = lower_channel - current_close
-            momentum_diff = current_momentum - historical_momentum
-            logging.debug(f"Gap analysis - Upper gap: {upper_gap:.5f}, Lower gap: {lower_gap:.5f}, Momentum diff: {momentum_diff:.5f}")
+            execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
 
 def main():
     """Main function to run the strategy"""
