@@ -1,11 +1,16 @@
 import time
 import logging
 from datetime import datetime
+import os
+from dotenv import load_dotenv
 # Try to import metatrader5, fallback to MetaTrader5 if needed
 try:
     import metatrader5 as mt5
 except ImportError:
     import MetaTrader5 as mt5  # type: ignore
+
+# Load environment variables
+load_dotenv()
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
 
@@ -30,11 +35,36 @@ def initialize_mt5():
     """Initialize MT5 connection"""
     # Add more detailed initialization info
     logging.info("Attempting to initialize MT5...")
-    if not mt5.initialize():  # type: ignore
-        logging.error("Failed to initialize MT5")
-        error = mt5.last_error()  # type: ignore
-        logging.error(f"MT5 initialization error: {error}")
-        return False
+    
+    # Get credentials from environment
+    login = os.getenv('MT5_LOGIN')
+    password = os.getenv('MT5_PASSWORD')
+    server = os.getenv('MT5_SERVER')
+    
+    # Initialize with credentials if available
+    if login and password and server:
+        try:
+            login_int = int(login)
+            logging.info(f"Initializing MT5 with credentials for account {login_int} on server {server}")
+            # Log the password length and first character for debugging (but not the full password for security)
+            logging.info(f"Password length: {len(password)}, First char: {password[0] if password else 'N/A'}")
+            if not mt5.initialize(login=login_int, password=password, server=server):  # type: ignore
+                logging.error("Failed to initialize MT5 with credentials")
+                error = mt5.last_error()  # type: ignore
+                logging.error(f"MT5 initialization error: {error}")
+                return False
+        except ValueError as e:
+            logging.error(f"Invalid login format: {login}. Error: {e}")
+            return False
+    else:
+        # Initialize without credentials
+        logging.info("Initializing MT5 without credentials")
+        if not mt5.initialize():  # type: ignore
+            logging.error("Failed to initialize MT5")
+            error = mt5.last_error()  # type: ignore
+            logging.error(f"MT5 initialization error: {error}")
+            return False
+    
     logging.info("MT5 initialized successfully")
     return True
 
