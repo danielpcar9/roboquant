@@ -1,8 +1,13 @@
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+import requests
+import math
+from enum import Enum
+from dataclasses import dataclass
+from typing import Optional
 # Try to import metatrader5, fallback to MetaTrader5 if needed
 try:
     import metatrader5 as mt5
@@ -11,6 +16,24 @@ except ImportError:
 
 # Load environment variables
 load_dotenv()
+
+# State machine for event detection
+class TradingMode(Enum):
+    NORMAL = "normal"
+    EVENT_DETECTED = "event_detected"
+    EVENT_WAIT = "event_wait"
+    EVENT_ACTIVE = "event_active"
+    EVENT_COOLDOWN = "event_cooldown"
+
+@dataclass
+class EventState:
+    mode: TradingMode = TradingMode.NORMAL
+    event_detected_at: Optional[datetime] = None
+    candles_waited: int = 0
+    last_event_trade_at: Optional[datetime] = None
+
+# Global event state for persistence between loops
+event_state = EventState()
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
 
@@ -27,6 +50,14 @@ from datetime import timezone
 TRADING_HOUR_START = 13  # GMT
 TRADING_HOUR_END = 22    # GMT
 MAGIC_NUMBER = 123456         # Magic number to identify bot trades
+
+# Event-driven trading parameters
+EVENT_WAIT_CANDLES = 3
+EVENT_SIZE_FACTOR = 0.25
+EVENT_SL_ATR_MULTIPLIER = 2.5
+EVENT_BREAKOUT_ATR_THRESHOLD = 0.3
+EVENT_VOLUME_SPIKE_FACTOR = 1.7
+MAX_SPREAD_POINTS = 50
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -128,6 +159,119 @@ def get_current_price(symbol, order_type):
     logging.debug(f"Current price for {symbol}: {price}")
     return price
 
+def get_current_spread(symbol):
+    """Calculate current spread in points"""
+    logging.debug(f"Calculating spread for {symbol}")
+    tick = mt5.symbol_info_tick(symbol)  # type: ignore
+    if tick is None:
+        logging.error(f"Failed to get tick data for {symbol}")
+        return None
+    
+    symbol_info = mt5.symbol_info(symbol)  # type: ignore
+    if symbol_info is None:
+        logging.error(f"Failed to get symbol info for {symbol}")
+        return None
+    
+    point = symbol_info.point
+    spread_points = (tick.ask - tick.bid) / point if point > 0 else 0
+    logging.debug(f"Spread for {symbol}: {spread_points:.2f} points")
+    return spread_points
+
+def calculate_atr(symbol, period=14):
+    """Calculate Average True Range"""
+    logging.debug(f"Calculating ATR for {symbol} with period {period}")
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, period + 1)  # type: ignore
+    if rates is None or len(rates) < period + 1:
+        logging.error(f"Failed to get rate data for ATR calculation. Rates: {rates}, Length: {len(rates) if rates else 0}")
+        return None
+    
+    atr_values = []
+    for i in range(1, len(rates)):
+        tr1 = rates[i]['high'] - rates[i]['low']
+        tr2 = abs(rates[i]['high'] - rates[i-1]['close'])
+        tr3 = abs(rates[i]['low'] - rates[i-1]['close'])
+        tr = max(tr1, tr2, tr3)
+        atr_values.append(tr)
+    
+    atr = sum(atr_values) / len(atr_values) if atr_values else 0
+    logging.debug(f"ATR for {symbol}: {atr:.5f}")
+    return atr
+
+def calculate_normalized_breakout(price, channel, atr):
+    """Calculate normalized breakout distance (price-channel)/atr"""
+    if atr is None or atr == 0:
+        return 0
+    distance = abs(price - channel)
+    normalized = distance / atr
+    return normalized
+
+def get_volume_stats(symbol, lookback=20):
+    """Get current volume vs average volume"""
+    logging.debug(f"Calculating volume stats for {symbol} with lookback {lookback}")
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, lookback)  # type: ignore
+    if rates is None or len(rates) < lookback:
+        logging.error(f"Failed to get rate data for volume calculation. Rates: {rates}, Length: {len(rates) if rates else 0}")
+        return None, None
+    
+    volumes = [rate['tick_volume'] for rate in rates]
+    current_volume = volumes[-1] if volumes else 0
+    avg_volume = sum(volumes) / len(volumes) if volumes else 0
+    
+    logging.debug(f"Volume stats for {symbol} - Current: {current_volume}, Average: {avg_volume:.2f}")
+    return current_volume, avg_volume
+
+def fetch_upcoming_high_impact(minutes_window=120):
+    """Fetch upcoming high impact events from TradingEconomics API"""
+    # This would require a TradingEconomics API key
+    te_key = os.getenv('TRADINGECONOMICS_KEY')
+    if not te_key:
+        logging.debug("No TradingEconomics API key found, skipping event check")
+        return []
+    
+    try:
+        # This is a placeholder implementation - actual implementation would depend on TradingEconomics API
+        logging.debug(f"Checking for high impact events in next {minutes_window} minutes")
+        # In a real implementation, you would call the TradingEconomics API here
+        return []
+    except Exception as e:
+        logging.error(f"Error fetching economic events: {e}")
+        return []
+
+def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
+    """Calculate lot size based on risk percentage and stop loss distance"""
+    risk_amount = balance * (risk_pct / 100.0)
+    
+    symbol_info = mt5.symbol_info(symbol)  # type: ignore
+    if symbol_info is None:
+        logging.error(f"Failed to get symbol info for {symbol}")
+        return LOTS  # fallback to default
+    
+    # For XAU/USD, 1 lot = 100 oz troy, so point value is 100
+    point_value = 100.0 if 'XAU' in symbol or 'GOLD' in symbol else 1.0
+    point = symbol_info.point
+    
+    if point == 0 or sl_distance == 0:
+        logging.warning(f"Invalid point or SL distance for {symbol}, using default lot size")
+        return LOTS
+    
+    # Calculate lots: risk_amount / (sl_distance_points * point_value)
+    sl_distance_points = sl_distance / point
+    lots = risk_amount / (sl_distance_points * point_value)
+    
+    # Ensure minimum lot size
+    min_lot = symbol_info.volume_min
+    lots = max(lots, min_lot)
+    
+    # Ensure we don't exceed maximum lot size
+    max_lot = symbol_info.volume_max or lots
+    lots = min(lots, max_lot)
+    
+    # Normalize to broker requirements
+    lots = normalize_volume(symbol, lots)
+    
+    logging.debug(f"Computed lots for {symbol}: {lots:.2f} (risk: {risk_amount:.2f}, SL: {sl_distance_points:.1f} points)")
+    return lots
+
 def execute_trade(symbol, order_type, lots, sl_points, tp_points):
     """Execute a trade with given parameters"""
     logging.info(f"Attempting to execute {order_type} trade for {symbol}")
@@ -183,14 +327,81 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
         logging.error(f"Error executing trade: {e}", exc_info=True)
         return False
 
+def handle_event_state(symbol):
+    """Handle event state transitions"""
+    global event_state
+    
+    current_time = datetime.now()
+    
+    if event_state.mode == TradingMode.NORMAL:
+        # Check for high impact events
+        events = fetch_upcoming_high_impact()
+        if events:
+            logging.info(f"High impact event detected: {len(events)} events upcoming")
+            event_state.mode = TradingMode.EVENT_DETECTED
+            event_state.event_detected_at = current_time
+            return
+    
+    elif event_state.mode == TradingMode.EVENT_DETECTED:
+        # Transition to wait mode
+        event_state.mode = TradingMode.EVENT_WAIT
+        event_state.candles_waited = 0
+        return
+    
+    elif event_state.mode == TradingMode.EVENT_WAIT:
+        # Count candles
+        event_state.candles_waited += 1
+        logging.debug(f"Event wait mode: {event_state.candles_waited}/{EVENT_WAIT_CANDLES} candles waited")
+        
+        if event_state.candles_waited >= EVENT_WAIT_CANDLES:
+            event_state.mode = TradingMode.EVENT_ACTIVE
+            logging.info("Event trading activated")
+        return
+    
+    elif event_state.mode == TradingMode.EVENT_ACTIVE:
+        # Check if we should exit event mode
+        if event_state.last_event_trade_at:
+            cooldown_period = timedelta(minutes=30)  # 30 minute cooldown
+            if current_time - event_state.last_event_trade_at > cooldown_period:
+                event_state.mode = TradingMode.EVENT_COOLDOWN
+                logging.info("Entering event cooldown period")
+        return
+    
+    elif event_state.mode == TradingMode.EVENT_COOLDOWN:
+        # Cooldown for 1 hour after event trading
+        cooldown_period = timedelta(hours=1)
+        if event_state.last_event_trade_at and \
+           current_time - event_state.last_event_trade_at > cooldown_period:
+            event_state.mode = TradingMode.NORMAL
+            event_state.event_detected_at = None
+            event_state.candles_waited = 0
+            event_state.last_event_trade_at = None
+            logging.info("Returned to normal trading mode")
+        return
+
 def run_strategy(symbol="XAUUSD"):
     """Main strategy function"""
-    logging.info(f"Running strategy for symbol: {symbol}")
+    global event_state
+    
+    logging.info(f"Running strategy for symbol: {symbol} in mode: {event_state.mode.value}")
     
     # Check if we're in trading hours
     if not in_trading_hours():
         logging.info("Outside trading hours")
         return
+    
+    # Check spread first
+    spread = get_current_spread(symbol)
+    if spread is None:
+        logging.error("Failed to get current spread")
+        return
+    
+    if spread > MAX_SPREAD_POINTS:
+        logging.info(f"Spread too high: {spread:.2f} points > {MAX_SPREAD_POINTS} points, skipping")
+        return
+    
+    # Handle event state transitions
+    handle_event_state(symbol)
     
     # Check if we already have open positions
     positions = mt5.positions_get(symbol=symbol)  # type: ignore
@@ -216,43 +427,102 @@ def run_strategy(symbol="XAUUSD"):
     logging.info(f"Current close price (bid): {current_close}")
     logging.info(f"Upper channel: {upper_channel}, Lower channel: {lower_channel}")
     
+    # Calculate ATR for event-driven trading
+    atr = calculate_atr(symbol)
+    if atr is None:
+        atr = 1.0  # fallback
+    
     # Calculate momentum values
     current_momentum = calculate_avg_momentum(symbol, MOMENTUM_PERIOD)
     historical_momentum = calculate_avg_momentum(symbol, SAMPLE_PERIOD)
     
     logging.info(f"Momentum values - Current: {current_momentum}, Historical: {historical_momentum}")
     
+    # Get volume stats for event detection
+    current_volume, avg_volume = get_volume_stats(symbol)
+    volume_spike = current_volume and avg_volume and current_volume > avg_volume * EVENT_VOLUME_SPIKE_FACTOR
+    
     # Check for breakout conditions
     bullish_breakout = current_close > upper_channel
     bearish_breakout = current_close < lower_channel
     momentum_filter = current_momentum > historical_momentum
     
-    logging.info(f"Breakout conditions - Bullish: {bullish_breakout}, Bearish: {bearish_breakout}, Momentum filter: {momentum_filter}")
+    # Calculate normalized breakouts for event mode
+    normalized_bullish_breakout = calculate_normalized_breakout(current_close, upper_channel, atr)
+    normalized_bearish_breakout = calculate_normalized_breakout(current_close, lower_channel, atr)
     
-    if bullish_breakout and momentum_filter:
-        # Bullish breakout
-        logging.info("Bullish breakout detected")
-        success = execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
-        if success:
-            logging.info("BUY trade executed successfully")
-        else:
-            logging.error("Failed to execute BUY trade")
+    # Event-driven trading logic
+    if event_state.mode in [TradingMode.EVENT_ACTIVE, TradingMode.EVENT_WAIT]:
+        # In event mode, use different criteria
+        event_bullish = bullish_breakout and normalized_bullish_breakout > EVENT_BREAKOUT_ATR_THRESHOLD
+        event_bearish = bearish_breakout and normalized_bearish_breakout > EVENT_BREAKOUT_ATR_THRESHOLD
         
-    elif bearish_breakout and momentum_filter:
-        # Bearish breakout
-        logging.info("Bearish breakout detected")
-        success = execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
-        if success:
-            logging.info("SELL trade executed successfully")
-        else:
-            logging.error("Failed to execute SELL trade")
+        logging.info(f"Event mode breakout conditions - Bullish: {event_bullish}, Bearish: {event_bearish}, Volume spike: {volume_spike}")
+        
+        if (event_bullish or event_bearish) and volume_spike:
+            # Event-driven trade
+            order_type = "BUY" if event_bullish else "SELL"
+            
+            # Calculate dynamic lot size
+            account_info = mt5.account_info()  # type: ignore
+            if account_info:
+                balance = account_info.balance
+                # For events, risk 1.5% of account
+                risk_pct = 1.5
+                
+                # Calculate SL based on ATR
+                sl_distance = atr * EVENT_SL_ATR_MULTIPLIER
+                
+                # Calculate TP (2x SL for 2:1 ratio)
+                tp_distance = sl_distance * 2
+                
+                # Calculate lot size
+                lots = compute_lots_from_risk(balance, risk_pct, sl_distance, symbol)
+                
+                # Convert distances to points
+                symbol_info = mt5.symbol_info(symbol)  # type: ignore
+                if symbol_info:
+                    point = symbol_info.point
+                    sl_points = sl_distance / point if point > 0 else STOP_LOSS_POINTS
+                    tp_points = tp_distance / point if point > 0 else TAKE_PROFIT_POINTS
+                    
+                    logging.info(f"Event-driven {order_type} trade detected")
+                    success = execute_trade(symbol, order_type, lots, sl_points, tp_points)
+                    if success:
+                        logging.info(f"Event-driven {order_type} trade executed successfully")
+                        event_state.last_event_trade_at = datetime.now()
+                    else:
+                        logging.error(f"Failed to execute event-driven {order_type} trade")
+            else:
+                logging.error("Failed to get account info for event-driven trade")
     else:
-        logging.info("No breakout conditions met")
-        # Show gap analysis for debugging
-        upper_gap = current_close - upper_channel
-        lower_gap = lower_channel - current_close
-        momentum_diff = current_momentum - historical_momentum
-        logging.debug(f"Gap analysis - Upper gap: {upper_gap:.5f}, Lower gap: {lower_gap:.5f}, Momentum diff: {momentum_diff:.5f}")
+        # Normal trading logic
+        logging.info(f"Normal breakout conditions - Bullish: {bullish_breakout}, Bearish: {bearish_breakout}, Momentum filter: {momentum_filter}")
+        
+        if bullish_breakout and momentum_filter:
+            # Bullish breakout
+            logging.info("Bullish breakout detected")
+            success = execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
+            if success:
+                logging.info("BUY trade executed successfully")
+            else:
+                logging.error("Failed to execute BUY trade")
+        
+        elif bearish_breakout and momentum_filter:
+            # Bearish breakout
+            logging.info("Bearish breakout detected")
+            success = execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
+            if success:
+                logging.info("SELL trade executed successfully")
+            else:
+                logging.error("Failed to execute SELL trade")
+        else:
+            logging.info("No breakout conditions met")
+            # Show gap analysis for debugging
+            upper_gap = current_close - upper_channel
+            lower_gap = lower_channel - current_close
+            momentum_diff = current_momentum - historical_momentum
+            logging.debug(f"Gap analysis - Upper gap: {upper_gap:.5f}, Lower gap: {lower_gap:.5f}, Momentum diff: {momentum_diff:.5f}")
 
 def main():
     """Main function to run the strategy"""
