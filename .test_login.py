@@ -1,6 +1,10 @@
 import os
 from dotenv import load_dotenv
-import metatrader5 as mt5
+# Try to import metatrader5, fallback to MetaTrader5 if needed
+try:
+    import metatrader5 as mt5
+except ImportError:
+    import MetaTrader5 as mt5  # type: ignore
 
 load_dotenv()
 
@@ -17,7 +21,7 @@ print()
 
 # Verificar espacios
 if login and (login != login.strip()):
-    print(⚠️ ADVERTENCIA: Login tiene espacios!")
+    print("⚠️ ADVERTENCIA: Login tiene espacios!")
 if password and (password != password.strip()):
     print("⚠️ ADVERTENCIA: Password tiene espacios!")
 if server and (server != server.strip()):
@@ -26,9 +30,9 @@ print()
 
 # Inicializar MT5
 print("Intentando inicializar MT5...")
-if not mt5.initialize():
+if not mt5.initialize():  # type: ignore
     print("❌ Error al inicializar MT5")
-    print("Error code:", mt5.last_error())
+    print("Error code:", mt5.last_error())  # type: ignore
     quit()
 
 print("✓ MT5 inicializado correctamente")
@@ -36,21 +40,32 @@ print()
 
 # Intentar login
 print("Intentando login...")
-authorized = mt5.login(
-    login=int(login),
-    password=password,
-    server=server
-)
+if login and password and server:
+    try:
+        login_int = int(login)
+        authorized = mt5.login(  # type: ignore
+            login=login_int,
+            password=password,
+            server=server
+        )
+    except ValueError as e:
+        print(f"❌ Error de formato de login: {e}")
+        mt5.shutdown()  # type: ignore
+        quit()
+else:
+    print("❌ Credenciales incompletas")
+    mt5.shutdown()  # type: ignore
+    quit()
 
 if authorized:
     print("✓ ¡Login exitoso!")
-    account_info = mt5.account_info()
+    account_info = mt5.account_info()  # type: ignore
     if account_info:
         print(f"Balance: {account_info.balance}")
         print(f"Cuenta: {account_info.login}")
 else:
     print("❌ Error de login")
-    error = mt5.last_error()
+    error = mt5.last_error()  # type: ignore
     print(f"Código de error: {error}")
 
-mt5.shutdown()
+mt5.shutdown()  # type: ignore
