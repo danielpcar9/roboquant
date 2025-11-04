@@ -215,9 +215,11 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
             logging.warning("Intento %d/%d (modo=%s) fallo: retcode=%s, comment=%s", 
                           attempts_made, max_total_attempts, filling_mode, retcode, comment)
             
-            # If we get "Invalid stops" error, try without SL/TP
+            # If we get "Invalid stops" error, try a different approach
             if retcode == 10016:  # Invalid stops
-                logging.warning("Invalid stops detected, trying without SL/TP")
+                logging.warning("Invalid stops detected, trying alternative approach")
+                
+                # Approach 1: Place order without SL/TP first, then modify
                 request_no_stops = request.copy()
                 request_no_stops.pop('sl', None)
                 request_no_stops.pop('tp', None)
@@ -225,14 +227,42 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
                 try:
                     result_no_stops = mt5_module.order_send(request_no_stops)  # type: ignore
                     if result_no_stops and getattr(result_no_stops, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-                        logging.info("Orden enviada exitosamente sin SL/TP. Ticket: %s", getattr(result_no_stops, 'order', 'N/A'))
-                        return result_no_stops
+                        order_ticket = getattr(result_no_stops, 'order', None)
+                        if order_ticket:
+                            logging.info("Orden enviada sin SL/TP. Ticket: %s", order_ticket)
+                            
+                            # Now try to modify the order to add SL/TP
+                            if sl is not None or tp is not None:
+                                modification_request = {
+                                    'action': mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+                                    'symbol': symbol,
+                                    'position': int(order_ticket),
+                                    'deviation': deviation,
+                                    'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
+                                    'type_filling': filling_mode
+                                }
+                                if sl is not None:
+                                    modification_request['sl'] = float(sl)
+                                if tp is not None:
+                                    modification_request['tp'] = float(tp)
+                                
+                                modification_result = mt5_module.order_send(modification_request)  # type: ignore
+                                if modification_result and getattr(modification_result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+                                    logging.info("SL/TP modificados exitosamente para orden %s", order_ticket)
+                                else:
+                                    mod_retcode = getattr(modification_result, 'retcode', 'N/A') if modification_result else 'N/A'
+                                    mod_comment = getattr(modification_result, 'comment', 'N/A') if modification_result else 'N/A'
+                                    logging.warning("Fallo al modificar SL/TP: retcode=%s, comment=%s", mod_retcode, mod_comment)
+                            
+                            return result_no_stops
+                        else:
+                            logging.warning("No se pudo obtener el ticket de la orden")
                     else:
                         retcode_no_stops = getattr(result_no_stops, 'retcode', 'N/A') if result_no_stops else 'N/A'
                         comment_no_stops = getattr(result_no_stops, 'comment', 'N/A') if result_no_stops else 'N/A'
                         logging.warning("Intento sin SL/TP fallo: retcode=%s, comment=%s", retcode_no_stops, comment_no_stops)
                 except Exception as e:
-                    logging.exception("Exception en order_send sin SL/TP")
+                    logging.exception("Exception en order_send sin SL/TP o modificando")
             
             if attempts_made < max_total_attempts:
                 wait_time = 0.5 * (2 ** ((attempts_made - 1) // len(filling_modes_to_try)))
@@ -263,27 +293,45 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
         close_type = mt5_module.ORDER_TYPE_BUY  # type: ignore
         price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
     
-    request = {
-        'action': mt5_module.TRADE_ACTION_DEAL,  # type: ignore
-        'symbol': symbol,
-        'volume': volume,
-        'type': close_type,
-        'position': int(pos.ticket),
-        'price': price,
-        'deviation': deviation,
-        'magic': int(getattr(pos, 'magic', 0)),
-        'comment': 'close_by_bot',
-        'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-        'type_filling': get_filling_mode(symbol, mt5_module)
-    }
+    # List of filling modes to try
+    filling_modes_to_try = [
+        mt5_module.ORDER_FILLING_RETURN,  # type: ignore
+    ]
     
-    result = mt5_module.order_send(request)  # type: ignore
+    # Add other modes if they exist
+    if hasattr(mt5_module, 'ORDER_FILLING_IOC'):  # type: ignore
+        filling_modes_to_try.append(mt5_module.ORDER_FILLING_IOC)  # type: ignore
+    if hasattr(mt5_module, 'ORDER_FILLING_FOK'):  # type: ignore
+        filling_modes_to_try.append(mt5_module.ORDER_FILLING_FOK)  # type: ignore
     
-    if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-        logging.info("Posicion %s cerrada exitosamente", ticket)
-        return True
-    else:
-        retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
-        comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
-        logging.error("Error al cerrar posicion %s: retcode=%s, comment=%s", ticket, retcode, comment)
-        return False
+    # Try each filling mode
+    for filling_mode in filling_modes_to_try:
+        request = {
+            'action': mt5_module.TRADE_ACTION_DEAL,  # type: ignore
+            'symbol': symbol,
+            'volume': volume,
+            'type': close_type,
+            'position': int(pos.ticket),
+            'price': price,
+            'deviation': deviation,
+            'magic': int(getattr(pos, 'magic', 0)),
+            'comment': 'close_by_bot',
+            'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
+            'type_filling': filling_mode
+        }
+        
+        try:
+            result = mt5_module.order_send(request)  # type: ignore
+            
+            if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+                logging.info("Posicion %s cerrada exitosamente", ticket)
+                return True
+            else:
+                retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
+                comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
+                logging.warning("Intento con modo=%s fallo: retcode=%s, comment=%s", filling_mode, retcode, comment)
+        except Exception as e:
+            logging.exception("Exception al cerrar posicion %s con modo=%s", ticket, filling_mode)
+    
+    logging.error("Error al cerrar posicion %s despues de intentar todos los modos de llenado", ticket)
+    return False
