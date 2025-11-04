@@ -96,8 +96,12 @@ The bot uses Forex Factory's economic calendar to detect high-impact events:
    ```
    pip install -r requirements.txt
    ```
-4. Configure your MT5 credentials in the [.env](file:///C:/Users/edgar/roboquant/.env) file
-5. Set up webhook security by adding a strong secret key to [.env](file:///C:/Users/edgar/roboquant/.env):
+4. Install web scraping dependencies:
+   ```
+   pip install beautifulsoup4==4.12.2 lxml==4.9.3 pytz==2023.3
+   ```
+5. Configure your MT5 credentials in the [.env](file:///C:/Users/edgar/roboquant/.env) file
+6. Set up webhook security by adding a strong secret key to [.env](file:///C:/Users/edgar/roboquant/.env):
    ```
    WEBHOOK_SECRET_KEY=your_very_long_random_secret_key_here
    ```
