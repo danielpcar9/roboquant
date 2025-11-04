@@ -13,6 +13,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 
 def generate_dashboard(trades_csv='logs/trades.csv', output_html='dashboard.html'):
     """Genera dashboard HTML con métricas visuales"""
+    
     if not os.path.exists(trades_csv):
         print(f"No se encontró {trades_csv}")
         return
