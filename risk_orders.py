@@ -53,8 +53,23 @@ point = sym_info.point
 
 # Calcular entry y stops
 price = tick.ask if side == "BUY" else tick.bid
-sl_price = price - 50 * point if side == "BUY" else price + 50 * point
-tp_price = price + 100 * point if side == "BUY" else price - 100 * point
+
+# Use more reasonable SL/TP values for XAUUSD (in points)
+# XAUUSD typically needs wider stops due to higher volatility
+sl_points = 150  # 150 points for SL
+tp_points = 300  # 300 points for TP (2:1 ratio)
+
+# Calculate SL/TP with proper direction
+if side == "BUY":
+    sl_price = price - sl_points * point
+    tp_price = price + tp_points * point
+else:  # SELL
+    sl_price = price + sl_points * point
+    tp_price = price - tp_points * point
+
+# Log the calculated prices for debugging
+logging.info(f"Current price: {price}, SL: {sl_price}, TP: {tp_price}")
+logging.info(f"Price difference - SL: {abs(price - sl_price)/point} points, TP: {abs(price - tp_price)/point} points")
 
 # Calcular volumen basado en riesgo
 volume = estimate_lots_by_risk(

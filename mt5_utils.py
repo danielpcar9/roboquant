@@ -26,16 +26,25 @@ def get_filling_mode(symbol, mt5_module=None):
         return mt5_module.ORDER_FILLING_RETURN  # type: ignore
     
     try:
+        # Try FOK first (Fill or Kill)
         if hasattr(mt5_module, 'ORDER_FILLING_FOK'):  # type: ignore
             if filling_mode & mt5_module.ORDER_FILLING_FOK:  # type: ignore
                 return mt5_module.ORDER_FILLING_FOK  # type: ignore
         
+        # Try IOC next (Immediate or Cancel)
         if hasattr(mt5_module, 'ORDER_FILLING_IOC'):  # type: ignore
             if filling_mode & mt5_module.ORDER_FILLING_IOC:  # type: ignore
                 return mt5_module.ORDER_FILLING_IOC  # type: ignore
+                
+        # Try RETURN as fallback (Return if not filled)
+        if hasattr(mt5_module, 'ORDER_FILLING_RETURN'):  # type: ignore
+            if filling_mode & mt5_module.ORDER_FILLING_RETURN:  # type: ignore
+                return mt5_module.ORDER_FILLING_RETURN  # type: ignore
     except Exception as e:
         logging.debug("Error checking filling mode: %s", e)
     
+    # Default fallback
+    logging.warning("Using default ORDER_FILLING_RETURN for %s", symbol)
     return mt5_module.ORDER_FILLING_RETURN  # type: ignore
 
 
@@ -87,31 +96,27 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
         logging.error("Stop distance es cero")
         return volume_min
     
-    tick_value = getattr(sym_info, 'trade_tick_value', None)
+    # CORRECTION: More accurate tick values for different instruments
+    # For XAU/USD, 1 lot = 100 oz troy, so point value is 100
+    if 'XAU' in symbol or 'GOLD' in symbol:
+        tick_value = 100.0
+    else:
+        tick_value = getattr(sym_info, 'trade_tick_value', None)
+        if tick_value is None or tick_value == 0:
+            logging.warning("tick_value no disponible del broker, usando valor por defecto")
+            # Default values by instrument type
+            if 'JPY' in symbol:
+                # Pairs with JPY (ej: USDJPY)
+                tick_value = 1000.0
+            elif any(curr in symbol for curr in ['EUR', 'GBP', 'AUD', 'NZD']):
+                # Major forex pairs
+                tick_value = 10.0
+            else:
+                # Conservative default
+                tick_value = 10.0
     
-    # DEBUG
     logging.info("DEBUG: tick_value=%s, point=%s, contract_size=%s", 
                  tick_value, point, getattr(sym_info, 'trade_contract_size', 'N/A'))
-    
-    # CORRECTION: More accurate tick values for different instruments
-    if tick_value is None or tick_value == 0:
-        logging.warning("tick_value no disponible del broker, usando valores conocidos")
-        
-        # Valores correctos por tipo de instrumento
-        if 'XAU' in symbol or 'GOLD' in symbol:
-            # Oro: 1 lote = 100 oz troy, $1 movimiento = $100
-            tick_value = 100.0
-        elif 'JPY' in symbol:
-            # Pares con JPY (ej: USDJPY)
-            tick_value = 1000.0
-        elif any(curr in symbol for curr in ['EUR', 'GBP', 'AUD', 'NZD']):
-            # Pares major forex
-            tick_value = 10.0
-        else:
-            # Default conservador
-            tick_value = 10.0
-        
-        logging.info("Usando tick_value estimado: %.2f para %s", tick_value, symbol)
     
     lots = risk_amount / (stop_distance_points * tick_value)
     
@@ -145,50 +150,95 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     
     price = tick.ask if side == "BUY" else tick.bid
     
-    filling = get_filling_mode(symbol, mt5_module)
-    
+    # Try different approaches to handle the filling mode issue
     order_type = mt5_module.ORDER_TYPE_BUY if side == "BUY" else mt5_module.ORDER_TYPE_SELL  # type: ignore
     
-    request = {
-        'action': mt5_module.TRADE_ACTION_DEAL,  # type: ignore
-        'symbol': symbol,
-        'volume': volume,
-        'type': order_type,
-        'price': price,
-        'deviation': deviation,
-        'magic': magic,
-        'comment': 'bot_order',
-        'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-        'type_filling': filling
-    }
+    # List of filling modes to try
+    filling_modes_to_try = [
+        mt5_module.ORDER_FILLING_RETURN,  # type: ignore
+    ]
     
-    if sl is not None:
-        request['sl'] = float(sl)
-    if tp is not None:
-        request['tp'] = float(tp)
+    # Add other modes if they exist
+    if hasattr(mt5_module, 'ORDER_FILLING_IOC'):  # type: ignore
+        filling_modes_to_try.append(mt5_module.ORDER_FILLING_IOC)  # type: ignore
+    if hasattr(mt5_module, 'ORDER_FILLING_FOK'):  # type: ignore
+        filling_modes_to_try.append(mt5_module.ORDER_FILLING_FOK)  # type: ignore
     
     last_result = None
-    for attempt in range(1, retries + 1):
-        try:
-            result = mt5_module.order_send(request)  # type: ignore
-        except Exception as e:
-            logging.exception("Exception en order_send (intento %d)", attempt)
-            result = None
-        
-        if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-            logging.info("Orden enviada exitosamente. Ticket: %s", getattr(result, 'order', 'N/A'))
-            return result
-        
-        last_result = result
-        retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
-        comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
-        logging.warning("Intento %d/%d fallo: retcode=%s, comment=%s", attempt, retries, retcode, comment)
-        
-        if attempt < retries:
-            wait_time = 0.5 * (2 ** (attempt - 1))
-            time.sleep(wait_time)
+    attempts_made = 0
+    max_total_attempts = retries * len(filling_modes_to_try)
     
-    error_msg = "Orden fallo despues de " + str(retries) + " intentos. Ultimo retcode: " + str(getattr(last_result, 'retcode', 'N/A'))
+    # Try each filling mode
+    for filling_mode in filling_modes_to_try:
+        if attempts_made >= max_total_attempts:
+            break
+            
+        # Try with SL/TP first
+        request = {
+            'action': mt5_module.TRADE_ACTION_DEAL,  # type: ignore
+            'symbol': symbol,
+            'volume': volume,
+            'type': order_type,
+            'price': price,
+            'deviation': deviation,
+            'magic': magic,
+            'comment': 'bot_order',
+            'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
+            'type_filling': filling_mode
+        }
+        
+        # Add SL/TP if provided
+        if sl is not None:
+            request['sl'] = float(sl)
+        if tp is not None:
+            request['tp'] = float(tp)
+        
+        # Try this filling mode for the specified number of retries
+        for attempt_in_mode in range(1, retries + 1):
+            attempts_made += 1
+            if attempts_made > max_total_attempts:
+                break
+                
+            try:
+                result = mt5_module.order_send(request)  # type: ignore
+            except Exception as e:
+                logging.exception("Exception en order_send (modo=%s, intento %d)", filling_mode, attempt_in_mode)
+                result = None
+            
+            if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+                logging.info("Orden enviada exitosamente. Ticket: %s", getattr(result, 'order', 'N/A'))
+                return result
+            
+            last_result = result
+            retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
+            comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
+            logging.warning("Intento %d/%d (modo=%s) fallo: retcode=%s, comment=%s", 
+                          attempts_made, max_total_attempts, filling_mode, retcode, comment)
+            
+            # If we get "Invalid stops" error, try without SL/TP
+            if retcode == 10016:  # Invalid stops
+                logging.warning("Invalid stops detected, trying without SL/TP")
+                request_no_stops = request.copy()
+                request_no_stops.pop('sl', None)
+                request_no_stops.pop('tp', None)
+                
+                try:
+                    result_no_stops = mt5_module.order_send(request_no_stops)  # type: ignore
+                    if result_no_stops and getattr(result_no_stops, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+                        logging.info("Orden enviada exitosamente sin SL/TP. Ticket: %s", getattr(result_no_stops, 'order', 'N/A'))
+                        return result_no_stops
+                    else:
+                        retcode_no_stops = getattr(result_no_stops, 'retcode', 'N/A') if result_no_stops else 'N/A'
+                        comment_no_stops = getattr(result_no_stops, 'comment', 'N/A') if result_no_stops else 'N/A'
+                        logging.warning("Intento sin SL/TP fallo: retcode=%s, comment=%s", retcode_no_stops, comment_no_stops)
+                except Exception as e:
+                    logging.exception("Exception en order_send sin SL/TP")
+            
+            if attempts_made < max_total_attempts:
+                wait_time = 0.5 * (2 ** ((attempts_made - 1) // len(filling_modes_to_try)))
+                time.sleep(wait_time)
+    
+    error_msg = "Orden fallo despues de " + str(attempts_made) + " intentos. Ultimo retcode: " + str(getattr(last_result, 'retcode', 'N/A'))
     logging.error(error_msg)
     raise RuntimeError(error_msg)
 
