@@ -68,7 +68,7 @@ def test_log_trade():
         post_mortem.TRADES_FILE = original_file
         try:
             os.unlink(temp_trades_file)
-        except:
+        except OSError:
             pass
 
 def test_analyze_recent_trades():
@@ -170,7 +170,7 @@ def test_analyze_recent_trades():
         post_mortem.TRADES_FILE = original_file
         try:
             os.unlink(temp_trades_file)
-        except:
+        except OSError:
             pass
 
 def test_generate_performance_report():
@@ -240,7 +240,7 @@ def test_generate_performance_report():
         try:
             os.unlink(temp_trades_file)
             os.unlink(temp_report_file)
-        except:
+        except OSError:
             pass
 
 def main():

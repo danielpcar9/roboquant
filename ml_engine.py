@@ -527,11 +527,11 @@ class MLTradingSystem:
             
             condition1 = (df['close'] > upper_dc) & (close_shifted <= upper_dc_shifted)
             condition2 = (df['close'] < lower_dc) & (close_shifted >= lower_dc_shifted)
-            
+
             signals[condition1] = 1   # Buy breakout
             signals[condition2] = -1  # Sell breakout
-        except:
-            # If shift operations fail, use simpler conditions
+        except (KeyError, ValueError) as e:
+            ml_logger.warning(f"Error in shifted Donchian signals: {e}, using simple signals instead")
             condition1 = df['close'] > upper_dc
             condition2 = df['close'] < lower_dc
             signals[condition1] = 1
@@ -545,8 +545,8 @@ class MLTradingSystem:
             condition4 = (rsi > 70) & (rsi_shifted <= 70)
             signals[condition3] = 1   # RSI oversold buy
             signals[condition4] = -1  # RSI overbought sell
-        except:
-            # If shift operations fail, use simpler conditions
+        except (KeyError, ValueError) as e:
+            ml_logger.warning(f"Error in shifted RSI signals: {e}, using simple signals instead")
             condition3 = rsi < 30
             condition4 = rsi > 70
             signals[condition3] = 1
@@ -561,8 +561,8 @@ class MLTradingSystem:
             condition6 = (macd_histogram < 0) & (macd_hist_shifted >= 0)
             signals[condition5] = 1   # MACD bullish crossover
             signals[condition6] = -1  # MACD bearish crossover
-        except:
-            # If shift operations fail, use simpler conditions
+        except (KeyError, ValueError) as e:
+            ml_logger.warning(f"Error in shifted MACD signals: {e}, using simple signals instead")
             condition5 = macd_histogram > 0
             condition6 = macd_histogram < 0
             signals[condition5] = 1

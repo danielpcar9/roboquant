@@ -109,7 +109,7 @@ def test_post_mortem_functionality():
         post_mortem.TRADES_FILE = original_file
         try:
             os.unlink(temp_trades_file)
-        except:
+        except Exception:
             pass
 
 if __name__ == "__main__":

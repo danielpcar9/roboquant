@@ -122,8 +122,6 @@ def initialize_mt5():
         try:
             login_int = int(login)
             logging.info(f"Initializing MT5 with credentials for account {login_int} on server {server}")
-            # Log the password length and first character for debugging (but not the full password for security)
-            logging.info(f"Password length: {len(password)}, First char: {password[0] if password else 'N/A'}")
             if not mt5.initialize(login=login_int, password=password, server=server):  # type: ignore
                 logging.error("Failed to initialize MT5 with credentials")
                 error = mt5.last_error()  # type: ignore
