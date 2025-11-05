@@ -17,15 +17,6 @@ try:
 except ImportError:
     import MetaTrader5 as mt5  # type: ignore
 
-# Import security manager
-from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message
-
-# Load environment variables
-load_dotenv()
-
-# Initialize security manager
-credential_manager = SecureCredentialManager()
-
 # State machine for event detection
 class TradingMode(Enum):
     NORMAL = "normal"
@@ -46,6 +37,8 @@ class EventState:
 event_state = EventState()
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
+# Import security manager
+from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message, RateLimiter
 
 # Configuration parameters - OPTIMIZED VALUES
 DONCHIAN_PERIOD = 50          # Increased to reduce false signals
@@ -73,6 +66,10 @@ MAX_SPREAD_POINTS = 150
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
+
+# Load environment variables and initialize security manager
+load_dotenv()
+credential_manager = SecureCredentialManager()
 
 def initialize_mt5():
     """Initialize MT5 connection"""

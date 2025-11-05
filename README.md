@@ -19,16 +19,20 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 ## Files
 
 - [donchian_strategy.py](file:///C:/Users/edgar/roboquant/donchian_strategy.py) - Main strategy implementation
-- [webhook_receiver.py](file:///C:/Users/edgar/roboquant/webhook_receiver.py) - Webhook receiver for external signals
-- [backtest_apex_vectorbt.py](file:///C:/Users/edgar/roboquant/backtest_apex_vectorbt.py) - Backtesting script using VectorBT
-- [performance_dashboard.py](file:///C:/Users/edgar/roboquant/performance_dashboard.py) - Performance visualization dashboard
-- [mt5_utils.py](file:///C:/Users/edgar/roboquant/mt5_utils.py) - Utility functions for MT5 interaction
-- [safety.py](file:///C:/Users/edgar/roboquant/safety.py) - Safety checks module
-- [alerts.py](file:///C:/Users/edgar/roboquant/alerts.py) - Alert notifications
-- [run_donchian.bat](file:///C:/Users/edgar/roboquant/run_donchian.bat) - Batch file to run the strategy on Windows
-- [run_webhook.bat](file:///C:/Users/edgar/roboquant/run_webhook.bat) - Batch file to run the webhook receiver
-- [run_backtest.bat](file:///C:/Users/edgar/roboquant/run_backtest.bat) - Batch file to run backtesting
-- [test_mt5_connection.py](file:///C:/Users/edgar/roboquant/test_mt5_connection.py) - Script to test MT5 connection
+- [webhook_receiver.py](file://c:\Users\edgar\roboquant\webhook_receiver.py) - Webhook receiver for external signals
+- [backtest_apex_vectorbt.py](file://c:\Users\edgar\roboquant\backtest_apex_vectorbt.py) - Backtesting script using VectorBT
+- [performance_dashboard.py](file://c:\Users\edgar\roboquant\performance_dashboard.py) - Performance visualization dashboard
+- [mt5_utils.py](file://c:\Users\edgar\roboquant\mt5_utils.py) - Utility functions for MT5 interaction
+- [safety.py](file://c:\Users\edgar\roboquant\safety.py) - Safety checks module
+- [alerts.py](file://c:\Users\edgar\roboquant\alerts.py) - Alert notifications
+- [security_manager.py](file://c:\Users\edgar\roboquant\security_manager.py) - Security manager with credential handling, input validation, and rate limiting
+- [error_handler.py](file://c:\Users\edgar\roboquant\error_handler.py) - Error handling with circuit breaker and retry logic
+- [ml_engine.py](file://c:\Users\edgar\roboquant\ml_engine.py) - Machine learning engine with XGBoost model for hybrid trading signals
+- [run_donchian.bat](file://c:\Users\edgar\roboquant\run_donchian.bat) - Batch file to run the strategy on Windows
+- [run_webhook.bat](file://c:\Users\edgar\roboquant\run_webhook.bat) - Batch file to run the webhook receiver
+- [run_backtest.bat](file://c:\Users\edgar\roboquant\run_backtest.bat) - Batch file to run backtesting
+- [test_mt5_connection.py](file://c:\Users\edgar\roboquant\test_mt5_connection.py) - Script to test MT5 connection
+- [test_security.py](file://c:\Users\edgar\roboquant\test_security.py) - Test script for security components
 
 ## Configuración Actualizada
 
@@ -84,6 +88,21 @@ The bot uses Forex Factory's economic calendar to detect high-impact events:
 - Python 3.7+
 - See [requirements.txt](file:///C:/Users/edgar/roboquant/requirements.txt) for complete list of dependencies
 
+### Key Dependencies:
+- metatrader5==5.0.45
+- python-dotenv==1.0.0
+- pandas==2.1.0
+- numpy==1.24.3
+- requests==2.31.0
+- flask==3.0.0
+- vectorbt==0.26.0
+- ta-lib==0.4.28
+- plotly==5.17.0
+- beautifulsoup4==4.12.2
+- lxml==4.9.3
+- pytz==2023.3
+- xgboost==1.7.3
+
 ## Installation
 
 1. Clone this repository
@@ -100,8 +119,12 @@ The bot uses Forex Factory's economic calendar to detect high-impact events:
    ```
    pip install beautifulsoup4==4.12.2 lxml==4.9.3 pytz==2023.3
    ```
-5. Configure your MT5 credentials in the [.env](file:///C:/Users/edgar/roboquant/.env) file
-6. Set up webhook security by adding a strong secret key to [.env](file:///C:/Users/edgar/roboquant/.env):
+5. Install machine learning dependencies (optional):
+   ```
+   pip install xgboost==1.7.3
+   ```
+6. Configure your MT5 credentials in the [.env](file:///C:/Users/edgar/roboquant/.env) file
+7. Set up webhook security by adding a strong secret key to [.env](file:///C:/Users/edgar/roboquant/.env):
    ```
    WEBHOOK_SECRET_KEY=your_very_long_random_secret_key_here
    ```
@@ -184,14 +207,47 @@ response = requests.post("http://your-server:5000/webhook", data=body, headers=h
 4. When the current price breaks below the lower channel AND momentum is higher than historical average, it enters a short position
 5. Positions are managed with fixed stop loss and take profit levels
 
-## Safety Features
+## Security Features
 
-This strategy integrates with the existing safety module which includes:
-- Kill switch functionality
-- Drawdown limits
-- Daily loss limits
-- Concurrent position limits
-- Correlation checks
+This strategy now includes enhanced security features:
+
+### Secure Credential Management
+- Credentials are loaded securely from [.env](file:///C:/Users/edgar/roboquant/.env) without exposing them in logs
+- Automatic validation of webhook secret key length (>32 characters)
+
+### Input Validation
+- Symbol validation with regex patterns
+- Volume and price validation with reasonable limits
+- Order type validation (BUY/SELL only)
+
+### Rate Limiting
+- Webhook receiver limits requests to 10 per minute
+- Prevents abuse and denial of service attacks
+
+### Error Sanitization
+- Sensitive information is removed from error messages
+- Constant-time signature comparison prevents timing attacks
+
+### Circuit Breaker Pattern
+- Prevents cascading failures during MT5 connection issues
+- Automatic recovery after timeout periods
+
+## Machine Learning Integration
+
+The system includes a machine learning engine for enhanced trading signals:
+
+### Feature Engineering
+- RSI, MACD, ATR, Donchian channels, and other technical indicators
+- Comprehensive feature set for market analysis
+
+### XGBoost Model
+- Gradient boosting model for pattern recognition
+- Hybrid approach combining technical and ML signals (70/30 ratio)
+
+### Gradual Rollout
+- First logs predictions for monitoring
+- Then validates with paper trading
+- Finally enables live trading after validation
 
 ## Backtesting
 
@@ -206,6 +262,21 @@ The performance dashboard generates interactive HTML visualizations including:
 - Hourly trading patterns
 - Monthly performance
 - Profit factor evolution
+
+## Testing
+
+### Security Testing
+To test the security components:
+```
+python test_security.py
+```
+
+This test validates:
+- Secure credential loading
+- Input validation
+- Rate limiting
+- Error sanitization
+- Constant-time comparison
 
 ## Disclaimer
 
