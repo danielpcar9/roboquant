@@ -46,7 +46,7 @@ def test_secure_credential_manager():
         # Clean up temporary file
         try:
             os.unlink(temp_env_path)
-        except:
+        except Exception:
             pass
 
 def test_input_validator():

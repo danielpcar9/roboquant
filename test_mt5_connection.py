@@ -17,7 +17,7 @@ server = os.getenv('MT5_SERVER', '')
 print("MT5 Credentials:")
 print(f"Login: {login}")
 print(f"Server: {server}")
-print(f"Password length: {len(password)}")
+print(f"Password: {'(set)' if password else '(not set)'}")
 
 # Initialize MT5
 print("\nInitializing MT5...")

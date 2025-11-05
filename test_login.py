@@ -11,7 +11,7 @@ server = os.getenv('MT5_SERVER')
 
 print("=== Verificando credenciales ===")
 print(f"Login: '{login}'")
-print(f"Password length: {len(password) if password else 0} caracteres")
+print(f"Password: {'(set)' if password else '(not set)'}")
 print(f"Server: '{server}'")
 print()
 

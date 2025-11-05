@@ -52,18 +52,14 @@ def execute_risk_order():
     side = "BUY"
     risk_pct = 1.0
 
-    # Verificar safety checks (but allow override for testing)
+    # Verificar safety checks - MUST NOT BYPASS
     ok, reason = safety.check_all(new_symbol=symbol)
     if not ok:
-        # Check if it's just a correlation issue with the same symbol
-        if reason and "corr_" in reason and "_with_XAUUSD" in reason:
-            logging.warning(f"Correlation check failed but it's the same symbol: {reason}")
-            logging.info("Proceeding with trade execution for testing purposes")
-        else:
-            alert_safety_violation(reason)
-            logging.error("Safety check failed: %s", reason)
-            mt5.shutdown()  # type: ignore
-            return False
+        alert_safety_violation(reason)
+        logging.error("Safety check failed: %s", reason)
+        logging.critical("Trade execution prevented by safety checks. Aborting.")
+        mt5.shutdown()  # type: ignore
+        return False
 
     # Obtener precios actuales
     tick = mt5.symbol_info_tick(symbol)  # type: ignore

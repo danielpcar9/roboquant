@@ -172,7 +172,7 @@ def run_backtest(df, initial_capital=10000, lot_size=0.01,
         
         logging.info("🚀 Ejecutando backtest...")
         
-        # PORTFOLIO con SL/TP nativos (método correcto)
+        # PORTFOLIO con SL/TP nativos y costos realistas (método correcto)
         portfolio = vbt.Portfolio.from_signals(
             close=df['close'],
             entries=df['long_entry'],
@@ -180,8 +180,8 @@ def run_backtest(df, initial_capital=10000, lot_size=0.01,
             sl_stop=df['sl_stop'],      # ✅ Stop Loss como fracción
             tp_stop=df['tp_stop'],      # ✅ Take Profit como fracción
             init_cash=initial_capital,
-            fees=0.001,                 # 0.1% comisión por operación
-            slippage=0.0001,            # 1 pip de slippage
+            fees=0.002,                 # 0.2% comisión por operación (Exness Pro típico)
+            slippage=0.0003,            # 3 pips de slippage realista (XAUUSD spread 2-5 pips)
             size=lot_size,
             size_type='amount',         # Tamaño fijo en lotes
             freq='1H'                   # ✅ IMPORTANTE: Para Sharpe Ratio correcto
