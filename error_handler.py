@@ -6,11 +6,13 @@ circuit breaker pattern, and retry logic.
 
 import time
 import logging
+import os
 from enum import Enum
 from typing import Optional, Callable, Any, Type, Tuple, Union
 from functools import wraps
 import random
 import traceback
+import json
 
 # Configure logging for error handling
 error_logger = logging.getLogger('error_handling')
@@ -54,6 +56,16 @@ class CircuitBreakerError(RoboQuantError):
 
 class ConfigurationError(RoboQuantError):
     """Exception raised when configuration is invalid."""
+    pass
+
+
+class DataError(RoboQuantError):
+    """Exception raised when data processing fails."""
+    pass
+
+
+class NetworkError(RoboQuantError):
+    """Exception raised when network operations fail."""
     pass
 
 
@@ -241,6 +253,12 @@ market_data_circuit = CircuitBreaker(
     expected_exception=(ConnectionError, TimeoutError)
 )
 
+webhook_circuit = CircuitBreaker(
+    failure_threshold=3,
+    timeout=30,
+    expected_exception=(NetworkError, ConnectionError, TimeoutError)
+)
+
 
 def safe_mt5_call(func: Callable):
     """
@@ -299,6 +317,12 @@ def handle_exception(func: Callable):
             raise
         except CircuitBreakerError as e:
             error_logger.error(f"Circuit breaker error in {func.__name__}: {str(e)}")
+            raise
+        except DataError as e:
+            error_logger.error(f"Data error in {func.__name__}: {str(e)}")
+            raise
+        except NetworkError as e:
+            error_logger.error(f"Network error in {func.__name__}: {str(e)}")
             raise
         except Exception as e:
             error_logger.error(f"Unexpected error in {func.__name__}: {str(e)}")
@@ -387,3 +411,35 @@ MT5_ERROR_CODES = {
     10075: "Invalid trade operation for stochastics calculation mode",
     10076: "Invalid trade operation for wpr calculation mode"
 }
+
+
+def log_error_to_file(error_info: dict, log_file: str = "error_log.json"):
+    """
+    Log error information to a JSON file for later analysis.
+    
+    Args:
+        error_info: Dictionary containing error information
+        log_file: Path to the log file
+    """
+    try:
+        # Read existing log file if it exists
+        existing_logs = []
+        if os.path.exists(log_file):
+            with open(log_file, 'r') as f:
+                try:
+                    existing_logs = json.load(f)
+                except json.JSONDecodeError:
+                    existing_logs = []
+        
+        # Add new error info
+        existing_logs.append(error_info)
+        
+        # Keep only the last 1000 errors to prevent file from growing too large
+        if len(existing_logs) > 1000:
+            existing_logs = existing_logs[-1000:]
+        
+        # Write back to file
+        with open(log_file, 'w') as f:
+            json.dump(existing_logs, f, indent=2)
+    except Exception as e:
+        error_logger.error(f"Failed to log error to file: {e}")

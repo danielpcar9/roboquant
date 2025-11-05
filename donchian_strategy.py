@@ -41,6 +41,8 @@ from safety import Safety
 from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message, RateLimiter
 # Import config manager
 from config_manager import config_manager
+# Import error handler
+from error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -73,6 +75,38 @@ EVENT_BREAKOUT_ATR_THRESHOLD = config_manager.get('EVENT_BREAKOUT_ATR_THRESHOLD'
 EVENT_VOLUME_SPIKE_FACTOR = config_manager.get('EVENT_VOLUME_SPIKE_FACTOR')
 MAX_SPREAD_POINTS = config_manager.get('MAX_SPREAD_POINTS')
 
+# Performance monitoring
+STRATEGY_PERFORMANCE_MONITORING = True
+strategy_execution_times = []
+
+def performance_monitor(func):
+    """Decorator to monitor strategy performance."""
+    def wrapper(*args, **kwargs):
+        if not STRATEGY_PERFORMANCE_MONITORING:
+            return func(*args, **kwargs)
+            
+        start_time = time.perf_counter()
+        try:
+            result = func(*args, **kwargs)
+            end_time = time.perf_counter()
+            execution_time = end_time - start_time
+            strategy_execution_times.append(execution_time)
+            logging.debug(f"Strategy Performance: {func.__name__} executed in {execution_time:.4f} seconds")
+            
+            # Log average execution time every 10 executions
+            if len(strategy_execution_times) % 10 == 0:
+                avg_time = sum(strategy_execution_times[-10:]) / min(10, len(strategy_execution_times))
+                logging.info(f"Average execution time (last 10): {avg_time:.4f} seconds")
+            
+            return result
+        except Exception as e:
+            end_time = time.perf_counter()
+            execution_time = end_time - start_time
+            logging.debug(f"Strategy Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {e}")
+            raise
+    return wrapper
+
+@handle_exception
 def initialize_mt5():
     """Initialize MT5 connection"""
     # Add more detailed initialization info
@@ -110,6 +144,7 @@ def initialize_mt5():
     logging.info("MT5 initialized successfully")
     return True
 
+@handle_exception
 def in_trading_hours():
     """Check if current time is within trading hours (GMT)"""
     # Obtener hora UTC correctamente
@@ -122,6 +157,8 @@ def in_trading_hours():
     
     return in_hours
 
+@handle_exception
+@performance_monitor
 def get_donchian_channels(symbol, period):
     """Calculate Donchian channels"""
     logging.debug(f"Calculating Donchian channels for {symbol} with period {period}")
@@ -140,6 +177,8 @@ def get_donchian_channels(symbol, period):
     logging.debug(f"Calculated channels - Upper: {upper_channel}, Lower: {lower_channel}")
     return upper_channel, lower_channel
 
+@handle_exception
+@performance_monitor
 def calculate_avg_momentum(symbol, lookback):
     """Calculate average momentum over a lookback period"""
     logging.debug(f"Calculating momentum for {symbol} with lookback {lookback}")
@@ -158,6 +197,8 @@ def calculate_avg_momentum(symbol, lookback):
     logging.debug(f"Calculated momentum: {momentum}")
     return momentum
 
+@handle_exception
+@performance_monitor
 def get_current_price(symbol, order_type):
     """Get current price based on order type"""
     logging.debug(f"Getting current price for {symbol}, order type: {order_type}")
@@ -170,6 +211,8 @@ def get_current_price(symbol, order_type):
     logging.debug(f"Current price for {symbol}: {price}")
     return price
 
+@handle_exception
+@performance_monitor
 def get_current_spread(symbol):
     """Calculate current spread in points"""
     logging.debug(f"Calculating spread for {symbol}")
@@ -188,6 +231,8 @@ def get_current_spread(symbol):
     logging.debug(f"Spread for {symbol}: {spread_points:.2f} points")
     return spread_points
 
+@handle_exception
+@performance_monitor
 def calculate_atr(symbol, period=14):
     """Calculate Average True Range"""
     logging.debug(f"Calculating ATR for {symbol} with period {period}")
@@ -208,6 +253,8 @@ def calculate_atr(symbol, period=14):
     logging.debug(f"ATR for {symbol}: {atr:.5f}")
     return atr
 
+@handle_exception
+@performance_monitor
 def calculate_normalized_breakout(price, channel, atr):
     """Calculate normalized breakout distance (price-channel)/atr"""
     if atr is None or atr == 0:
@@ -216,6 +263,8 @@ def calculate_normalized_breakout(price, channel, atr):
     normalized = distance / atr
     return normalized
 
+@handle_exception
+@performance_monitor
 def get_volume_stats(symbol, lookback=20):
     """Get current volume vs average volume"""
     logging.debug(f"Calculating volume stats for {symbol} with lookback {lookback}")
@@ -231,17 +280,23 @@ def get_volume_stats(symbol, lookback=20):
     logging.debug(f"Volume stats for {symbol} - Current: {current_volume}, Average: {avg_volume:.2f}")
     return current_volume, avg_volume
 
+@handle_exception
+@performance_monitor
 def fetch_upcoming_high_impact(minutes_window=120):
     """Fetch upcoming high impact events from Forex Factory with caching."""
     # Convert minutes to hours for the new function
     hours_ahead = int(minutes_window / 60)
     return fetch_upcoming_events_cached(hours_ahead)
 
+@handle_exception
+@performance_monitor
 def fetch_fred_series(series_id, observations=1):
     """Fetch FRED series data - OBSOLETE, using Forex Factory instead."""
     # This function is obsolete, return None to indicate no data
     return None
 
+@handle_exception
+@performance_monitor
 def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     """Calculate lot size based on risk percentage and stop loss distance"""
     risk_amount = balance * (risk_pct / 100.0)
@@ -277,6 +332,9 @@ def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     logging.debug(f"Computed lots for {symbol}: {lots:.2f} (risk: {risk_amount:.2f}, SL: {sl_distance_points:.1f} points)")
     return lots
 
+@handle_exception
+@retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
+@performance_monitor
 def execute_trade(symbol, order_type, lots, sl_points, tp_points):
     """Execute a trade with given parameters"""
     # Validate inputs
@@ -380,6 +438,8 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
         logging.error(f"Error executing trade: {sanitize_error_message(str(e))}", exc_info=True)
         return False
 
+@handle_exception
+@performance_monitor
 def handle_event_state(symbol):
     """Handle event state transitions"""
     global event_state
@@ -410,6 +470,8 @@ def handle_event_state(symbol):
         return True
     return False
 
+@handle_exception
+@performance_monitor
 def run_strategy(symbol="XAUUSD"):
     """Main strategy function"""
     global event_state
@@ -507,6 +569,8 @@ def run_strategy(symbol="XAUUSD"):
         elif bearish_breakout and momentum_filter:
             execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
 
+@handle_exception
+@performance_monitor
 def main():
     """Main function to run the strategy"""
     logging.info("Starting Donchian Breakout Strategy")

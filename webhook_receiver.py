@@ -12,7 +12,7 @@ except ImportError:
     import MetaTrader5 as mt5  # type: ignore
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
-from security_manager import SecureCredentialManager, InputValidator, RateLimiter, constant_time_compare, sanitize_error_message
+from security_manager import SecureCredentialManager, InputValidator, RateLimiter, constant_time_compare, sanitize_error_message, ip_whitelist
 # Import config manager
 from config_manager import config_manager
 
@@ -43,6 +43,9 @@ DEFAULT_LOTS = config_manager.get('LOTS')
 DEFAULT_SL_POINTS = config_manager.get('STOP_LOSS_POINTS')
 DEFAULT_TP_POINTS = config_manager.get('TAKE_PROFIT_POINTS')
 DEFAULT_MAGIC = config_manager.get('MAGIC_NUMBER')
+
+# Webhook IP whitelist (configured via environment variable)
+WEBHOOK_ALLOWED_IPS = os.getenv('WEBHOOK_ALLOWED_IPS', '127.0.0.1,::1').split(',')
 
 
 def initialize_mt5():
@@ -167,8 +170,9 @@ def process_trade_signal(signal_data):
         return False
 
 @app.route('/webhook', methods=['POST'])
+@ip_whitelist(WEBHOOK_ALLOWED_IPS)  # Apply IP whitelist decorator
 def webhook():
-    """Webhook endpoint with HMAC authentication and rate limiting"""
+    """Webhook endpoint with HMAC authentication, rate limiting, and IP whitelisting"""
     try:
         # Apply rate limiting
         if not rate_limiter.is_allowed():

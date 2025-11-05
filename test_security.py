@@ -7,7 +7,7 @@ import os
 import tempfile
 import time
 from dotenv import load_dotenv
-from security_manager import SecureCredentialManager, InputValidator, RateLimiter, sanitize_error_message, constant_time_compare
+from security_manager import SecureCredentialManager, InputValidator, RateLimiter, sanitize_error_message, constant_time_compare, ip_whitelist
 
 def test_secure_credential_manager():
     """Test SecureCredentialManager functionality."""
@@ -179,6 +179,26 @@ def test_constant_time_compare():
         print(f"✗ Constant time comparison tests failed: {e}")
         return False
 
+def test_ip_whitelist():
+    """Test IP whitelist functionality."""
+    print("Testing IP whitelist...")
+    
+    try:
+        # Test with localhost IPs
+        allowed_ips = ['127.0.0.1', '::1']
+        
+        # This test is limited since we can't easily simulate Flask requests
+        # but we can at least verify the decorator can be created
+        decorator = ip_whitelist(allowed_ips)
+        assert callable(decorator)
+        
+        print("✓ IP whitelist tests passed")
+        return True
+        
+    except Exception as e:
+        print(f"✗ IP whitelist tests failed: {e}")
+        return False
+
 def main():
     """Run all security tests."""
     print("Running security component tests...\n")
@@ -188,7 +208,8 @@ def main():
         test_input_validator,
         test_rate_limiter,
         test_error_sanitization,
-        test_constant_time_compare
+        test_constant_time_compare,
+        test_ip_whitelist
     ]
     
     passed = 0

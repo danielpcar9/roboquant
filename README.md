@@ -15,6 +15,11 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - Webhook receiver for external signals
 - Backtesting capabilities
 - Performance dashboard
+- Enhanced security with encrypted credential storage
+- Comprehensive error handling with circuit breaker pattern
+- Machine learning integration for hybrid trading signals
+- Event-driven trading based on economic calendar
+- Performance monitoring and optimization
 
 ## Files
 
@@ -28,11 +33,82 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - [security_manager.py](file://c:\Users\edgar\roboquant\security_manager.py) - Security manager with credential handling, input validation, and rate limiting
 - [error_handler.py](file://c:\Users\edgar\roboquant\error_handler.py) - Error handling with circuit breaker and retry logic
 - [ml_engine.py](file://c:\Users\edgar\roboquant\ml_engine.py) - Machine learning engine with XGBoost model for hybrid trading signals
+- [post_mortem.py](file://c:\Users\edgar\roboquant\post_mortem.py) - Post-trade analysis and performance metrics
+- [forex_factory_scraper.py](file://c:\Users\edgar\roboquant\forex_factory_scraper.py) - Economic calendar scraper for event detection
+- [api_cache.py](file://c:\Users\edgar\roboquant\api_cache.py) - Caching system for API responses
+- [config_manager.py](file://c:\Users\edgar\roboquant\config_manager.py) - Centralized configuration management
 - [run_donchian.bat](file://c:\Users\edgar\roboquant\run_donchian.bat) - Batch file to run the strategy on Windows
 - [run_webhook.bat](file://c:\Users\edgar\roboquant\run_webhook.bat) - Batch file to run the webhook receiver
 - [run_backtest.bat](file://c:\Users\edgar\roboquant\run_backtest.bat) - Batch file to run backtesting
 - [test_mt5_connection.py](file://c:\Users\edgar\roboquant\test_mt5_connection.py) - Script to test MT5 connection
 - [test_security.py](file://c:\Users\edgar\roboquant\test_security.py) - Test script for security components
+- [test_post_mortem.py](file://c:\Users\edgar\roboquant\test_post_mortem.py) - Test script for post-trade analysis
+- [test_forex_factory_scraper.py](file://c:\Users\edgar\roboquant\test_forex_factory_scraper.py) - Test script for economic calendar scraper
+
+## Enhanced Security Features
+
+### Encrypted Credential Storage
+- Credentials are now stored using the keyring library for enhanced security
+- Falls back to environment variables if keyring is not available
+- Automatic encryption/decryption of sensitive data
+
+### IP Whitelisting
+- Webhook receiver now supports IP whitelisting for enhanced security
+- Configure allowed IPs via WEBHOOK_ALLOWED_IPS environment variable
+
+### Rate Limiting Improvements
+- Enhanced rate limiting with both global and per-IP tracking
+- Better retry-after calculation for clients
+
+## Performance Monitoring and Optimization
+
+### Execution Time Monitoring
+- All critical functions now include performance monitoring
+- Execution times are logged for optimization purposes
+- Average execution time tracking for strategy functions
+
+### Enhanced Trade Analysis
+- Comprehensive post-trade analysis with advanced metrics
+- Detailed performance reports with Sharpe ratio, Sortino ratio, and Calmar ratio
+- Time-based performance analysis to identify optimal trading hours
+
+## Machine Learning Enhancements
+
+### Improved Feature Engineering
+- Enhanced technical indicators with better calculation methods
+- Additional features for more accurate market analysis
+- Better handling of missing data and edge cases
+
+### Hybrid Signal Generation
+- Improved combination of technical and ML signals
+- Better weighting system for different signal types
+- Enhanced error handling for ML model predictions
+
+## Event-Driven Trading Improvements
+
+### Robust Economic Calendar Integration
+- Enhanced Forex Factory scraper with better error handling
+- Improved caching system with TTL support
+- Better parsing of calendar events with timezone handling
+
+### Event State Management
+- Enhanced state machine for event detection and trading
+- Better tracking of event-related trades
+- Improved cooldown periods between event trades
+
+## Configuration Management
+
+### Centralized Configuration
+- All configuration parameters are now managed through a centralized config manager
+- Easy parameter adjustment through environment variables
+- Secure credential management through the same interface
+
+## Testing Improvements
+
+### Comprehensive Test Coverage
+- Added unit tests for post-trade analysis module
+- Added unit tests for economic calendar scraper
+- Enhanced existing test coverage for security components
 
 ## Configuración Actualizada
 
@@ -102,6 +178,7 @@ The bot uses Forex Factory's economic calendar to detect high-impact events:
 - lxml==4.9.3
 - pytz==2023.3
 - xgboost==1.7.3
+- keyring==24.2.0
 
 ## Installation
 
@@ -123,10 +200,18 @@ The bot uses Forex Factory's economic calendar to detect high-impact events:
    ```
    pip install xgboost==1.7.3
    ```
-6. Configure your MT5 credentials in the [.env](file:///C:/Users/edgar/roboquant/.env) file
-7. Set up webhook security by adding a strong secret key to [.env](file:///C:/Users/edgar/roboquant/.env):
+6. Install security dependencies:
+   ```
+   pip install keyring==24.2.0
+   ```
+7. Configure your MT5 credentials in the [.env](file:///C:/Users/edgar/roboquant/.env) file
+8. Set up webhook security by adding a strong secret key to [.env](file:///C:/Users/edgar/roboquant/.env):
    ```
    WEBHOOK_SECRET_KEY=your_very_long_random_secret_key_here
+   ```
+9. Configure IP whitelisting for webhook receiver (optional):
+   ```
+   WEBHOOK_ALLOWED_IPS=127.0.0.1,::1,your_trusted_ip_addresses
    ```
 
 ## Usage
@@ -168,6 +253,12 @@ python backtest_apex_vectorbt.py
 To generate a performance dashboard:
 ```
 python performance_dashboard.py
+```
+
+### Post-Trade Analysis
+To generate a detailed performance report:
+```
+python post_mortem.py
 ```
 
 ## Webhook Security
@@ -214,6 +305,7 @@ This strategy now includes enhanced security features:
 ### Secure Credential Management
 - Credentials are loaded securely from [.env](file:///C:/Users/edgar/roboquant/.env) without exposing them in logs
 - Automatic validation of webhook secret key length (>32 characters)
+- Encrypted credential storage using keyring library
 
 ### Input Validation
 - Symbol validation with regex patterns
@@ -223,6 +315,7 @@ This strategy now includes enhanced security features:
 ### Rate Limiting
 - Webhook receiver limits requests to 10 per minute
 - Prevents abuse and denial of service attacks
+- Enhanced rate limiting with global and per-IP tracking
 
 ### Error Sanitization
 - Sensitive information is removed from error messages
@@ -231,6 +324,10 @@ This strategy now includes enhanced security features:
 ### Circuit Breaker Pattern
 - Prevents cascading failures during MT5 connection issues
 - Automatic recovery after timeout periods
+
+### IP Whitelisting
+- Webhook receiver supports IP whitelisting for enhanced security
+- Configure allowed IPs via WEBHOOK_ALLOWED_IPS environment variable
 
 ## Machine Learning Integration
 
@@ -263,6 +360,14 @@ The performance dashboard generates interactive HTML visualizations including:
 - Monthly performance
 - Profit factor evolution
 
+## Post-Trade Analysis
+
+The post-mortem module provides comprehensive trade analysis:
+- Detailed performance metrics (Sharpe ratio, Sortino ratio, Calmar ratio)
+- Time-based performance analysis
+- Best and worst performing hours
+- Maximum drawdown and consecutive loss tracking
+
 ## Testing
 
 ### Security Testing
@@ -277,6 +382,28 @@ This test validates:
 - Rate limiting
 - Error sanitization
 - Constant-time comparison
+
+### Post-Trade Analysis Testing
+To test the post-mortem components:
+```
+python test_post_mortem.py
+```
+
+This test validates:
+- Trade logging functionality
+- Performance metrics calculation
+- Report generation
+
+### Economic Calendar Scraper Testing
+To test the Forex Factory scraper:
+```
+python test_forex_factory_scraper.py
+```
+
+This test validates:
+- Event fetching functionality
+- Caching system
+- Error handling
 
 ## Disclaimer
 

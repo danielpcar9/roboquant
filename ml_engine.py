@@ -9,6 +9,7 @@ import numpy as np
 import logging
 from typing import Dict, Any, Tuple, Optional
 from datetime import datetime
+import os
 
 # Try to import XGBoost
 try:
@@ -36,7 +37,7 @@ class FeatureEngineer:
         """Initialize the feature engineer."""
         pass
     
-    def calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
+    def calculate_rsi(self, prices, period: int = 14):
         """
         Calculate Relative Strength Index (RSI).
         
@@ -54,10 +55,10 @@ class FeatureEngineer:
         rsi = 100 - (100 / (1 + rs))
         return rsi
     
-    def calculate_macd(self, prices: pd.Series, 
+    def calculate_macd(self, prices, 
                       fast_period: int = 12, 
                       slow_period: int = 26, 
-                      signal_period: int = 9) -> Tuple[pd.Series, pd.Series]:
+                      signal_period: int = 9):
         """
         Calculate MACD indicator.
         
@@ -76,7 +77,7 @@ class FeatureEngineer:
         signal_line = macd_line.ewm(span=signal_period).mean()
         return macd_line, signal_line
     
-    def calculate_atr(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
+    def calculate_atr(self, df: pd.DataFrame, period: int = 14):
         """
         Calculate Average True Range (ATR).
         
@@ -88,14 +89,14 @@ class FeatureEngineer:
             ATR series
         """
         high_low = df['high'] - df['low']
-        high_close = np.abs(df['high'] - df['close'].shift())
-        low_close = np.abs(df['low'] - df['close'].shift())
+        high_close = abs(df['high'] - df['close'].shift())
+        low_close = abs(df['low'] - df['close'].shift())
         ranges = pd.concat([high_low, high_close, low_close], axis=1)
-        true_range = np.max(ranges, axis=1)
+        true_range = ranges.max(axis=1)
         atr = pd.Series(true_range).rolling(period).mean()
         return atr
     
-    def calculate_donchian(self, df: pd.DataFrame, period: int = 50) -> Tuple[pd.Series, pd.Series]:
+    def calculate_donchian(self, df: pd.DataFrame, period: int = 50):
         """
         Calculate Donchian channels.
         
@@ -110,7 +111,7 @@ class FeatureEngineer:
         lower_channel = df['low'].rolling(period).min()
         return upper_channel, lower_channel
     
-    def engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def engineer_features(self, df: pd.DataFrame):
         """
         Engineer features for ML model.
         
@@ -169,8 +170,8 @@ class FeatureEngineer:
         
         # Lag features
         for lag in [1, 2, 3, 5]:
-            features_df[f'returns_lag_{lag}'] = features_df['returns'].shift(lag)
-            features_df[f'rsi_lag_{lag}'] = features_df['rsi'].shift(lag)
+            features_df['returns_lag_' + str(lag)] = features_df['returns'].shift(lag)
+            features_df['rsi_lag_' + str(lag)] = features_df['rsi'].shift(lag)
         
         # Difference features
         features_df['price_change'] = features_df['close'] - features_df['close'].shift(1)
@@ -179,7 +180,7 @@ class FeatureEngineer:
         # Clean up any NaN values
         features_df = features_df.dropna()
         
-        ml_logger.info(f"Engineered {len(features_df.columns)} features from {len(df.columns)} input columns")
+        ml_logger.info("Engineered %d features from %d input columns", len(features_df.columns), len(df.columns))
         return features_df
 
 
@@ -199,11 +200,12 @@ class TradingMLModel:
         self.model = None
         self.feature_engineer = FeatureEngineer()
         self.is_trained = False
+        self.model_path = model_path
         
-        if model_path:
+        if model_path and os.path.exists(model_path):
             self.load_model(model_path)
     
-    def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def prepare_features(self, df: pd.DataFrame):
         """
         Prepare features for model training/prediction.
         
@@ -224,9 +226,10 @@ class TradingMLModel:
         exclude_columns = ['open', 'high', 'low', 'close', 'tick_volume', 'volume']
         feature_columns = [col for col in features_df.columns if col not in exclude_columns]
         
-        return features_df[feature_columns]
+        result = features_df[feature_columns]
+        return result
     
-    def prepare_targets(self, df: pd.DataFrame, lookahead: int = 1) -> pd.Series:
+    def prepare_targets(self, df: pd.DataFrame, lookahead: int = 1):
         """
         Prepare target variables for model training.
         
@@ -271,6 +274,12 @@ class TradingMLModel:
         features_df = self.prepare_features(df)
         targets = self.prepare_targets(df)
         
+        # Ensure we're working with pandas objects
+        if not isinstance(features_df, pd.DataFrame):
+            features_df = pd.DataFrame(features_df)
+        if not isinstance(targets, pd.Series):
+            targets = pd.Series(targets)
+        
         # Align indices
         common_index = features_df.index.intersection(targets.index)
         features_df = features_df.loc[common_index]
@@ -284,34 +293,41 @@ class TradingMLModel:
         y_test = targets.iloc[split_idx:]
         
         # Handle class imbalance
-        scale_pos_weight = float(len(y_train[y_train == -1])) / len(y_train[y_train == 1]) if len(y_train[y_train == 1]) > 0 else 1
+        pos_count = len(y_train[y_train == 1])
+        neg_count = len(y_train[y_train == -1])
+        scale_pos_weight = float(neg_count) / pos_count if pos_count > 0 else 1
         
         # Create XGBoost classifier
-        self.model = xgb.XGBClassifier(
-            n_estimators=100,
-            max_depth=6,
-            learning_rate=0.1,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            scale_pos_weight=scale_pos_weight,
-            random_state=random_state,
-            objective='multi:softprob',
-            num_class=3  # Buy, Sell, Hold
-        )
+        if xgb is not None:
+            self.model = xgb.XGBClassifier(
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                scale_pos_weight=scale_pos_weight,
+                random_state=random_state,
+                objective='multi:softprob',
+                num_class=3  # Buy, Sell, Hold
+            )
         
         # Train model
-        ml_logger.info(f"Training model with {len(X_train)} samples and {len(X_train.columns)} features")
-        self.model.fit(X_train, y_train)
+        ml_logger.info("Training model with %d samples and %d features", len(X_train), len(X_train.columns))
+        if self.model is not None:
+            self.model.fit(X_train, y_train)
         
         # Evaluate model
-        train_score = self.model.score(X_train, y_train)
-        test_score = self.model.score(X_test, y_test)
+        train_score = self.model.score(X_train, y_train) if self.model is not None else 0
+        test_score = self.model.score(X_test, y_test) if self.model is not None else 0
         
         # Get feature importance
-        feature_importance = pd.DataFrame({
-            'feature': X_train.columns,
-            'importance': self.model.feature_importances_
-        }).sort_values('importance', ascending=False)
+        if self.model is not None:
+            feature_importance = pd.DataFrame({
+                'feature': X_train.columns,
+                'importance': self.model.feature_importances_
+            }).sort_values('importance', ascending=False)
+        else:
+            feature_importance = pd.DataFrame()
         
         self.is_trained = True
         
@@ -324,10 +340,10 @@ class TradingMLModel:
             'n_samples_test': len(X_test)
         }
         
-        ml_logger.info(f"Model training completed. Train accuracy: {train_score:.4f}, Test accuracy: {test_score:.4f}")
+        ml_logger.info("Model training completed. Train accuracy: %.4f, Test accuracy: %.4f", train_score, test_score)
         return results
     
-    def predict(self, df: pd.DataFrame) -> pd.Series:
+    def predict(self, df: pd.DataFrame):
         """
         Make predictions using the trained model.
         
@@ -343,13 +359,17 @@ class TradingMLModel:
         # Prepare features
         features_df = self.prepare_features(df)
         
+        # Ensure we're working with pandas objects
+        if not isinstance(features_df, pd.DataFrame):
+            features_df = pd.DataFrame(features_df)
+        
         # Make predictions
         predictions = self.model.predict(features_df)
         
         # Return as pandas Series with same index
         return pd.Series(predictions, index=features_df.index)
     
-    def predict_proba(self, df: pd.DataFrame) -> pd.DataFrame:
+    def predict_proba(self, df: pd.DataFrame):
         """
         Get prediction probabilities.
         
@@ -364,6 +384,10 @@ class TradingMLModel:
             
         # Prepare features
         features_df = self.prepare_features(df)
+        
+        # Ensure we're working with pandas objects
+        if not isinstance(features_df, pd.DataFrame):
+            features_df = pd.DataFrame(features_df)
         
         # Get probabilities
         probabilities = self.model.predict_proba(features_df)
@@ -383,8 +407,12 @@ class TradingMLModel:
         if not self.is_trained or self.model is None:
             raise RuntimeError("Model is not trained. Please train the model first.")
             
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        
         self.model.save_model(path)
-        ml_logger.info(f"Model saved to {path}")
+        self.model_path = path
+        ml_logger.info("Model saved to %s", path)
     
     def load_model(self, path: str) -> None:
         """
@@ -396,10 +424,16 @@ class TradingMLModel:
         if not XGBOOST_AVAILABLE:
             raise RuntimeError("XGBoost is not available. Please install xgboost package.")
             
-        self.model = xgb.XGBClassifier()
-        self.model.load_model(path)
+        # Check if file exists
+        if not os.path.exists(path):
+            raise FileNotFoundError("Model file not found: %s" % path)
+            
+        if xgb is not None:
+            self.model = xgb.XGBClassifier()
+            self.model.load_model(path)
         self.is_trained = True
-        ml_logger.info(f"Model loaded from {path}")
+        self.model_path = path
+        ml_logger.info("Model loaded from %s", path)
 
 
 class MLTradingSystem:
@@ -415,10 +449,11 @@ class MLTradingSystem:
         self.ml_model = TradingMLModel(model_path) if XGBOOST_AVAILABLE else None
         self.feature_engineer = FeatureEngineer()
         self.paper_trading_mode = True  # Start in paper trading mode
+        self.model_path = model_path
         
     def generate_hybrid_signals(self, df: pd.DataFrame, 
                               technical_weight: float = 0.7,
-                              ml_weight: float = 0.3) -> pd.DataFrame:
+                              ml_weight: float = 0.3):
         """
         Generate hybrid trading signals combining technical and ML signals.
         
@@ -432,7 +467,11 @@ class MLTradingSystem:
         """
         if not XGBOOST_AVAILABLE or self.ml_model is None:
             ml_logger.warning("ML model not available, using only technical signals")
-            return self._generate_technical_signals(df)
+            result = self._generate_technical_signals(df)
+            # Convert to DataFrame
+            result_df = df.copy()
+            result_df['signal'] = result
+            return result_df
             
         # Generate technical signals
         tech_signals = self._generate_technical_signals(df)
@@ -443,7 +482,7 @@ class MLTradingSystem:
                 ml_predictions = self.ml_model.predict(df)
                 ml_signals = pd.Series(ml_predictions, index=df.index)
             except Exception as e:
-                ml_logger.warning(f"Failed to generate ML signals: {e}")
+                ml_logger.warning("Failed to generate ML signals: %s", str(e))
                 ml_signals = pd.Series(0, index=df.index)
         else:
             ml_logger.warning("ML model not trained, using only technical signals")
@@ -466,7 +505,7 @@ class MLTradingSystem:
         
         return result_df
     
-    def _generate_technical_signals(self, df: pd.DataFrame) -> pd.Series:
+    def _generate_technical_signals(self, df: pd.DataFrame):
         """
         Generate technical trading signals.
         
@@ -480,19 +519,54 @@ class MLTradingSystem:
         
         # Donchian breakout signals
         upper_dc, lower_dc = self.feature_engineer.calculate_donchian(df)
-        signals[(df['close'] > upper_dc) & (df['close'].shift(1) <= upper_dc.shift(1))] = 1   # Buy breakout
-        signals[(df['close'] < lower_dc) & (df['close'].shift(1) >= lower_dc.shift(1))] = -1  # Sell breakout
+        # Use safe indexing for shift operations
+        try:
+            close_shifted = df['close'].shift(1)
+            upper_dc_shifted = upper_dc.shift(1)
+            lower_dc_shifted = lower_dc.shift(1)
+            
+            condition1 = (df['close'] > upper_dc) & (close_shifted <= upper_dc_shifted)
+            condition2 = (df['close'] < lower_dc) & (close_shifted >= lower_dc_shifted)
+            
+            signals[condition1] = 1   # Buy breakout
+            signals[condition2] = -1  # Sell breakout
+        except:
+            # If shift operations fail, use simpler conditions
+            condition1 = df['close'] > upper_dc
+            condition2 = df['close'] < lower_dc
+            signals[condition1] = 1
+            signals[condition2] = -1
         
         # RSI signals
         rsi = self.feature_engineer.calculate_rsi(df['close'])
-        signals[(rsi < 30) & (rsi.shift(1) >= 30)] = 1   # RSI oversold buy
-        signals[(rsi > 70) & (rsi.shift(1) <= 70)] = -1  # RSI overbought sell
+        try:
+            rsi_shifted = rsi.shift(1)
+            condition3 = (rsi < 30) & (rsi_shifted >= 30)
+            condition4 = (rsi > 70) & (rsi_shifted <= 70)
+            signals[condition3] = 1   # RSI oversold buy
+            signals[condition4] = -1  # RSI overbought sell
+        except:
+            # If shift operations fail, use simpler conditions
+            condition3 = rsi < 30
+            condition4 = rsi > 70
+            signals[condition3] = 1
+            signals[condition4] = -1
         
         # MACD signals
         macd_line, signal_line = self.feature_engineer.calculate_macd(df['close'])
         macd_histogram = macd_line - signal_line
-        signals[(macd_histogram > 0) & (macd_histogram.shift(1) <= 0)] = 1   # MACD bullish crossover
-        signals[(macd_histogram < 0) & (macd_histogram.shift(1) >= 0)] = -1  # MACD bearish crossover
+        try:
+            macd_hist_shifted = macd_histogram.shift(1)
+            condition5 = (macd_histogram > 0) & (macd_hist_shifted <= 0)
+            condition6 = (macd_histogram < 0) & (macd_hist_shifted >= 0)
+            signals[condition5] = 1   # MACD bullish crossover
+            signals[condition6] = -1  # MACD bearish crossover
+        except:
+            # If shift operations fail, use simpler conditions
+            condition5 = macd_histogram > 0
+            condition6 = macd_histogram < 0
+            signals[condition5] = 1
+            signals[condition6] = -1
         
         return signals
     
@@ -516,16 +590,16 @@ class MLTradingSystem:
                 for idx in recent_idx:
                     if idx in predictions.index:
                         pred = predictions.loc[idx]
-                        prob = probabilities.loc[idx] if idx in probabilities.index else None
-                        signal_text = {1: "BUY", -1: "SELL", 0: "HOLD"}.get(pred, "UNKNOWN")
-                        ml_logger.info(f"ML Prediction for {idx}: {signal_text}")
-                        if prob is not None:
-                            ml_logger.info(f"  Probabilities - Sell: {prob['sell_prob']:.3f}, "
-                                         f"Hold: {prob['hold_prob']:.3f}, Buy: {prob['buy_prob']:.3f}")
+                        if idx in probabilities.index:
+                            prob = probabilities.loc[idx]
+                            signal_text = {1: "BUY", -1: "SELL", 0: "HOLD"}.get(pred, "UNKNOWN")
+                            ml_logger.info("ML Prediction for %s: %s", idx, signal_text)
+                            ml_logger.info("  Probabilities - Sell: %.3f, Hold: %.3f, Buy: %.3f", 
+                                         prob['sell_prob'], prob['hold_prob'], prob['buy_prob'])
             else:
                 ml_logger.info("ML model not trained yet")
         except Exception as e:
-            ml_logger.error(f"Error logging predictions: {e}")
+            ml_logger.error("Error logging predictions: %s", str(e))
     
     def enable_live_trading(self) -> None:
         """Enable live trading mode (after paper trading validation)."""

@@ -12,168 +12,149 @@ from safety import Safety
 from mt5_utils import build_and_send_order, estimate_lots_by_risk
 from post_mortem import log_trade
 from alerts import alert_trade_opened, alert_safety_violation
+# Import error handler
+from error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-# Inicializar MT5
-if not mt5.initialize():  # type: ignore
-    logging.error("No se pudo inicializar MT5")
-    quit()
+@handle_exception
+def initialize_mt5():
+    """Initialize MT5 connection"""
+    if not mt5.initialize():  # type: ignore
+        logging.error("No se pudo inicializar MT5")
+        return False
 
-LOGIN = int(os.getenv("MT5_LOGIN", "0"))
-PASSWORD = os.getenv("MT5_PASSWORD", "")
-SERVER = os.getenv("MT5_SERVER", "")
+    LOGIN = int(os.getenv("MT5_LOGIN", "0"))
+    PASSWORD = os.getenv("MT5_PASSWORD", "")
+    SERVER = os.getenv("MT5_SERVER", "")
 
-if not mt5.login(LOGIN, password=PASSWORD, server=SERVER):  # type: ignore
-    logging.error("Login fallido")
-    mt5.shutdown()  # type: ignore
-    quit()
-
-# Inicializar modulo de seguridad
-safety = Safety(mt5_module=mt5)
-
-# Parametros de trade
-symbol = "XAUUSD"
-side = "BUY"
-risk_pct = 1.0
-
-# Verificar safety checks (but allow override for testing)
-ok, reason = safety.check_all(new_symbol=symbol)
-if not ok:
-    # Check if it's just a correlation issue with the same symbol
-    if reason and "corr_" in reason and "_with_XAUUSD" in reason:
-        logging.warning(f"Correlation check failed but it's the same symbol: {reason}")
-        logging.info("Proceeding with trade execution for testing purposes")
-    else:
-        alert_safety_violation(reason)
-        logging.error("Safety check failed: %s", reason)
+    if not mt5.login(LOGIN, password=PASSWORD, server=SERVER):  # type: ignore
+        logging.error("Login fallido")
         mt5.shutdown()  # type: ignore
-        quit()
+        return False
+    
+    return True
 
-# Obtener precios actuales
-tick = mt5.symbol_info_tick(symbol)  # type: ignore
-sym_info = mt5.symbol_info(symbol)  # type: ignore
-point = sym_info.point
+@handle_exception
+@retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
+def execute_risk_order():
+    """Execute a risk-based order with comprehensive error handling"""
+    # Inicializar MT5
+    if not initialize_mt5():
+        return False
 
-# Calcular entry y stops
-price = tick.ask if side == "BUY" else tick.bid
+    # Inicializar modulo de seguridad
+    safety = Safety(mt5_module=mt5)
 
-# Use more conservative SL/TP values for XAUUSD (in points)
-# XAUUSD typically needs wider stops due to higher volatility
-sl_points = 200  # Increased from 150 to 200 points for SL
-tp_points = 400  # Increased from 300 to 400 points for TP (2:1 ratio)
+    # Parametros de trade
+    symbol = "XAUUSD"
+    side = "BUY"
+    risk_pct = 1.0
 
-# Calculate SL/TP with proper direction
-if side == "BUY":
-    sl_price = price - sl_points * point
-    tp_price = price + tp_points * point
-else:  # SELL
-    sl_price = price + sl_points * point
-    tp_price = price - tp_points * point
+    # Verificar safety checks (but allow override for testing)
+    ok, reason = safety.check_all(new_symbol=symbol)
+    if not ok:
+        # Check if it's just a correlation issue with the same symbol
+        if reason and "corr_" in reason and "_with_XAUUSD" in reason:
+            logging.warning(f"Correlation check failed but it's the same symbol: {reason}")
+            logging.info("Proceeding with trade execution for testing purposes")
+        else:
+            alert_safety_violation(reason)
+            logging.error("Safety check failed: %s", reason)
+            mt5.shutdown()  # type: ignore
+            return False
 
-# Log the calculated prices for debugging
-logging.info(f"Current price: {price}, SL: {sl_price}, TP: {tp_price}")
-logging.info(f"Price difference - SL: {abs(price - sl_price)/point} points, TP: {abs(price - tp_price)/point} points")
+    # Obtener precios actuales
+    tick = mt5.symbol_info_tick(symbol)  # type: ignore
+    sym_info = mt5.symbol_info(symbol)  # type: ignore
+    point = sym_info.point
 
-# Ensure SL/TP are not too close to current price (minimum distance)
-min_distance_points = 100 * point  # Minimum 100 points distance
-if side == "BUY":
-    if (sl_price > price - min_distance_points):
-        sl_price = price - min_distance_points
-    if (tp_price < price + min_distance_points * 2):
-        tp_price = price + min_distance_points * 2
-else:  # SELL
-    if (sl_price < price + min_distance_points):
-        sl_price = price + min_distance_points
-    if (tp_price > price - min_distance_points * 2):
-        tp_price = price - min_distance_points * 2
+    # Calcular entry y stops
+    price = tick.ask if side == "BUY" else tick.bid
 
-logging.info(f"Adjusted prices - Price: {price}, SL: {sl_price}, TP: {tp_price}")
+    # Use more conservative SL/TP values for XAUUSD (in points)
+    # XAUUSD typically needs wider stops due to higher volatility
+    sl_points = 200  # Increased from 150 to 200 points for SL
+    tp_points = 400  # Increased from 300 to 400 points for TP (2:1 ratio)
 
-# Calcular volumen basado en riesgo
-volume = estimate_lots_by_risk(
-    symbol=symbol,
-    entry_price=price,
-    stop_price=sl_price,
-    risk_pct=risk_pct,
-    mt5_module=mt5
-)
+    # Calculate SL/TP with proper direction
+    if side == "BUY":
+        sl_price = price - sl_points * point
+        tp_price = price + tp_points * point
+    else:  # SELL
+        sl_price = price + sl_points * point
+        tp_price = price - tp_points * point
 
-logging.info("Volumen calculado: %s lotes para %s porciento de riesgo", volume, risk_pct)
+    # Log the calculated prices for debugging
+    logging.info(f"Current price: {price}, SL: {sl_price}, TP: {tp_price}")
+    logging.info(f"Price difference - SL: {abs(price - sl_price)/point} points, TP: {abs(price - tp_price)/point} points")
 
-# Enviar orden
-try:
-    result = build_and_send_order(
+    # Ensure SL/TP are not too close to current price (minimum distance)
+    min_distance_points = 100 * point  # Minimum 100 points distance
+    if side == "BUY":
+        if (sl_price > price - min_distance_points):
+            sl_price = price - min_distance_points
+        if (tp_price < price + min_distance_points * 2):
+            tp_price = price + min_distance_points * 2
+    else:  # SELL
+        if (sl_price < price + min_distance_points):
+            sl_price = price + min_distance_points
+        if (tp_price > price - min_distance_points * 2):
+            tp_price = price - min_distance_points * 2
+
+    logging.info(f"Adjusted prices - Price: {price}, SL: {sl_price}, TP: {tp_price}")
+
+    # Calcular volumen basado en riesgo
+    volume = estimate_lots_by_risk(
         symbol=symbol,
-        side=side,
-        volume=volume,
-        sl=sl_price,
-        tp=tp_price,
+        entry_price=price,
+        stop_price=sl_price,
+        risk_pct=risk_pct,
         mt5_module=mt5
     )
-    
-    # Logging para post-mortem
-    log_trade({
-        'timestamp_open': datetime.utcnow().isoformat(),
-        'ticket': result.order,
-        'symbol': symbol,
-        'side': side,
-        'volume': volume,
-        'entry_price': result.price,
-        'sl': sl_price,
-        'tp': tp_price,
-        'balance_before': mt5.account_info().balance,  # type: ignore
-        'hour_of_day': datetime.utcnow().hour,
-        'day_of_week': datetime.utcnow().weekday()
-    })
-    
-    # Enviar alerta
-    alert_trade_opened(result.order, symbol, side, volume, result.price, sl_price, tp_price)
-    
-    logging.info("Orden ejecutada exitosamente. Ticket: %s", result.order)
 
-except Exception as e:
-    logging.exception("Error al ejecutar orden")
-    from alerts import telegram_alert
-    telegram_alert("Error al ejecutar orden: " + str(e))
+    logging.info("Volumen calculado: %s lotes para %s porciento de riesgo", volume, risk_pct)
 
-# Try placing order with SL/TP using the same approach as donchian_strategy
-try:
-    result = build_and_send_order(
-        symbol=symbol,
-        side=side,
-        volume=volume,
-        sl=sl_price,
-        tp=tp_price,
-        # Add specific parameters that might help
-        deviation=10,  # Reduced deviation
-        mt5_module=mt5
-    )
-    
-    # Logging para post-mortem
-    log_trade({
-        'timestamp_open': datetime.utcnow().isoformat(),
-        'ticket': result.order,
-        'symbol': symbol,
-        'side': side,
-        'volume': volume,
-        'entry_price': result.price,
-        'sl': sl_price,
-        'tp': tp_price,
-        'balance_before': mt5.account_info().balance,  # type: ignore
-        'hour_of_day': datetime.utcnow().hour,
-        'day_of_week': datetime.utcnow().weekday()
-    })
-    
-    # Enviar alerta
-    alert_trade_opened(result.order, symbol, side, volume, result.price, sl_price, tp_price)
-    
-    logging.info("Orden ejecutada exitosamente. Ticket: %s", result.order)
+    # Enviar orden
+    try:
+        result = build_and_send_order(
+            symbol=symbol,
+            side=side,
+            volume=volume,
+            sl=sl_price,
+            tp=tp_price,
+            mt5_module=mt5
+        )
+        
+        # Logging para post-mortem
+        log_trade({
+            'timestamp_open': datetime.utcnow().isoformat(),
+            'ticket': result.order,
+            'symbol': symbol,
+            'side': side,
+            'volume': volume,
+            'entry_price': result.price,
+            'sl': sl_price,
+            'tp': tp_price,
+            'balance_before': mt5.account_info().balance,  # type: ignore
+            'hour_of_day': datetime.utcnow().hour,
+            'day_of_week': datetime.utcnow().weekday()
+        })
+        
+        # Enviar alerta
+        alert_trade_opened(result.order, symbol, side, volume, result.price, sl_price, tp_price)
+        
+        logging.info("Orden ejecutada exitosamente. Ticket: %s", result.order)
+        return True
 
-except Exception as e:
-    logging.exception("Error al ejecutar orden")
-    from alerts import telegram_alert
-    telegram_alert("Error al ejecutar orden: " + str(e))
+    except Exception as e:
+        logging.exception("Error al ejecutar orden")
+        from alerts import telegram_alert
+        telegram_alert("Error al ejecutar orden: " + str(e))
+        return False
+    finally:
+        mt5.shutdown()  # type: ignore
 
-mt5.shutdown()  # type: ignore
+if __name__ == "__main__":
+    execute_risk_order()

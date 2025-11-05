@@ -15,6 +15,17 @@ import hmac
 import ipaddress
 from functools import wraps
 
+# Try to import keyring for encrypted credential storage
+KEYRING_AVAILABLE = False
+keyring = None
+try:
+    import importlib
+    keyring = importlib.import_module('keyring')
+    importlib.import_module('keyring.errors')
+    KEYRING_AVAILABLE = True
+except ImportError:
+    logging.warning("Keyring not available. Credentials will be stored in environment variables.")
+
 # Configure logging for security module
 security_logger = logging.getLogger('security')
 security_logger.setLevel(logging.INFO)
@@ -26,20 +37,22 @@ if not security_logger.handlers:
 
 
 class SecureCredentialManager:
-    """Securely loads and manages credentials without exposing them in logs."""
+    """Securely loads and manages credentials with encryption support."""
     
-    def __init__(self, env_file_path: Optional[str] = None):
+    def __init__(self, env_file_path: Optional[str] = None, use_encryption: bool = True):
         """
         Initialize the credential manager.
         
         Args:
             env_file_path: Path to the .env file. If None, uses default loading behavior.
+            use_encryption: Whether to use encrypted storage for credentials
         """
         self._credentials = {}
+        self._use_encryption = use_encryption and KEYRING_AVAILABLE
         self._load_credentials(env_file_path)
     
     def _load_credentials(self, env_file_path: Optional[str] = None) -> None:
-        """Load credentials from environment variables."""
+        """Load credentials from environment variables or encrypted storage."""
         try:
             # Load environment variables without logging their values
             if env_file_path:
@@ -58,6 +71,22 @@ class SecureCredentialManager:
             ]
             
             for key in credential_keys:
+                if self._use_encryption and keyring:
+                    # Try to get from encrypted storage first
+                    try:
+                        value = keyring.get_password("roboquant", key)
+                        if value is not None:
+                            # Store only non-sensitive information about credentials
+                            self._credentials[key] = {
+                                'exists': True,
+                                'length': len(value) if key != 'MT5_LOGIN' else None,
+                                'first_char': value[0] if value and key not in ['MT5_LOGIN', 'MT5_PASSWORD'] else None
+                            }
+                            continue
+                    except Exception:
+                        pass  # Fall back to environment variables
+                
+                # Fall back to environment variables
                 value = os.getenv(key)
                 if value is not None:
                     # Store only non-sensitive information about credentials
@@ -84,7 +113,41 @@ class SecureCredentialManager:
         Returns:
             The credential value or None if not found
         """
+        if self._use_encryption and keyring:
+            # Try to get from encrypted storage first
+            try:
+                value = keyring.get_password("roboquant", key)
+                if value is not None:
+                    return value
+            except Exception:
+                pass  # Fall back to environment variables
+        
+        # Fall back to environment variables
         return os.getenv(key)
+    
+    def set_credential(self, key: str, value: str) -> bool:
+        """
+        Set a credential value securely.
+        
+        Args:
+            key: The credential key to set
+            value: The credential value to store
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if self._use_encryption and keyring:
+            try:
+                keyring.set_password("roboquant", key, value)
+                return True
+            except Exception as e:
+                security_logger.error("Failed to store credential in keyring: %s", str(e))
+                return False
+        else:
+            # For non-encrypted storage, we can't actually set environment variables
+            # This is just for compatibility
+            security_logger.warning("Non-encrypted credential storage requested or keyring not available - not setting environment variable")
+            return False
     
     def credential_exists(self, key: str) -> bool:
         """
@@ -234,6 +297,7 @@ class RateLimiter:
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests = {}  # Dictionary of IP -> list of timestamps
+        self.global_requests = []  # List of all request timestamps for global limiting
     
     def is_allowed(self, ip_address: Optional[str] = None) -> bool:
         """
@@ -245,24 +309,32 @@ class RateLimiter:
         Returns:
             True if allowed, False if rate limited
         """
-        # Use a default key if no IP provided
-        key = ip_address if ip_address else "default"
-        
         now = time.time()
         
-        # Initialize requests list for this IP if not exists
-        if key not in self.requests:
-            self.requests[key] = []
-        
-        # Remove old requests outside the time window
-        self.requests[key] = [req_time for req_time in self.requests[key] if now - req_time < self.time_window]
-        
-        # Check if we're under the limit
-        if len(self.requests[key]) < self.max_requests:
-            self.requests[key].append(now)
-            return True
-        else:
+        # Global rate limiting
+        self.global_requests = [req_time for req_time in self.global_requests if now - req_time < self.time_window]
+        if len(self.global_requests) >= self.max_requests:
             return False
+        
+        # Per-IP rate limiting
+        if ip_address:
+            # Initialize requests list for this IP if not exists
+            if ip_address not in self.requests:
+                self.requests[ip_address] = []
+            
+            # Remove old requests outside the time window
+            self.requests[ip_address] = [req_time for req_time in self.requests[ip_address] if now - req_time < self.time_window]
+            
+            # Check if we're under the limit
+            if len(self.requests[ip_address]) >= self.max_requests:
+                return False
+            
+            # Add the new request
+            self.requests[ip_address].append(now)
+        
+        # Add to global requests
+        self.global_requests.append(now)
+        return True
     
     def get_retry_after(self) -> int:
         """
@@ -272,9 +344,7 @@ class RateLimiter:
             Seconds to wait
         """
         now = time.time()
-        all_requests = []
-        for ip_requests in self.requests.values():
-            all_requests.extend(ip_requests)
+        all_requests = self.global_requests[:]
         
         if not all_requests:
             return 0

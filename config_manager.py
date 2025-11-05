@@ -48,6 +48,26 @@ class ConfigManager:
             'EVENT_SL_ATR_MULTIPLIER': float(os.getenv('EVENT_SL_ATR_MULTIPLIER', '2.5')),
             'EVENT_BREAKOUT_ATR_THRESHOLD': float(os.getenv('EVENT_BREAKOUT_ATR_THRESHOLD', '0.3')),
             'EVENT_VOLUME_SPIKE_FACTOR': float(os.getenv('EVENT_VOLUME_SPIKE_FACTOR', '1.7')),
+            
+            # Webhook parameters
+            'WEBHOOK_PORT': int(os.getenv('WEBHOOK_PORT', '5000')),
+            'WEBHOOK_HOST': os.getenv('WEBHOOK_HOST', '0.0.0.0'),
+            
+            # ML Engine parameters
+            'ML_ENABLED': os.getenv('ML_ENABLED', 'False').lower() == 'true',
+            'ML_MODEL_PATH': os.getenv('ML_MODEL_PATH', 'models/trading_model.json'),
+            'ML_TRAINING_DATA_PATH': os.getenv('ML_TRAINING_DATA_PATH', 'data/training_data.csv'),
+            
+            # Backtesting parameters
+            'BACKTEST_INITIAL_CAPITAL': float(os.getenv('BACKTEST_INITIAL_CAPITAL', '10000.0')),
+            'BACKTEST_DAYS_BACK': int(os.getenv('BACKTEST_DAYS_BACK', '1825')),  # ~5 years
+            
+            # Performance dashboard parameters
+            'DASHBOARD_OUTPUT_FILE': os.getenv('DASHBOARD_OUTPUT_FILE', 'dashboard.html'),
+            
+            # API Cache parameters
+            'CACHE_TTL': int(os.getenv('CACHE_TTL', '1800')),  # 30 minutes
+            'CACHE_FILE_PATH': os.getenv('CACHE_FILE_PATH', 'data/api_cache.json'),
         })
     
     def get(self, key: str, default: Any = None) -> Any:
@@ -63,6 +83,16 @@ class ConfigManager:
         """
         return self._config.get(key, default)
     
+    def set(self, key: str, value: Any) -> None:
+        """
+        Set a configuration value.
+        
+        Args:
+            key: Configuration key
+            value: Configuration value
+        """
+        self._config[key] = value
+    
     def get_credential(self, key: str) -> Optional[str]:
         """
         Get a credential value.
@@ -74,6 +104,19 @@ class ConfigManager:
             Credential value or None if not found
         """
         return self._credential_manager.get_credential(key)
+    
+    def set_credential(self, key: str, value: str) -> bool:
+        """
+        Set a credential value securely.
+        
+        Args:
+            key: Credential key
+            value: Credential value
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        return self._credential_manager.set_credential(key, value)
     
     def validate_webhook_secret(self) -> bool:
         """

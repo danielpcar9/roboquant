@@ -1,6 +1,8 @@
 # mt5_utils.py
 import time
 import logging
+import functools
+from typing import Callable, Any
 # Try to import metatrader5, fallback to MetaTrader5 if needed
 try:
     import metatrader5 as mt5
@@ -8,8 +10,39 @@ except ImportError:
     import MetaTrader5 as mt5  # type: ignore
 
 # Import error handling components
-from error_handler import safe_mt5_call, MT5ConnectionError, OrderExecutionError, MT5_ERROR_CODES
+from error_handler import safe_mt5_call, MT5ConnectionError, OrderExecutionError, MT5_ERROR_CODES, retry_with_exponential_backoff
 
+# Performance monitoring
+PERFORMANCE_MONITORING_ENABLED = True
+
+def performance_monitor(func: Callable) -> Callable:
+    """
+    Decorator to monitor performance of MT5 functions.
+    
+    Args:
+        func: Function to monitor
+        
+    Returns:
+        Wrapped function with performance monitoring
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if not PERFORMANCE_MONITORING_ENABLED:
+            return func(*args, **kwargs)
+            
+        start_time = time.perf_counter()
+        try:
+            result = func(*args, **kwargs)
+            end_time = time.perf_counter()
+            execution_time = end_time - start_time
+            logging.debug(f"Performance: {func.__name__} executed in {execution_time:.4f} seconds")
+            return result
+        except Exception as e:
+            end_time = time.perf_counter()
+            execution_time = end_time - start_time
+            logging.debug(f"Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {e}")
+            raise
+    return wrapper
 
 def get_filling_mode(symbol, mt5_module=None):
     if mt5_module is None:
@@ -50,7 +83,7 @@ def get_filling_mode(symbol, mt5_module=None):
     logging.warning("Using default ORDER_FILLING_RETURN for %s", symbol)
     return mt5_module.ORDER_FILLING_RETURN  # type: ignore
 
-
+@performance_monitor
 def normalize_volume(symbol, requested_volume, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
@@ -71,7 +104,7 @@ def normalize_volume(symbol, requested_volume, mt5_module=None):
     
     return float(normalized)
 
-
+@performance_monitor
 def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
@@ -134,8 +167,9 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
     
     return result
 
-
+@performance_monitor
 @safe_mt5_call
+@retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
 def build_and_send_order(symbol, side, volume, sl=None, tp=None, 
                          deviation=30, retries=3, magic=123456, mt5_module=None):
     if mt5_module is None:
@@ -276,8 +310,9 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     logging.error(error_msg)
     raise RuntimeError(error_msg)
 
-
+@performance_monitor
 @safe_mt5_call
+@retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
 def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
