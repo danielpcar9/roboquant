@@ -45,6 +45,8 @@ from safety import Safety
 DONCHIAN_PERIOD = 50          # Increased to reduce false signals
 MOMENTUM_PERIOD = 40
 SAMPLE_PERIOD = 1000
+RISK_PERCENT = 1.0
+USE_RISK_MANAGEMENT = True
 LOTS = 0.01
 STOP_LOSS_POINTS = 150        # CRITICAL: Adjusted to gold's volatility
 TAKE_PROFIT_POINTS = 300      # Maintains 1:2 ratio
@@ -61,7 +63,7 @@ EVENT_SIZE_FACTOR = 0.25
 EVENT_SL_ATR_MULTIPLIER = 2.5
 EVENT_BREAKOUT_ATR_THRESHOLD = 0.3
 EVENT_VOLUME_SPIKE_FACTOR = 1.7
-MAX_SPREAD_POINTS = 50
+MAX_SPREAD_POINTS = 150
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -293,6 +295,22 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
     else:  # SELL
         sl = price + sl_points * point
         tp = price - tp_points * point
+    
+    if USE_RISK_MANAGEMENT:
+        account_info = mt5.account_info()  # type: ignore
+        if account_info is None:
+            logging.error("Failed to get account info")
+            return False
+        from mt5_utils import estimate_lots_by_risk
+        calculated_lots = estimate_lots_by_risk(
+            symbol=symbol,
+            entry_price=price,
+            stop_price=sl,
+            risk_pct=RISK_PERCENT,
+            mt5_module=mt5
+        )
+        logging.info(f"Risk: {RISK_PERCENT}% = ${account_info.balance * RISK_PERCENT / 100:.2f}, Lots: {calculated_lots}")
+        lots = calculated_lots
     
     logging.info(f"Trade parameters - Price: {price}, SL: {sl}, TP: {tp}, Volume: {lots}")
     
