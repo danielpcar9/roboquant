@@ -12,6 +12,7 @@ except ImportError:
     import MetaTrader5 as mt5  # type: ignore
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
+from security_manager import SecureCredentialManager, InputValidator, RateLimiter, constant_time_compare, sanitize_error_message
 
 # Configure logging
 logging.basicConfig(
@@ -28,8 +29,12 @@ app = Flask(__name__)
 # Global variables for MT5 connection
 mt5_connected = False
 
-# Get webhook secret key from environment
-SECRET_KEY = os.getenv('WEBHOOK_SECRET_KEY', '')
+# Security components
+credential_manager = SecureCredentialManager()
+rate_limiter = RateLimiter(max_requests=10, time_window=60)  # 10 requests per minute
+
+# Get webhook secret key from secure credential manager
+SECRET_KEY = credential_manager.get_credential('WEBHOOK_SECRET_KEY')
 
 def initialize_mt5():
     """Initialize MT5 connection"""
@@ -39,31 +44,36 @@ def initialize_mt5():
             logging.error("Failed to initialize MT5")
             return False
         
-        # Try to login with credentials from .env
-        from dotenv import load_dotenv
-        load_dotenv()
-        
-        login = int(os.getenv('MT5_LOGIN', '0'))
-        password = os.getenv('MT5_PASSWORD', '')
-        server = os.getenv('MT5_SERVER', '')
+        # Try to login with credentials from secure credential manager
+        login = credential_manager.get_credential('MT5_LOGIN')
+        password = credential_manager.get_credential('MT5_PASSWORD')
+        server = credential_manager.get_credential('MT5_SERVER')
         
         if login and password and server:
-            authorized = mt5.login(login, password=password, server=server)  # type: ignore
-            if not authorized:
-                logging.error("Failed to login to MT5")
+            try:
+                login_int = int(login)
+                authorized = mt5.login(login_int, password=password, server=server)  # type: ignore
+                if not authorized:
+                    logging.error("Failed to login to MT5")
+                    return False
+            except ValueError as e:
+                logging.error(f"Invalid login format: {sanitize_error_message(str(e))}")
                 return False
         
         mt5_connected = True
         logging.info("MT5 initialized and logged in successfully")
         return True
     except Exception as e:
-        logging.error(f"Error initializing MT5: {e}")
+        logging.error(f"Error initializing MT5: {sanitize_error_message(str(e))}")
         return False
 
 def process_trade_signal(signal_data):
     """Process a trade signal received from webhook"""
     try:
-        # Extract signal data
+        # Sanitize input data
+        signal_data = InputValidator.sanitize_input(signal_data)
+        
+        # Extract and validate signal data
         symbol = signal_data.get('symbol', 'XAUUSD')
         order_type = signal_data.get('order_type', '').upper()
         volume = float(signal_data.get('volume', 0.01))
@@ -71,12 +81,16 @@ def process_trade_signal(signal_data):
         tp_points = float(signal_data.get('tp_points', 300))  # Updated default
         magic = int(signal_data.get('magic', 234000))
         
-        # Validate signal
-        if order_type not in ['BUY', 'SELL']:
+        # Validate inputs
+        if not InputValidator.validate_symbol(symbol):
+            logging.error(f"Invalid symbol: {symbol}")
+            return False
+            
+        if not InputValidator.validate_order_type(order_type):
             logging.error(f"Invalid order type: {order_type}")
             return False
             
-        if volume <= 0:
+        if not InputValidator.validate_volume(volume):
             logging.error(f"Invalid volume: {volume}")
             return False
             
@@ -98,6 +112,12 @@ def process_trade_signal(signal_data):
             return False
             
         price = tick.ask if order_type == 'BUY' else tick.bid
+        
+        # Validate price
+        if not InputValidator.validate_price(price):
+            logging.error(f"Invalid price: {price}")
+            return False
+            
         point = mt5.symbol_info(symbol).point  # type: ignore
         
         # Calculate SL and TP
@@ -107,6 +127,11 @@ def process_trade_signal(signal_data):
         else:  # SELL
             sl = price + sl_points * point
             tp = price - tp_points * point
+            
+        # Validate calculated prices
+        if not InputValidator.validate_price(sl) or not InputValidator.validate_price(tp):
+            logging.error(f"Invalid calculated SL/TP prices: SL={sl}, TP={tp}")
+            return False
             
         # Normalize volume
         volume = normalize_volume(symbol, volume)
@@ -129,23 +154,34 @@ def process_trade_signal(signal_data):
             return False
             
     except Exception as e:
-        logging.error(f"Error processing trade signal: {e}")
+        logging.error(f"Error processing trade signal: {sanitize_error_message(str(e))}")
         return False
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    """Webhook endpoint with HMAC authentication"""
+    """Webhook endpoint with HMAC authentication and rate limiting"""
     try:
-        # Verify HMAC signature
+        # Apply rate limiting
+        if not rate_limiter.is_allowed():
+            retry_after = rate_limiter.get_retry_after()
+            logging.warning("Rate limit exceeded from %s", request.remote_addr)
+            return jsonify({'error': 'Rate limit exceeded', 'retry_after': retry_after}), 429
+        
+        # Verify HMAC signature using constant-time comparison
         signature = request.headers.get('X-Webhook-Signature')
         if not signature:
             logging.warning("Webhook without signature from %s", request.remote_addr)
             return jsonify({'error': 'Missing signature'}), 401
         
-        # Check if SECRET_KEY is configured
+        # Check if SECRET_KEY is configured and valid
         if not SECRET_KEY:
             logging.error("WEBHOOK_SECRET_KEY not configured in environment")
             return jsonify({'error': 'Server not configured for webhook authentication'}), 500
+            
+        # Validate secret key length for security
+        if len(SECRET_KEY) < 32:
+            logging.error("WEBHOOK_SECRET_KEY must be at least 32 characters for security")
+            return jsonify({'error': 'Server not configured securely'}), 500
         
         # Calculate expected signature
         body = request.get_data()
@@ -156,7 +192,7 @@ def webhook():
         ).hexdigest()
         
         # Secure comparison against timing attacks
-        if not hmac.compare_digest(signature, expected_signature):
+        if not constant_time_compare(signature, expected_signature):
             logging.warning("Invalid signature from %s", request.remote_addr)
             return jsonify({'error': 'Invalid signature'}), 401
         
@@ -167,7 +203,7 @@ def webhook():
             logging.error("No data received in webhook")
             return jsonify({'error': 'No data received'}), 400
         
-        logging.info(f"Authenticated webhook received: {data}")
+        logging.info(f"Authenticated webhook received: {data.get('symbol', 'N/A')} {data.get('order_type', 'N/A')}")
         
         # Process the trade signal
         success = process_trade_signal(data)
@@ -178,8 +214,8 @@ def webhook():
             return jsonify({'status': 'error', 'message': 'Failed to execute trade'}), 500
             
     except Exception as e:
-        logging.error(f"Error in webhook: {e}")
-        return jsonify({'error': str(e)}), 500
+        logging.error(f"Error in webhook: {sanitize_error_message(str(e))}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():

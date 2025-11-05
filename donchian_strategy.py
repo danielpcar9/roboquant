@@ -17,8 +17,14 @@ try:
 except ImportError:
     import MetaTrader5 as mt5  # type: ignore
 
+# Import security manager
+from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message
+
 # Load environment variables
 load_dotenv()
+
+# Initialize security manager
+credential_manager = SecureCredentialManager()
 
 # State machine for event detection
 class TradingMode(Enum):
@@ -73,10 +79,10 @@ def initialize_mt5():
     # Add more detailed initialization info
     logging.info("Attempting to initialize MT5...")
     
-    # Get credentials from environment
-    login = os.getenv('MT5_LOGIN')
-    password = os.getenv('MT5_PASSWORD')
-    server = os.getenv('MT5_SERVER')
+    # Get credentials from secure credential manager
+    login = credential_manager.get_credential('MT5_LOGIN')
+    password = credential_manager.get_credential('MT5_PASSWORD')
+    server = credential_manager.get_credential('MT5_SERVER')
     
     # Initialize with credentials if available
     if login and password and server:
@@ -91,7 +97,7 @@ def initialize_mt5():
                 logging.error(f"MT5 initialization error: {error}")
                 return False
         except ValueError as e:
-            logging.error(f"Invalid login format: {login}. Error: {e}")
+            logging.error(f"Invalid login format: {login}. Error: {sanitize_error_message(str(e))}")
             return False
     else:
         # Initialize without credentials
@@ -274,10 +280,32 @@ def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
 
 def execute_trade(symbol, order_type, lots, sl_points, tp_points):
     """Execute a trade with given parameters"""
+    # Validate inputs
+    if not InputValidator.validate_symbol(symbol):
+        logging.error(f"Invalid symbol: {symbol}")
+        return False
+        
+    if not InputValidator.validate_order_type(order_type):
+        logging.error(f"Invalid order type: {order_type}")
+        return False
+        
+    if not InputValidator.validate_volume(lots):
+        logging.error(f"Invalid volume: {lots}")
+        return False
+        
+    if sl_points <= 0 or tp_points <= 0:
+        logging.error(f"Invalid SL/TP points: SL={sl_points}, TP={tp_points}")
+        return False
+    
     logging.info(f"Attempting to execute {order_type} trade for {symbol}")
     price = get_current_price(symbol, order_type)
     if price is None:
         logging.error("Failed to get current price")
+        return False
+    
+    # Validate price
+    if not InputValidator.validate_price(price):
+        logging.error(f"Invalid price: {price}")
         return False
     
     # Get symbol info for point value
@@ -296,6 +324,11 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
         sl = price + sl_points * point
         tp = price - tp_points * point
     
+    # Validate calculated prices
+    if not InputValidator.validate_price(sl) or not InputValidator.validate_price(tp):
+        logging.error(f"Invalid calculated SL/TP prices: SL={sl}, TP={tp}")
+        return False
+    
     if USE_RISK_MANAGEMENT:
         account_info = mt5.account_info()  # type: ignore
         if account_info is None:
@@ -311,6 +344,11 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
         )
         logging.info(f"Risk: {RISK_PERCENT}% = ${account_info.balance * RISK_PERCENT / 100:.2f}, Lots: {calculated_lots}")
         lots = calculated_lots
+    
+    # Validate final volume
+    if not InputValidator.validate_volume(lots):
+        logging.error(f"Invalid final volume: {lots}")
+        return False
     
     logging.info(f"Trade parameters - Price: {price}, SL: {sl}, TP: {tp}, Volume: {lots}")
     
@@ -340,7 +378,7 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
             return False
             
     except Exception as e:
-        logging.error(f"Error executing trade: {e}", exc_info=True)
+        logging.error(f"Error executing trade: {sanitize_error_message(str(e))}", exc_info=True)
         return False
 
 def handle_event_state(symbol):

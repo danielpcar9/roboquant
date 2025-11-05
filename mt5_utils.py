@@ -7,6 +7,9 @@ try:
 except ImportError:
     import MetaTrader5 as mt5  # type: ignore
 
+# Import error handling components
+from error_handler import safe_mt5_call, MT5ConnectionError, OrderExecutionError, MT5_ERROR_CODES
+
 
 def get_filling_mode(symbol, mt5_module=None):
     if mt5_module is None:
@@ -132,6 +135,7 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
     return result
 
 
+@safe_mt5_call
 def build_and_send_order(symbol, side, volume, sl=None, tp=None, 
                          deviation=30, retries=3, magic=123456, mt5_module=None):
     if mt5_module is None:
@@ -273,6 +277,7 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     raise RuntimeError(error_msg)
 
 
+@safe_mt5_call
 def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
