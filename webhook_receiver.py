@@ -13,6 +13,8 @@ except ImportError:
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
 from security_manager import SecureCredentialManager, InputValidator, RateLimiter, constant_time_compare, sanitize_error_message
+# Import config manager
+from config_manager import config_manager
 
 # Configure logging
 logging.basicConfig(
@@ -35,6 +37,13 @@ rate_limiter = RateLimiter(max_requests=10, time_window=60)  # 10 requests per m
 
 # Get webhook secret key from secure credential manager
 SECRET_KEY = credential_manager.get_credential('WEBHOOK_SECRET_KEY')
+
+# Configuration parameters
+DEFAULT_LOTS = config_manager.get('LOTS')
+DEFAULT_SL_POINTS = config_manager.get('STOP_LOSS_POINTS')
+DEFAULT_TP_POINTS = config_manager.get('TAKE_PROFIT_POINTS')
+DEFAULT_MAGIC = config_manager.get('MAGIC_NUMBER')
+
 
 def initialize_mt5():
     """Initialize MT5 connection"""

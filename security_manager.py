@@ -8,10 +8,12 @@ import os
 import time
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 from dotenv import load_dotenv
 import hashlib
 import hmac
+import ipaddress
+from functools import wraps
 
 # Configure logging for security module
 security_logger = logging.getLogger('security')
@@ -144,7 +146,7 @@ class InputValidator:
         return bool(cls.SYMBOL_PATTERN.match(symbol))
     
     @classmethod
-    def validate_volume(cls, volume: float) -> bool:
+    def validate_volume(cls, volume: Union[float, int, str]) -> bool:
         """
         Validate a trading volume.
         
@@ -161,7 +163,7 @@ class InputValidator:
             return False
     
     @classmethod
-    def validate_price(cls, price: float) -> bool:
+    def validate_price(cls, price: Union[float, int, str]) -> bool:
         """
         Validate a price value.
         
@@ -231,23 +233,33 @@ class RateLimiter:
         """
         self.max_requests = max_requests
         self.time_window = time_window
-        self.requests = []  # List of timestamps
+        self.requests = {}  # Dictionary of IP -> list of timestamps
     
-    def is_allowed(self) -> bool:
+    def is_allowed(self, ip_address: Optional[str] = None) -> bool:
         """
         Check if a request is allowed based on rate limiting rules.
         
+        Args:
+            ip_address: IP address of the requester (optional)
+            
         Returns:
             True if allowed, False if rate limited
         """
+        # Use a default key if no IP provided
+        key = ip_address if ip_address else "default"
+        
         now = time.time()
         
+        # Initialize requests list for this IP if not exists
+        if key not in self.requests:
+            self.requests[key] = []
+        
         # Remove old requests outside the time window
-        self.requests = [req_time for req_time in self.requests if now - req_time < self.time_window]
+        self.requests[key] = [req_time for req_time in self.requests[key] if now - req_time < self.time_window]
         
         # Check if we're under the limit
-        if len(self.requests) < self.max_requests:
-            self.requests.append(now)
+        if len(self.requests[key]) < self.max_requests:
+            self.requests[key].append(now)
             return True
         else:
             return False
@@ -259,11 +271,15 @@ class RateLimiter:
         Returns:
             Seconds to wait
         """
-        if not self.requests:
+        now = time.time()
+        all_requests = []
+        for ip_requests in self.requests.values():
+            all_requests.extend(ip_requests)
+        
+        if not all_requests:
             return 0
             
-        now = time.time()
-        oldest_request = min(self.requests)
+        oldest_request = min(all_requests)
         return max(0, int(self.time_window - (now - oldest_request)))
 
 
@@ -283,7 +299,7 @@ def sanitize_error_message(error_msg: str) -> str:
     # Remove sensitive information
     sanitized = re.sub(r'[A-Za-z0-9]{10,}', '***', error_msg)  # Remove long alphanumeric strings
     sanitized = re.sub(r'\d{5,}', '*****', sanitized)  # Remove long number sequences
-    sanitized = re.sub(r'password|secret|key|token', '***', sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r'password|secret|key|token|login', '***', sanitized, flags=re.IGNORECASE)
     
     # Limit length
     return sanitized[:500]
@@ -301,3 +317,47 @@ def constant_time_compare(a: str, b: str) -> bool:
         True if strings are equal, False otherwise
     """
     return hmac.compare_digest(a, b) if isinstance(a, str) and isinstance(b, str) else False
+
+
+def ip_whitelist(allowed_ips: list):
+    """
+    Decorator to restrict access based on IP whitelist.
+    
+    Args:
+        allowed_ips: List of allowed IP addresses or networks
+        
+    Returns:
+        Decorator function
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Get the request object if available (for Flask routes)
+            import flask
+            if flask.has_request_context():
+                client_ip = flask.request.remote_addr
+                if client_ip is None:
+                    security_logger.warning("Unable to determine client IP address")
+                    return flask.jsonify({'error': 'Unable to determine client IP'}), 403
+                    
+                try:
+                    client_ip_obj = ipaddress.ip_address(client_ip)
+                    for allowed_ip in allowed_ips:
+                        try:
+                            allowed_network = ipaddress.ip_network(allowed_ip, strict=False)
+                            if client_ip_obj in allowed_network:
+                                return func(*args, **kwargs)
+                        except ValueError:
+                            # If it's not a network, check if it's a single IP
+                            if client_ip == allowed_ip:
+                                return func(*args, **kwargs)
+                except ValueError:
+                    pass  # Invalid IP address
+                
+                security_logger.warning(f"Access denied from IP: {client_ip}")
+                return flask.jsonify({'error': 'Access denied'}), 403
+            
+            # If not in Flask context, allow access
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator

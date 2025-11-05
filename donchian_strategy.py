@@ -39,30 +39,8 @@ from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
 # Import security manager
 from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message, RateLimiter
-
-# Configuration parameters - OPTIMIZED VALUES
-DONCHIAN_PERIOD = 50          # Increased to reduce false signals
-MOMENTUM_PERIOD = 40
-SAMPLE_PERIOD = 1000
-RISK_PERCENT = 1.0
-USE_RISK_MANAGEMENT = True
-LOTS = 0.01
-STOP_LOSS_POINTS = 150        # CRITICAL: Adjusted to gold's volatility
-TAKE_PROFIT_POINTS = 300      # Maintains 1:2 ratio
-TIMEFRAME = mt5.TIMEFRAME_M5  # Reduced noise, more reliable signals
-from datetime import timezone
-
-TRADING_HOUR_START = 13  # GMT
-TRADING_HOUR_END = 22    # GMT
-MAGIC_NUMBER = 123456         # Magic number to identify bot trades
-
-# Event-driven trading parameters
-EVENT_WAIT_CANDLES = 3
-EVENT_SIZE_FACTOR = 0.25
-EVENT_SL_ATR_MULTIPLIER = 2.5
-EVENT_BREAKOUT_ATR_THRESHOLD = 0.3
-EVENT_VOLUME_SPIKE_FACTOR = 1.7
-MAX_SPREAD_POINTS = 150
+# Import config manager
+from config_manager import config_manager
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -70,6 +48,30 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(mes
 # Load environment variables and initialize security manager
 load_dotenv()
 credential_manager = SecureCredentialManager()
+
+# Configuration parameters - OPTIMIZED VALUES (now managed by config_manager)
+DONCHIAN_PERIOD = config_manager.get('DONCHIAN_PERIOD')
+MOMENTUM_PERIOD = config_manager.get('MOMENTUM_PERIOD')
+SAMPLE_PERIOD = config_manager.get('SAMPLE_PERIOD')
+RISK_PERCENT = config_manager.get('RISK_PERCENT')
+USE_RISK_MANAGEMENT = config_manager.get('USE_RISK_MANAGEMENT')
+LOTS = config_manager.get('LOTS')
+STOP_LOSS_POINTS = config_manager.get('STOP_LOSS_POINTS')
+TAKE_PROFIT_POINTS = config_manager.get('TAKE_PROFIT_POINTS')
+TIMEFRAME = mt5.TIMEFRAME_M5  # Reduced noise, more reliable signals
+from datetime import timezone
+
+TRADING_HOUR_START = config_manager.get('TRADING_HOUR_START')
+TRADING_HOUR_END = config_manager.get('TRADING_HOUR_END')
+MAGIC_NUMBER = config_manager.get('MAGIC_NUMBER')
+
+# Event-driven trading parameters
+EVENT_WAIT_CANDLES = config_manager.get('EVENT_WAIT_CANDLES')
+EVENT_SIZE_FACTOR = config_manager.get('EVENT_SIZE_FACTOR')
+EVENT_SL_ATR_MULTIPLIER = config_manager.get('EVENT_SL_ATR_MULTIPLIER')
+EVENT_BREAKOUT_ATR_THRESHOLD = config_manager.get('EVENT_BREAKOUT_ATR_THRESHOLD')
+EVENT_VOLUME_SPIKE_FACTOR = config_manager.get('EVENT_VOLUME_SPIKE_FACTOR')
+MAX_SPREAD_POINTS = config_manager.get('MAX_SPREAD_POINTS')
 
 def initialize_mt5():
     """Initialize MT5 connection"""

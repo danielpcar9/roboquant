@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Optional, Callable, Any, Type, Tuple, Union
 from functools import wraps
 import random
+import traceback
 
 # Configure logging for error handling
 error_logger = logging.getLogger('error_handling')
@@ -48,6 +49,11 @@ class SafetyViolationError(RoboQuantError):
 
 class CircuitBreakerError(RoboQuantError):
     """Exception raised when circuit breaker is open."""
+    pass
+
+
+class ConfigurationError(RoboQuantError):
+    """Exception raised when configuration is invalid."""
     pass
 
 
@@ -203,6 +209,9 @@ def retry_with_exponential_backoff(max_retries: int = 3,
                         error_logger.error(
                             f"All {max_retries + 1} attempts failed for {func.__name__}: {str(e)}"
                         )
+                        error_logger.debug(
+                            f"Full traceback:\n{traceback.format_exc()}"
+                        )
             
             # If we get here, all retries failed
             if last_exception is not None:
@@ -229,7 +238,7 @@ order_execution_circuit = CircuitBreaker(
 market_data_circuit = CircuitBreaker(
     failure_threshold=3,
     timeout=30,
-    expected_exception=(ConnectionError, TimeoutError)  # type: ignore
+    expected_exception=(ConnectionError, TimeoutError)
 )
 
 
@@ -261,6 +270,40 @@ def safe_mt5_call(func: Callable):
             return circuit.call(func, *args, **kwargs)
         
         return protected_call()
+    
+    return wrapper
+
+
+def handle_exception(func: Callable):
+    """
+    Decorator to provide centralized exception handling.
+    
+    Args:
+        func: Function to wrap with exception handling
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ConfigurationError as e:
+            error_logger.error(f"Configuration error in {func.__name__}: {str(e)}")
+            raise
+        except SafetyViolationError as e:
+            error_logger.error(f"Safe violation in {func.__name__}: {str(e)}")
+            raise
+        except MT5ConnectionError as e:
+            error_logger.error(f"MT5 connection error in {func.__name__}: {str(e)}")
+            raise
+        except OrderExecutionError as e:
+            error_logger.error(f"Order execution error in {func.__name__}: {str(e)}")
+            raise
+        except CircuitBreakerError as e:
+            error_logger.error(f"Circuit breaker error in {func.__name__}: {str(e)}")
+            raise
+        except Exception as e:
+            error_logger.error(f"Unexpected error in {func.__name__}: {str(e)}")
+            error_logger.debug(f"Full traceback:\n{traceback.format_exc()}")
+            raise
     
     return wrapper
 
