@@ -141,7 +141,7 @@ def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1
 
 
 def run_backtest(df, initial_capital=10000, lot_size=0.01, 
-                 donchian_period=50, momentum_period=40, sample_period=1000,
+                 donchian_period=30, momentum_period=20, sample_period=500,
                  sl_points=150, tp_points=300):
     """
     Ejecuta backtest con VectorBT
@@ -387,9 +387,9 @@ def main():
         df, 
         initial_capital=10000, 
         lot_size=0.01,
-        donchian_period=50,    # ✅ Optimizado (era 20)
-        momentum_period=40,    # ✅ Optimizado (era 25)
-        sample_period=1000,    # ✅ Optimizado (era 800)
+        donchian_period=30,    # ✅ Optimizado (era 20)
+        momentum_period=20,    # ✅ Optimizado (era 25)
+        sample_period=500,    # ✅ Optimizado (era 800)
         sl_points=150,         # ✅ CRÍTICO: Optimizado (era 50)
         tp_points=300          # ✅ Optimizado (era 100)
     )
