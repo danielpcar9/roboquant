@@ -284,9 +284,14 @@ def get_volume_stats(symbol, lookback=20):
 @performance_monitor
 def fetch_upcoming_high_impact(minutes_window=120):
     """Fetch upcoming high impact events from Forex Factory with caching."""
-    # Convert minutes to hours for the new function
-    hours_ahead = int(minutes_window / 60)
-    return fetch_upcoming_events_cached(hours_ahead)
+    try:
+        # Convert minutes to hours for the new function
+        hours_ahead = int(minutes_window / 60)
+        return fetch_upcoming_events_cached(hours_ahead)
+    except Exception as e:
+        logging.warning(f"Failed to fetch upcoming high impact events: {e}")
+        # Return False, None to indicate no events found
+        return (False, None)
 
 @handle_exception
 @performance_monitor
@@ -446,12 +451,17 @@ def handle_event_state(symbol):
     current_time = datetime.now(timezone.utc)
     
     if event_state.mode == TradingMode.NORMAL:
-        has_event, info = fetch_upcoming_high_impact()
-        if has_event:
-            event_state.mode = TradingMode.EVENT_DETECTED
-            event_state.event_detected_at = current_time
-            event_state.event_info = info
-            logging.info(f"Event detected: {info}")
+        try:
+            has_event, info = fetch_upcoming_high_impact()
+            if has_event:
+                event_state.mode = TradingMode.EVENT_DETECTED
+                event_state.event_detected_at = current_time
+                event_state.event_info = info
+                logging.info(f"Event detected: {info}")
+        except Exception as e:
+            # If Forex Factory scraping fails, log the error but continue with normal trading
+            logging.warning(f"Forex Factory scraping failed: {e}. Continuing with normal trading mode.")
+            # We could implement a fallback here if needed
     elif event_state.mode == TradingMode.EVENT_DETECTED:
         if event_state.event_detected_at and (current_time - event_state.event_detected_at).seconds >= 60:
             event_state.mode = TradingMode.EVENT_WAIT
@@ -538,7 +548,7 @@ def run_strategy(symbol="XAUUSD"):
     # Check for breakout conditions
     bullish_breakout = current_close > upper_channel
     bearish_breakout = current_close < lower_channel
-    momentum_filter = current_momentum > historical_momentum
+    momentum_filter = current_momentum > (historical_momentum * 0.7)
     
     # Macro veto - REMOVED: Using Forex Factory instead of FRED
     

@@ -2,6 +2,7 @@ import os
 import requests
 import logging
 import time
+import random
 from datetime import datetime, timedelta
 from typing import Tuple, Optional, List, Dict, Any
 from bs4 import BeautifulSoup
@@ -19,18 +20,24 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 CACHE_TTL = int(os.getenv('CACHE_FOREX_FACTORY_TTL', 1800))
 
 # User-Agent for web scraping
-DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 USER_AGENT = os.getenv('USER_AGENT', DEFAULT_USER_AGENT)
 
 # Session for connection pooling
 session = requests.Session()
 session.headers.update({
     "User-Agent": USER_AGENT,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
+    "Referer": "https://www.google.com/"
 })
 
 class ForexFactoryError(Exception):
@@ -131,9 +138,14 @@ def _scrape_forex_factory_events(hours_ahead: int) -> Tuple[bool, Optional[str]]
     # Forex Factory URL
     url = "https://www.forexfactory.com/calendar"
     
+    # Add some randomness to make requests look more human
+    time.sleep(random.uniform(1.5, 3.5))
+    
     # Make request with timeout
     try:
-        response = session.get(url, timeout=15)
+        # Add some randomness to timeout as well
+        timeout = random.uniform(10, 20)
+        response = session.get(url, timeout=timeout)
         response.raise_for_status()
     except requests.RequestException as e:
         logging.error(f"Request failed: {e}")
@@ -291,8 +303,12 @@ def get_all_upcoming_events(hours_ahead: int = 24) -> List[Dict[str, Any]]:
         # Forex Factory URL
         url = "https://www.forexfactory.com/calendar"
         
+        # Add some randomness to make requests look more human
+        time.sleep(random.uniform(1.5, 3.5))
+        
         # Make request with timeout
-        response = session.get(url, timeout=15)
+        timeout = random.uniform(10, 20)
+        response = session.get(url, timeout=timeout)
         response.raise_for_status()
         
         # Parse HTML
