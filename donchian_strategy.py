@@ -263,6 +263,24 @@ def calculate_normalized_breakout(price, channel, atr):
 
 @handle_exception
 @performance_monitor
+def get_volume_breakout(symbol, lookback=20):
+    """Detect volume spike confirming breakout validity"""
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, lookback)
+    if rates is None or len(rates) < lookback:
+        return False, 0
+    
+    volumes = [rate['tick_volume'] for rate in rates]
+    current_vol = volumes[-1]
+    avg_vol = sum(volumes[:-1]) / (len(volumes) - 1)
+    
+    # Volume spike = current > 1.5x average
+    is_spike = current_vol > (avg_vol * 1.5)
+    ratio = current_vol / avg_vol if avg_vol > 0 else 0
+    
+    return is_spike, ratio
+
+@handle_exception
+@performance_monitor
 def get_volume_stats(symbol, lookback=20):
     """Get current volume vs average volume"""
     logging.debug(f"Calculating volume stats for {symbol} with lookback {lookback}")
@@ -548,6 +566,9 @@ def run_strategy(symbol="XAUUSD"):
     bearish_breakout = current_close < lower_channel
     momentum_filter = current_momentum > (historical_momentum * 0.7)
     
+    # Add volume confirmation
+    volume_spike, vol_ratio = get_volume_breakout(symbol)
+    
     # Macro veto - REMOVED: Using Forex Factory instead of FRED
     
     if is_event_mode:
@@ -572,9 +593,11 @@ def run_strategy(symbol="XAUUSD"):
                 if execute_trade(symbol, "SELL", lots, sl_points, tp_points):
                     event_state.last_event_trade_at = datetime.now(timezone.utc)
     else:
-        if bullish_breakout and momentum_filter:
+        if bullish_breakout and momentum_filter and volume_spike:
+            logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
             execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
-        elif bearish_breakout and momentum_filter:
+        elif bearish_breakout and momentum_filter and volume_spike:
+            logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
             execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
 
 @handle_exception
