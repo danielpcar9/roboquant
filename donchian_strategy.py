@@ -540,8 +540,8 @@ def run_strategy(symbol="XAUUSD"):
         logging.error("Failed to get current tick data")
         return
     
-    # Use bid price for analysis (more reliable than 'last')
-    current_close = tick.bid
+    # Use last price for analysis (real market price)
+    current_close = tick.last
     logging.info(f"Current close price (bid): {current_close}")
     logging.info(f"Upper channel: {upper_channel}, Lower channel: {lower_channel}")
     
@@ -564,7 +564,7 @@ def run_strategy(symbol="XAUUSD"):
     # Check for breakout conditions
     bullish_breakout = current_close > upper_channel
     bearish_breakout = current_close < lower_channel
-    momentum_filter = current_momentum > (historical_momentum * 0.7)
+    momentum_filter = current_momentum > (historical_momentum * 0.5)
     
     # Add volume confirmation
     volume_spike, vol_ratio = get_volume_breakout(symbol)
@@ -593,10 +593,11 @@ def run_strategy(symbol="XAUUSD"):
                 if execute_trade(symbol, "SELL", lots, sl_points, tp_points):
                     event_state.last_event_trade_at = datetime.now(timezone.utc)
     else:
-        if bullish_breakout and momentum_filter and volume_spike:
+        # Volume confirmation made optional for more signals during testing
+        if bullish_breakout and momentum_filter:  # Removed volume_spike requirement
             logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
             execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
-        elif bearish_breakout and momentum_filter and volume_spike:
+        elif bearish_breakout and momentum_filter:  # Removed volume_spike requirement
             logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
             execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
 
