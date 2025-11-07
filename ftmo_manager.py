@@ -116,10 +116,12 @@ class FTMOManager:
         # Update daily balance
         self.update_daily_balance()
         
+        # Get CET timezone
+        cet = pytz.timezone('CET')
+        now_cet = datetime.now(cet)
+        
         # Check if trading is temporarily blocked (news protection)
         if self.trading_blocked_until:
-            cet = pytz.timezone('CET')
-            now_cet = datetime.now(cet)
             if now_cet < self.trading_blocked_until:
                 return False, f"Trading blocked until {self.trading_blocked_until.strftime('%H:%M:%S')} CET (news protection)"
             else:
@@ -132,8 +134,6 @@ class FTMOManager:
             return False, "Failed to get account information"
         
         # Check trading hours (7-16h CET)
-        cet = pytz.timezone('CET')
-        now_cet = datetime.now(cet)
         trading_start = time(7, 0)  # 7:00 CET
         trading_end = time(16, 0)   # 16:00 CET
         

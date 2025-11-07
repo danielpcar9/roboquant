@@ -234,7 +234,7 @@ class FTMOSafety(Safety):
             logging.error("Failed to import FTMO manager")
             self.ftmo_manager = None
     
-    def check_ftmo_rules(self, symbol="XAUUSD"):
+    def check_ftmo_rules(self, symbol: str = "XAUUSD"):
         """Check all FTMO challenge rules"""
         if not self.ftmo_manager:
             return True, None
@@ -249,9 +249,10 @@ class FTMOSafety(Safety):
             return False, reason
         
         # Check FTMO specific rules
-        ok, reason = self.check_ftmo_rules(new_symbol)
-        if not ok:
-            return False, reason
+        if new_symbol is not None:
+            ok, reason = self.check_ftmo_rules(new_symbol)
+            if not ok:
+                return False, reason
         
         return True, None
     

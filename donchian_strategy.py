@@ -1,10 +1,7 @@
 import time
 import logging
-from datetime import datetime, timedelta
-import os
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
-import requests
-import math
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
@@ -63,7 +60,6 @@ LOTS = config_manager.get('LOTS')
 STOP_LOSS_POINTS = config_manager.get('STOP_LOSS_POINTS')
 TAKE_PROFIT_POINTS = config_manager.get('TAKE_PROFIT_POINTS')
 TIMEFRAME = mt5.TIMEFRAME_M5  # Reduced noise, more reliable signals
-from datetime import timezone
 
 TRADING_HOUR_START = config_manager.get('TRADING_HOUR_START')
 TRADING_HOUR_END = config_manager.get('TRADING_HOUR_END')
@@ -312,12 +308,6 @@ def fetch_upcoming_high_impact(minutes_window=120):
         return (False, None)
 
 @handle_exception
-@performance_monitor
-def fetch_fred_series(series_id, observations=1):
-    """Fetch FRED series data - OBSOLETE, using Forex Factory instead."""
-    # This function is obsolete, return None to indicate no data
-    return None
-
 @handle_exception
 @performance_monitor
 def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
@@ -582,7 +572,6 @@ def run_strategy(symbol="XAUUSD"):
             if account_info:
                 # Use 2.5x ATR for SL as required for FTMO
                 sl_distance = atr * 2.5
-                lots = compute_lots_from_risk(account_info.balance, 1.5, sl_distance, symbol)
                 sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
                 
                 # For event mode, use market structure analysis for TP
@@ -598,7 +587,6 @@ def run_strategy(symbol="XAUUSD"):
             if account_info:
                 # Use 2.5x ATR for SL as required for FTMO
                 sl_distance = atr * 2.5
-                lots = compute_lots_from_risk(account_info.balance, 1.5, sl_distance, symbol)
                 sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
                 
                 # For event mode, use market structure analysis for TP
