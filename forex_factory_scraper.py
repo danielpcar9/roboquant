@@ -256,11 +256,16 @@ def _parse_calendar_row(row, now_utc: datetime, future_limit: datetime) -> Optio
         
         # Check if event is within our time window
         if now_utc <= event_datetime_utc <= future_limit:
+            # Convert to CET for FTMO compliance
+            cet = pytz.timezone('CET')
+            event_datetime_cet = event_datetime_utc.astimezone(cet)
+            
             return {
                 'name': event_name,
                 'currency': currency,
                 'time_utc': event_datetime_utc,
-                'time_ff': event_datetime_ff
+                'time_ff': event_datetime_ff,
+                'time_cet': event_datetime_cet
             }
             
     except ValueError as e:
@@ -276,6 +281,7 @@ def _parse_calendar_row(row, now_utc: datetime, future_limit: datetime) -> Optio
 def get_all_upcoming_events(hours_ahead: int = 24) -> List[Dict[str, Any]]:
     """
     Get all upcoming high-impact events within the specified time window.
+    Includes 2-minute buffer before/after for FTMO compliance.
     
     Args:
         hours_ahead: Time window to check for events (in hours)
@@ -343,6 +349,41 @@ def get_all_upcoming_events(hours_ahead: int = 24) -> List[Dict[str, Any]]:
             logging.warning("Using expired cache data as fallback")
             return cached_result
         return []
+
+def is_trading_blocked_by_news() -> Tuple[bool, Optional[datetime]]:
+    """
+    Check if trading should be blocked due to upcoming high-impact news.
+    Returns (is_blocked, blocking_until_time) tuple.
+    """
+    # Check for events in the next 5 minutes
+    has_event, event_info = fetch_upcoming_events_cached(hours_ahead=1)
+    
+    if has_event and event_info:
+        # Parse the event time
+        try:
+            # Get all events to find the specific one
+            all_events = get_all_upcoming_events(hours_ahead=1)
+            if all_events:
+                # Get the first event's time
+                event_time = all_events[0]['time_utc']
+                
+                # Convert to CET for FTMO compliance
+                cet = pytz.timezone('CET')
+                event_time_cet = event_time.astimezone(cet)
+                
+                # Block 2 minutes before and after
+                block_start = event_time_cet - timedelta(minutes=2)
+                block_end = event_time_cet + timedelta(minutes=2)
+                
+                # Check if we're in the blocked period
+                now_cet = datetime.now(cet)
+                if block_start <= now_cet <= block_end:
+                    return True, block_end
+                
+        except Exception as e:
+            logging.debug(f"Error checking news blocking: {e}")
+    
+    return False, None
 
 def test_scraper():
     """Test script for Forex Factory scraper"""

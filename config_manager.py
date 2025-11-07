@@ -32,14 +32,14 @@ class ConfigManager:
             'DONCHIAN_PERIOD': int(os.getenv('DONCHIAN_PERIOD', '50')),
             'MOMENTUM_PERIOD': int(os.getenv('MOMENTUM_PERIOD', '40')),
             'SAMPLE_PERIOD': int(os.getenv('SAMPLE_PERIOD', '1000')),
-            'RISK_PERCENT': float(os.getenv('RISK_PERCENT', '1.0')),
+            'RISK_PERCENT': float(os.getenv('RISK_PERCENT', '0.75')),  # FTMO 0.75% por trade
             'USE_RISK_MANAGEMENT': os.getenv('USE_RISK_MANAGEMENT', 'True').lower() == 'true',
             'LOTS': float(os.getenv('LOTS', '0.01')),
             'STOP_LOSS_POINTS': int(os.getenv('STOP_LOSS_POINTS', '150')),
             'TAKE_PROFIT_POINTS': int(os.getenv('TAKE_PROFIT_POINTS', '300')),
             'MAX_SPREAD_POINTS': int(os.getenv('MAX_SPREAD_POINTS', '150')),
-            'TRADING_HOUR_START': int(os.getenv('TRADING_HOUR_START', '13')),
-            'TRADING_HOUR_END': int(os.getenv('TRADING_HOUR_END', '22')),
+            'TRADING_HOUR_START': int(os.getenv('TRADING_HOUR_START', '7')),  # FTMO 7-16h CET
+            'TRADING_HOUR_END': int(os.getenv('TRADING_HOUR_END', '16')),
             'MAGIC_NUMBER': int(os.getenv('MAGIC_NUMBER', '123456')),
             
             # Event-driven trading parameters

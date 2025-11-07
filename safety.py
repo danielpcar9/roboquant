@@ -217,3 +217,45 @@ def deactivate_kill_switch():
         logging.info("Kill switch desactivado")
         return True
     return False
+
+
+class FTMOSafety(Safety):
+    """FTMO Challenge Safety Implementation"""
+    
+    def __init__(self, mt5_module=None):
+        # Initialize with FTMO-specific parameters
+        super().__init__(mt5_module, max_dd_pct=9.0, max_daily_loss_pct=4.0, max_concurrent=3, corr_threshold=0.75)
+        
+        # Import FTMO manager
+        try:
+            from ftmo_manager import ftmo_manager
+            self.ftmo_manager = ftmo_manager
+        except ImportError:
+            logging.error("Failed to import FTMO manager")
+            self.ftmo_manager = None
+    
+    def check_ftmo_rules(self, symbol="XAUUSD"):
+        """Check all FTMO challenge rules"""
+        if not self.ftmo_manager:
+            return True, None
+        
+        return self.ftmo_manager.is_trade_allowed(symbol)
+    
+    def check_all(self, new_symbol=None):
+        """Override check_all to include FTMO rules"""
+        # Check standard safety rules first
+        ok, reason = super().check_all(new_symbol)
+        if not ok:
+            return False, reason
+        
+        # Check FTMO specific rules
+        ok, reason = self.check_ftmo_rules(new_symbol)
+        if not ok:
+            return False, reason
+        
+        return True, None
+    
+    def update_after_trade(self):
+        """Update metrics after executing a trade"""
+        if self.ftmo_manager:
+            self.ftmo_manager.save_config()

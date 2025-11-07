@@ -542,7 +542,7 @@ def run_strategy(symbol="XAUUSD"):
         logging.error("Failed to get current tick data")
         return
     
-    # Use last price for analysis (real market price)
+    # Use last price for analysis (real market price) - FIXED FOR FTMO
     current_close = tick.last
     logging.info(f"Current close price (bid): {current_close}")
     logging.info(f"Upper channel: {upper_channel}, Lower channel: {lower_channel}")
@@ -566,6 +566,7 @@ def run_strategy(symbol="XAUUSD"):
     # Check for breakout conditions
     bullish_breakout = current_close > upper_channel
     bearish_breakout = current_close < lower_channel
+    # Reducir momentum_filter a 0.5x for FTMO
     momentum_filter = current_momentum > (historical_momentum * 0.5)
     
     # Add volume confirmation
@@ -579,7 +580,8 @@ def run_strategy(symbol="XAUUSD"):
         if (bullish_breakout and norm_bull > EVENT_BREAKOUT_ATR_THRESHOLD and volume_spike and momentum_filter):
             account_info = mt5.account_info()  # type: ignore
             if account_info:
-                sl_distance = atr * EVENT_SL_ATR_MULTIPLIER
+                # Use 2.5x ATR for SL as required for FTMO
+                sl_distance = atr * 2.5
                 lots = compute_lots_from_risk(account_info.balance, 1.5, sl_distance, symbol)
                 sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
                 
@@ -587,12 +589,15 @@ def run_strategy(symbol="XAUUSD"):
                 tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
                 tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
                 
+                # Use 0.75% risk per trade for FTMO
+                lots = compute_lots_from_risk(account_info.balance, 0.75, sl_distance, symbol)
                 if execute_trade(symbol, "BUY", lots, sl_points, tp_points):
                     event_state.last_event_trade_at = datetime.now(timezone.utc)
         elif (bearish_breakout and norm_bear > EVENT_BREAKOUT_ATR_THRESHOLD and volume_spike and momentum_filter):
             account_info = mt5.account_info()  # type: ignore
             if account_info:
-                sl_distance = atr * EVENT_SL_ATR_MULTIPLIER
+                # Use 2.5x ATR for SL as required for FTMO
+                sl_distance = atr * 2.5
                 lots = compute_lots_from_risk(account_info.balance, 1.5, sl_distance, symbol)
                 sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
                 
@@ -600,6 +605,8 @@ def run_strategy(symbol="XAUUSD"):
                 tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
                 tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
                 
+                # Use 0.75% risk per trade for FTMO
+                lots = compute_lots_from_risk(account_info.balance, 0.75, sl_distance, symbol)
                 if execute_trade(symbol, "SELL", lots, sl_points, tp_points):
                     event_state.last_event_trade_at = datetime.now(timezone.utc)
     else:
@@ -639,8 +646,9 @@ def main():
         mt5.shutdown()  # type: ignore
         return
     
-    # Initialize safety module
-    safety = Safety(mt5_module=mt5)
+    # Initialize FTMO safety module
+    from safety import FTMOSafety
+    safety = FTMOSafety(mt5_module=mt5)
     
     logging.info("Donchian Breakout Strategy started")
     logging.info(f"Parameters: Donchian Period={DONCHIAN_PERIOD}, Momentum Period={MOMENTUM_PERIOD}")
@@ -656,6 +664,12 @@ def main():
             logging.info("Skipping strategy execution due to safety check failure")
         else:
             logging.info("Safety checks passed")
+            # Show FTMO dashboard
+            try:
+                from ftmo_manager import ftmo_manager
+                logging.info(ftmo_manager.get_ftmo_dashboard())
+            except Exception as e:
+                logging.debug(f"Failed to show FTMO dashboard: {e}")
             run_strategy(symbol)
         
         # Import the monitoring function
@@ -671,6 +685,14 @@ def main():
                 logging.info("Skipping strategy execution due to safety check failure")
             else:
                 logging.info("Safety checks passed")
+                # Show FTMO dashboard every 10 iterations
+                import random
+                if random.randint(1, 10) == 1:  # Roughly every 50 minutes
+                    try:
+                        from ftmo_manager import ftmo_manager
+                        logging.info(ftmo_manager.get_ftmo_dashboard())
+                    except Exception as e:
+                        logging.debug(f"Failed to show FTMO dashboard: {e}")
                 run_strategy(symbol)
             
             # Monitor positions and add SL/TP if missing
