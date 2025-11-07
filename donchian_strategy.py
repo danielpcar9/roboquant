@@ -705,15 +705,15 @@ def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
     Returns:
         float: Take profit price level
     """
-    # Get historical data for market structure analysis
-    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, 100)  # type: ignore
-    if rates is None or len(rates) < 50:
+    # Get historical data for market structure analysis (focus on recent intraday data)
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, 50)  # type: ignore
+    if rates is None or len(rates) < 20:
         # Fallback to fixed TP if not enough data
         point = mt5.symbol_info(symbol).point  # type: ignore
         if order_type == "BUY":
-            return entry_price + (600 * point)  # 600 points for BUY
+            return entry_price + (300 * point)  # 300 points for BUY
         else:
-            return entry_price - (600 * point)  # 600 points for SELL
+            return entry_price - (300 * point)  # 300 points for SELL
     
     # Convert to list of dictionaries for easier handling
     candles = []
@@ -740,8 +740,8 @@ def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
     # If no market structure levels found, use ATR-based calculation
     if tp_level is None:
         if atr is not None:
-            # Use 2x ATR as TP distance
-            tp_distance = atr * 2
+            # Use 1.5x ATR as TP distance (more aggressive for intraday)
+            tp_distance = atr * 1.5
             point = mt5.symbol_info(symbol).point  # type: ignore
             tp_points = tp_distance / point
             if order_type == "BUY":
@@ -752,9 +752,9 @@ def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
             # Fallback to fixed TP
             point = mt5.symbol_info(symbol).point  # type: ignore
             if order_type == "BUY":
-                tp_level = entry_price + (600 * point)
+                tp_level = entry_price + (300 * point)
             else:
-                tp_level = entry_price - (600 * point)
+                tp_level = entry_price - (300 * point)
     
     return tp_level
 
@@ -767,18 +767,18 @@ def find_bullish_targets(candles, entry_price):
     # Look for resistance levels above entry price
     resistance_levels = []
     
-    # Find swing highs in recent candles
-    for i in range(10, min(50, len(candles) - 10)):
+    # Find swing highs in recent candles (more sensitive for intraday)
+    for i in range(5, min(30, len(candles) - 5)):
         current = candles[i]
         is_swing_high = True
         
-        # Check if current candle is higher high than surrounding candles
-        for j in range(i-5, i):
+        # Check if current candle is higher high than surrounding candles (less strict)
+        for j in range(i-3, i):
             if candles[j]['high'] >= current['high']:
                 is_swing_high = False
                 break
         
-        for j in range(i+1, i+6):
+        for j in range(i+1, i+4):
             if candles[j]['high'] >= current['high']:
                 is_swing_high = False
                 break
@@ -787,22 +787,22 @@ def find_bullish_targets(candles, entry_price):
             resistance_levels.append(current['high'])
     
     # Find FVG (Fair Value Gaps) - gaps where price jumped up
-    for i in range(5, len(candles) - 5):
+    for i in range(3, len(candles) - 3):
         prev_candle = candles[i-1]
         current_candle = candles[i]
         
-        # Look for significant gaps up (FVG)
+        # Look for significant gaps up (FVG) - more sensitive for intraday
         gap_size = current_candle['low'] - prev_candle['high']
         atr = calculate_candle_atr(candles, i)
-        if gap_size > atr * 0.5:  # Significant gap
+        if gap_size > atr * 0.3:  # More sensitive gap detection
             fvg_level = (current_candle['low'] + prev_candle['high']) / 2
             if fvg_level > entry_price:
                 resistance_levels.append(fvg_level)
     
     # Return the closest resistance level above entry price
     if resistance_levels:
-        # Filter levels that are reasonably close (not too far)
-        reasonable_levels = [level for level in resistance_levels if level <= entry_price * 1.05]  # Max 5% away
+        # Filter levels that are reasonably close (not too far) - more generous for intraday
+        reasonable_levels = [level for level in resistance_levels if level <= entry_price * 1.10]  # Max 10% away
         if reasonable_levels:
             return min(reasonable_levels)  # Closest level
         else:
@@ -819,18 +819,18 @@ def find_bearish_targets(candles, entry_price):
     # Look for support levels below entry price
     support_levels = []
     
-    # Find swing lows in recent candles
-    for i in range(10, min(50, len(candles) - 10)):
+    # Find swing lows in recent candles (more sensitive for intraday)
+    for i in range(5, min(30, len(candles) - 5)):
         current = candles[i]
         is_swing_low = True
         
-        # Check if current candle is lower low than surrounding candles
-        for j in range(i-5, i):
+        # Check if current candle is lower low than surrounding candles (less strict)
+        for j in range(i-3, i):
             if candles[j]['low'] <= current['low']:
                 is_swing_low = False
                 break
         
-        for j in range(i+1, i+6):
+        for j in range(i+1, i+4):
             if candles[j]['low'] <= current['low']:
                 is_swing_low = False
                 break
@@ -839,22 +839,22 @@ def find_bearish_targets(candles, entry_price):
             support_levels.append(current['low'])
     
     # Find FVG (Fair Value Gaps) - gaps where price jumped down
-    for i in range(5, len(candles) - 5):
+    for i in range(3, len(candles) - 3):
         prev_candle = candles[i-1]
         current_candle = candles[i]
         
-        # Look for significant gaps down (FVG)
+        # Look for significant gaps down (FVG) - more sensitive for intraday
         gap_size = prev_candle['low'] - current_candle['high']
         atr = calculate_candle_atr(candles, i)
-        if gap_size > atr * 0.5:  # Significant gap
+        if gap_size > atr * 0.3:  # More sensitive gap detection
             fvg_level = (prev_candle['low'] + current_candle['high']) / 2
             if fvg_level < entry_price:
                 support_levels.append(fvg_level)
     
     # Return the closest support level below entry price
     if support_levels:
-        # Filter levels that are reasonably close (not too far)
-        reasonable_levels = [level for level in support_levels if level >= entry_price * 0.95]  # Max 5% away
+        # Filter levels that are reasonably close (not too far) - more generous for intraday
+        reasonable_levels = [level for level in support_levels if level >= entry_price * 0.90]  # Max 10% away
         if reasonable_levels:
             return max(reasonable_levels)  # Closest level
         else:
