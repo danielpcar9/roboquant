@@ -582,7 +582,11 @@ def run_strategy(symbol="XAUUSD"):
                 sl_distance = atr * EVENT_SL_ATR_MULTIPLIER
                 lots = compute_lots_from_risk(account_info.balance, 1.5, sl_distance, symbol)
                 sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
-                tp_points = sl_points * 2
+                
+                # For event mode, use market structure analysis for TP
+                tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
+                tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+                
                 if execute_trade(symbol, "BUY", lots, sl_points, tp_points):
                     event_state.last_event_trade_at = datetime.now(timezone.utc)
         elif (bearish_breakout and norm_bear > EVENT_BREAKOUT_ATR_THRESHOLD and volume_spike and momentum_filter):
@@ -591,17 +595,31 @@ def run_strategy(symbol="XAUUSD"):
                 sl_distance = atr * EVENT_SL_ATR_MULTIPLIER
                 lots = compute_lots_from_risk(account_info.balance, 1.5, sl_distance, symbol)
                 sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
-                tp_points = sl_points * 2
+                
+                # For event mode, use market structure analysis for TP
+                tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
+                tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+                
                 if execute_trade(symbol, "SELL", lots, sl_points, tp_points):
                     event_state.last_event_trade_at = datetime.now(timezone.utc)
     else:
         # Volume confirmation made optional for more signals during testing
         if bullish_breakout and momentum_filter:  # Removed volume_spike requirement
             logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
-            execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
+            
+            # Use market structure analysis for TP in normal mode as well
+            tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
+            tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+            
+            execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, tp_points)
         elif bearish_breakout and momentum_filter:  # Removed volume_spike requirement
             logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
-            execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, TAKE_PROFIT_POINTS)
+            
+            # Use market structure analysis for TP in normal mode as well
+            tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
+            tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+            
+            execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, tp_points)
 
 @handle_exception
 @performance_monitor
@@ -672,6 +690,195 @@ def main():
     finally:
         mt5.shutdown()  # type: ignore
         logging.info("MT5 connection closed")
+
+def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
+    """
+    Calculate take profit level based on market structure analysis.
+    Looks for FVG (Fair Value Gaps), order blocks, equal highs/lows, and liquidity points.
+    
+    Args:
+        symbol: Trading symbol
+        entry_price: Entry price
+        order_type: "BUY" or "SELL"
+        atr: Average True Range (optional)
+    
+    Returns:
+        float: Take profit price level
+    """
+    # Get historical data for market structure analysis
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, 100)  # type: ignore
+    if rates is None or len(rates) < 50:
+        # Fallback to fixed TP if not enough data
+        point = mt5.symbol_info(symbol).point  # type: ignore
+        if order_type == "BUY":
+            return entry_price + (600 * point)  # 600 points for BUY
+        else:
+            return entry_price - (600 * point)  # 600 points for SELL
+    
+    # Convert to list of dictionaries for easier handling
+    candles = []
+    for rate in rates:
+        candles.append({
+            'time': rate['time'],
+            'open': rate['open'],
+            'high': rate['high'],
+            'low': rate['low'],
+            'close': rate['close'],
+            'volume': rate['tick_volume']
+        })
+    
+    # Reverse to have most recent first
+    candles.reverse()
+    
+    if order_type == "BUY":
+        # For BUY orders, look for resistance levels above entry price
+        tp_level = find_bullish_targets(candles, entry_price)
+    else:
+        # For SELL orders, look for support levels below entry price
+        tp_level = find_bearish_targets(candles, entry_price)
+    
+    # If no market structure levels found, use ATR-based calculation
+    if tp_level is None:
+        if atr is not None:
+            # Use 2x ATR as TP distance
+            tp_distance = atr * 2
+            point = mt5.symbol_info(symbol).point  # type: ignore
+            tp_points = tp_distance / point
+            if order_type == "BUY":
+                tp_level = entry_price + (tp_points * point)
+            else:
+                tp_level = entry_price - (tp_points * point)
+        else:
+            # Fallback to fixed TP
+            point = mt5.symbol_info(symbol).point  # type: ignore
+            if order_type == "BUY":
+                tp_level = entry_price + (600 * point)
+            else:
+                tp_level = entry_price - (600 * point)
+    
+    return tp_level
+
+
+def find_bullish_targets(candles, entry_price):
+    """
+    Find bullish targets based on market structure.
+    Looks for FVG, order blocks, equal highs, and liquidity points above entry price.
+    """
+    # Look for resistance levels above entry price
+    resistance_levels = []
+    
+    # Find swing highs in recent candles
+    for i in range(10, min(50, len(candles) - 10)):
+        current = candles[i]
+        is_swing_high = True
+        
+        # Check if current candle is higher high than surrounding candles
+        for j in range(i-5, i):
+            if candles[j]['high'] >= current['high']:
+                is_swing_high = False
+                break
+        
+        for j in range(i+1, i+6):
+            if candles[j]['high'] >= current['high']:
+                is_swing_high = False
+                break
+        
+        if is_swing_high and current['high'] > entry_price:
+            resistance_levels.append(current['high'])
+    
+    # Find FVG (Fair Value Gaps) - gaps where price jumped up
+    for i in range(5, len(candles) - 5):
+        prev_candle = candles[i-1]
+        current_candle = candles[i]
+        
+        # Look for significant gaps up (FVG)
+        gap_size = current_candle['low'] - prev_candle['high']
+        atr = calculate_candle_atr(candles, i)
+        if gap_size > atr * 0.5:  # Significant gap
+            fvg_level = (current_candle['low'] + prev_candle['high']) / 2
+            if fvg_level > entry_price:
+                resistance_levels.append(fvg_level)
+    
+    # Return the closest resistance level above entry price
+    if resistance_levels:
+        # Filter levels that are reasonably close (not too far)
+        reasonable_levels = [level for level in resistance_levels if level <= entry_price * 1.05]  # Max 5% away
+        if reasonable_levels:
+            return min(reasonable_levels)  # Closest level
+        else:
+            return min(resistance_levels)  # Any level
+    
+    return None
+
+
+def find_bearish_targets(candles, entry_price):
+    """
+    Find bearish targets based on market structure.
+    Looks for FVG, order blocks, equal lows, and liquidity points below entry price.
+    """
+    # Look for support levels below entry price
+    support_levels = []
+    
+    # Find swing lows in recent candles
+    for i in range(10, min(50, len(candles) - 10)):
+        current = candles[i]
+        is_swing_low = True
+        
+        # Check if current candle is lower low than surrounding candles
+        for j in range(i-5, i):
+            if candles[j]['low'] <= current['low']:
+                is_swing_low = False
+                break
+        
+        for j in range(i+1, i+6):
+            if candles[j]['low'] <= current['low']:
+                is_swing_low = False
+                break
+        
+        if is_swing_low and current['low'] < entry_price:
+            support_levels.append(current['low'])
+    
+    # Find FVG (Fair Value Gaps) - gaps where price jumped down
+    for i in range(5, len(candles) - 5):
+        prev_candle = candles[i-1]
+        current_candle = candles[i]
+        
+        # Look for significant gaps down (FVG)
+        gap_size = prev_candle['low'] - current_candle['high']
+        atr = calculate_candle_atr(candles, i)
+        if gap_size > atr * 0.5:  # Significant gap
+            fvg_level = (prev_candle['low'] + current_candle['high']) / 2
+            if fvg_level < entry_price:
+                support_levels.append(fvg_level)
+    
+    # Return the closest support level below entry price
+    if support_levels:
+        # Filter levels that are reasonably close (not too far)
+        reasonable_levels = [level for level in support_levels if level >= entry_price * 0.95]  # Max 5% away
+        if reasonable_levels:
+            return max(reasonable_levels)  # Closest level
+        else:
+            return max(support_levels)  # Any level
+    
+    return None
+
+
+def calculate_candle_atr(candles, index):
+    """
+    Calculate ATR for a specific candle.
+    """
+    if index >= len(candles) or index < 1:
+        return 0
+    
+    candle = candles[index]
+    prev_candle = candles[index-1]
+    
+    tr1 = candle['high'] - candle['low']
+    tr2 = abs(candle['high'] - prev_candle['close'])
+    tr3 = abs(candle['low'] - prev_candle['close'])
+    
+    return max(tr1, tr2, tr3)
+
 
 if __name__ == "__main__":
     main()
