@@ -15,6 +15,82 @@ from error_handler import safe_mt5_call, MT5ConnectionError, OrderExecutionError
 # Performance monitoring
 PERFORMANCE_MONITORING_ENABLED = True
 
+
+def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None):
+    """
+    Validate and adjust SL/TP levels to meet broker requirements.
+    Ensures minimum stop distance and correct direction.
+    
+    Args:
+        symbol: Trading symbol
+        entry_price: Entry price
+        sl: Stop loss level
+        tp: Take profit level
+        side: Order side ("BUY" or "SELL")
+        mt5_module: MT5 module instance
+    
+    Returns:
+        tuple: (adjusted_sl, adjusted_tp)
+    """
+    if mt5_module is None:
+        mt5_module = mt5
+    
+    # Get symbol info
+    symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
+    if not symbol_info:
+        logging.warning(f"Could not get symbol info for {symbol}, returning original SL/TP")
+        return sl, tp
+    
+    point = symbol_info.point
+    
+    # Get minimum stop distance (in points)
+    # For Exness, this is typically available as freeze_level or distance fields
+    min_stop_distance = getattr(symbol_info, 'freeze_level', 0)
+    if min_stop_distance == 0:
+        min_stop_distance = getattr(symbol_info, 'distance', 0)
+    
+    # If we still don't have a minimum distance, use a safe default
+    # For XAUUSD, 150 points should be sufficient based on your config
+    if min_stop_distance == 0:
+        min_stop_distance = 150  # Default safe value
+    
+    logging.debug(f"Symbol {symbol} min stop distance: {min_stop_distance} points")
+    
+    # Adjust SL/TP based on order side and minimum distance requirements
+    if side == "BUY":
+        # For BUY orders: SL must be below entry, TP must be above entry
+        if sl is not None:
+            # Ensure SL is at least min_stop_distance below entry
+            min_sl = entry_price - (min_stop_distance * point)
+            adjusted_sl = min(sl, min_sl)  # SL further from entry is safer
+        else:
+            adjusted_sl = None
+            
+        if tp is not None:
+            # Ensure TP is at least min_stop_distance above entry
+            min_tp = entry_price + (min_stop_distance * point)
+            adjusted_tp = max(tp, min_tp)  # TP further from entry is better
+        else:
+            adjusted_tp = None
+    else:  # SELL
+        # For SELL orders: SL must be above entry, TP must be below entry
+        if sl is not None:
+            # Ensure SL is at least min_stop_distance above entry
+            min_sl = entry_price + (min_stop_distance * point)
+            adjusted_sl = max(sl, min_sl)  # SL further from entry is safer
+        else:
+            adjusted_sl = None
+            
+        if tp is not None:
+            # Ensure TP is at least min_stop_distance below entry
+            min_tp = entry_price - (min_stop_distance * point)
+            adjusted_tp = min(tp, min_tp)  # TP further from entry is better
+        else:
+            adjusted_tp = None
+    
+    logging.debug(f"SL/TP adjustment - Original: SL={sl}, TP={tp} | Adjusted: SL={adjusted_sl}, TP={adjusted_tp}")
+    return adjusted_sl, adjusted_tp
+
 def performance_monitor(func: Callable) -> Callable:
     """
     Decorator to monitor performance of MT5 functions.
@@ -188,6 +264,9 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     
     price = tick.ask if side == "BUY" else tick.bid
     
+    # Validate and adjust SL/TP levels to meet broker requirements
+    sl, tp = validate_and_adjust_stops(symbol, price, sl, tp, side, mt5_module)
+    
     # Try different approaches to handle the filling mode issue
     order_type = mt5_module.ORDER_TYPE_BUY if side == "BUY" else mt5_module.ORDER_TYPE_SELL  # type: ignore
     
@@ -291,6 +370,28 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
                                     mod_retcode = getattr(modification_result, 'retcode', 'N/A') if modification_result else 'N/A'
                                     mod_comment = getattr(modification_result, 'comment', 'N/A') if modification_result else 'N/A'
                                     logging.warning("Fallo al modificar SL/TP: retcode=%s, comment=%s", mod_retcode, mod_comment)
+                                    
+                                    # Try one more time with adjusted stops
+                                    adjusted_sl, adjusted_tp = validate_and_adjust_stops(symbol, price, sl, tp, side, mt5_module)
+                                    if adjusted_sl != sl or adjusted_tp != tp:
+                                        logging.info("Reintentando con SL/TP ajustados: SL=%s, TP=%s", adjusted_sl, adjusted_tp)
+                                        modification_request['sl'] = float(adjusted_sl) if adjusted_sl is not None else 0
+                                        modification_request['tp'] = float(adjusted_tp) if adjusted_tp is not None else 0
+                                        
+                                        # Remove zero values
+                                        if modification_request['sl'] == 0:
+                                            modification_request.pop('sl')
+                                        if modification_request['tp'] == 0:
+                                            modification_request.pop('tp')
+                                        
+                                        modification_result2 = mt5_module.order_send(modification_request)  # type: ignore
+                                        if modification_result2 and getattr(modification_result2, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+                                            logging.info("SL/TP modificados exitosamente con ajuste para orden %s", order_ticket)
+                                        else:
+                                            mod_retcode2 = getattr(modification_result2, 'retcode', 'N/A') if modification_result2 else 'N/A'
+                                            mod_comment2 = getattr(modification_result2, 'comment', 'N/A') if modification_result2 else 'N/A'
+                                            logging.warning("Fallo al modificar SL/TP ajustados: retcode=%s, comment=%s", mod_retcode2, mod_comment2)
+                                            logging.warning("La orden %s se ejecutó sin SL/TP. Deberás gestionarla manualmente.", order_ticket)
                             
                             return result_no_stops
                         else:
@@ -375,3 +476,86 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
     
     logging.error("Error al cerrar posicion %s despues de intentar todos los modos de llenado", ticket)
     return False
+
+
+@performance_monitor
+@safe_mt5_call
+def monitor_and_update_stops(mt5_module=None):
+    """
+    Monitor open positions and add SL/TP if missing.
+    This function should be called periodically to ensure all positions have proper stops.
+    """
+    if mt5_module is None:
+        mt5_module = mt5
+    
+    # Get all open positions
+    positions = mt5_module.positions_get()  # type: ignore
+    if not positions:
+        return
+    
+    for pos in positions:
+        # Check if position has SL/TP
+        sl = getattr(pos, 'sl', 0)
+        tp = getattr(pos, 'tp', 0)
+        
+        # If SL or TP is missing or zero, try to add them
+        if sl == 0 or tp == 0:
+            symbol = pos.symbol
+            ticket = pos.ticket
+            
+            logging.info(f"Position {ticket} missing SL/TP, attempting to add them")
+            
+            # Get current market price
+            tick = mt5_module.symbol_info_tick(symbol)  # type: ignore
+            if not tick:
+                logging.warning(f"Could not get tick data for {symbol}")
+                continue
+            
+            # Determine order side
+            if pos.type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
+                side = "BUY"
+                entry_price = pos.price_open
+                # Set reasonable SL/TP based on config
+                sl_price = entry_price - (150 * mt5_module.symbol_info(symbol).point)  # type: ignore
+                tp_price = entry_price + (300 * mt5_module.symbol_info(symbol).point)  # type: ignore
+            else:
+                side = "SELL"
+                entry_price = pos.price_open
+                # Set reasonable SL/TP based on config
+                sl_price = entry_price + (150 * mt5_module.symbol_info(symbol).point)  # type: ignore
+                tp_price = entry_price - (300 * mt5_module.symbol_info(symbol).point)  # type: ignore
+            
+            # Validate stops
+            sl_price, tp_price = validate_and_adjust_stops(symbol, entry_price, sl_price, tp_price, side, mt5_module)
+            
+            # Try to modify position
+            modification_request = {
+                'action': mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+                'symbol': symbol,
+                'position': int(ticket),
+                'sl': float(sl_price) if sl_price is not None else 0,
+                'tp': float(tp_price) if tp_price is not None else 0,
+                'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
+                'type_filling': mt5_module.ORDER_FILLING_RETURN  # type: ignore
+            }
+            
+            # Remove zero values
+            if modification_request['sl'] == 0:
+                modification_request.pop('sl')
+            if modification_request['tp'] == 0:
+                modification_request.pop('tp')
+            
+            # If we still have something to set
+            if 'sl' in modification_request or 'tp' in modification_request:
+                try:
+                    result = mt5_module.order_send(modification_request)  # type: ignore
+                    if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+                        logging.info(f"SL/TP added successfully to position {ticket}")
+                    else:
+                        retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
+                        comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
+                        logging.warning(f"Failed to add SL/TP to position {ticket}: retcode={retcode}, comment={comment}")
+                except Exception as e:
+                    logging.exception(f"Exception while adding SL/TP to position {ticket}")
+            else:
+                logging.warning(f"No valid SL/TP to add to position {ticket}")

@@ -43,6 +43,8 @@ from security_manager import SecureCredentialManager, InputValidator, sanitize_e
 from config_manager import config_manager
 # Import error handler
 from error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
+# Import MT5 utilities
+from mt5_utils import monitor_and_update_stops
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -181,7 +183,7 @@ def calculate_avg_momentum(symbol, lookback):
     """Calculate average momentum over a lookback period"""
     logging.debug(f"Calculating momentum for {symbol} with lookback {lookback}")
     # UPDATED: Use configurable timeframe
-    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, lookback)  # type: ignore
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, lookback)  # type: ignore  # type: ignore
     if rates is None or len(rates) < lookback:
         logging.error(f"Failed to get rate data for momentum calculation. Rates: {rates}, Length: {len(rates) if rates else 0}")
         return 0
@@ -265,7 +267,7 @@ def calculate_normalized_breakout(price, channel, atr):
 @performance_monitor
 def get_volume_breakout(symbol, lookback=20):
     """Detect volume spike confirming breakout validity"""
-    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, lookback)
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, lookback)  # type: ignore
     if rates is None or len(rates) < lookback:
         return False, 0
     
@@ -638,6 +640,9 @@ def main():
             logging.info("Safety checks passed")
             run_strategy(symbol)
         
+        # Import the monitoring function
+        from mt5_utils import monitor_and_update_stops
+        
         # Then continue with the loop
         while True:
             # Run strategy
@@ -649,6 +654,12 @@ def main():
             else:
                 logging.info("Safety checks passed")
                 run_strategy(symbol)
+            
+            # Monitor positions and add SL/TP if missing
+            try:
+                monitor_and_update_stops()
+            except Exception as e:
+                logging.error(f"Error monitoring positions: {e}", exc_info=True)
             
             # UPDATED: Sleep interval adjusted for M5 timeframe (300 seconds = 5 minutes)
             logging.debug("Waiting 300 seconds (5 minutes) before next check...")
