@@ -144,6 +144,10 @@ class Safety:
         
         for pos in open_positions:
             try:
+                # Skip correlation check for the same symbol
+                if pos.symbol == new_symbol:
+                    continue
+                    
                 existing_returns = self.get_returns(pos.symbol)
                 
                 if existing_returns.size == 0:
@@ -153,14 +157,16 @@ class Safety:
                 if common_len < 30:
                     continue
                 
-                corr = np.corrcoef(
-                    new_returns[-common_len:],
-                    existing_returns[-common_len:]
-                )[0, 1]
+                # Convert to numpy arrays to ensure compatibility
+                new_returns_array = np.array(new_returns[-common_len:])
+                existing_returns_array = np.array(existing_returns[-common_len:])
+                
+                corr_matrix = np.corrcoef(new_returns_array, existing_returns_array)
+                corr = corr_matrix[0, 1] if corr_matrix.size > 1 else 0.0
                 
                 if abs(corr) > threshold:
                     logging.warning("Alta correlacion (%.2f) entre %s y %s", corr, new_symbol, pos.symbol)
-                    return False, corr, pos.symbol
+                    return False, float(corr), pos.symbol
                 
             except Exception as e:
                 logging.debug("Error verificando correlacion con %s: %s", pos.symbol, e)
@@ -188,7 +194,9 @@ class Safety:
         if new_symbol:
             ok, corr, other_symbol = self.correlation_ok(new_symbol)
             if not ok:
-                return False, 'corr_' + str(round(corr, 2)) + '_with_' + other_symbol
+                corr_str = str(round(corr, 2)) if corr is not None else "unknown"
+                other_symbol_str = other_symbol if other_symbol is not None else "unknown"
+                return False, 'corr_' + corr_str + '_with_' + other_symbol_str
         
         return True, None
 
