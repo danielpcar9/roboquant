@@ -679,6 +679,12 @@ def main():
             except Exception as e:
                 logging.error(f"Error monitoring positions: {e}", exc_info=True)
             
+            # Update trailing stops for open positions
+            try:
+                update_trailing_stops()
+            except Exception as e:
+                logging.error(f"Error updating trailing stops: {e}", exc_info=True)
+            
             # UPDATED: Sleep interval adjusted for M5 timeframe (300 seconds = 5 minutes)
             logging.debug("Waiting 300 seconds (5 minutes) before next check...")
             time.sleep(300)
@@ -878,6 +884,90 @@ def calculate_candle_atr(candles, index):
     tr3 = abs(candle['low'] - prev_candle['close'])
     
     return max(tr1, tr2, tr3)
+
+
+def update_trailing_stops():
+    """
+    Update trailing stops for all open positions.
+    Moves stop loss closer to current price as it moves in favor of the position.
+    """
+    # Get all open positions
+    positions = mt5.positions_get()  # type: ignore
+    if not positions:
+        return
+    
+    for pos in positions:
+        symbol = pos.symbol
+        ticket = pos.ticket
+        pos_type = pos.type
+        entry_price = pos.price_open
+        current_sl = pos.sl
+        
+        # Get current market price
+        tick = mt5.symbol_info_tick(symbol)  # type: ignore
+        if not tick:
+            continue
+        
+        # Get symbol information for point value
+        symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        if not symbol_info:
+            continue
+        
+        point = symbol_info.point
+        
+        # Calculate trailing distance (25% of original SL distance)
+        if pos_type == mt5.POSITION_TYPE_BUY:  # type: ignore
+            # For BUY positions, trailing stop moves up
+            original_distance = abs(entry_price - current_sl) if current_sl > 0 else (150 * point)
+            trailing_distance = original_distance * 0.25  # 25% of original distance
+            
+            # Calculate new SL level based on current price
+            current_price = tick.bid
+            new_sl = current_price - trailing_distance
+            
+            # Only update if new SL is better than current SL and above entry price
+            if (current_sl == 0 or new_sl > current_sl) and new_sl > entry_price:
+                # Update the position with new SL
+                request = {
+                    'action': mt5.TRADE_ACTION_SLTP,  # type: ignore
+                    'symbol': symbol,
+                    'position': int(ticket),
+                    'sl': new_sl,
+                    'type_time': mt5.ORDER_TIME_GTC,  # type: ignore
+                    'type_filling': mt5.ORDER_FILLING_RETURN  # type: ignore
+                }
+                
+                result = mt5.order_send(request)  # type: ignore
+                if result and result.retcode == mt5.TRADE_RETCODE_DONE:  # type: ignore
+                    logging.info(f"Trailing stop updated for BUY position {ticket}: SL moved to {new_sl:.5f}")
+                else:
+                    logging.warning(f"Failed to update trailing stop for BUY position {ticket}: {getattr(result, 'comment', 'N/A')}")
+        else:  # SELL position
+            # For SELL positions, trailing stop moves down
+            original_distance = abs(entry_price - current_sl) if current_sl > 0 else (150 * point)
+            trailing_distance = original_distance * 0.25  # 25% of original distance
+            
+            # Calculate new SL level based on current price
+            current_price = tick.ask
+            new_sl = current_price + trailing_distance
+            
+            # Only update if new SL is better than current SL and below entry price
+            if (current_sl == 0 or new_sl < current_sl) and new_sl < entry_price:
+                # Update the position with new SL
+                request = {
+                    'action': mt5.TRADE_ACTION_SLTP,  # type: ignore
+                    'symbol': symbol,
+                    'position': int(ticket),
+                    'sl': new_sl,
+                    'type_time': mt5.ORDER_TIME_GTC,  # type: ignore
+                    'type_filling': mt5.ORDER_FILLING_RETURN  # type: ignore
+                }
+                
+                result = mt5.order_send(request)  # type: ignore
+                if result and result.retcode == mt5.TRADE_RETCODE_DONE:  # type: ignore
+                    logging.info(f"Trailing stop updated for SELL position {ticket}: SL moved to {new_sl:.5f}")
+                else:
+                    logging.warning(f"Failed to update trailing stop for SELL position {ticket}: {getattr(result, 'comment', 'N/A')}")
 
 
 if __name__ == "__main__":
