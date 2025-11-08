@@ -106,7 +106,6 @@ Risk per Trade:     1-1.5% of account
    - Implementation: Use `RISK_PERCENT` configuration in existing code
 
 4. **Event-Driven Logic** ✓
-   - Forex Factory scraper integrated
    - Event wait/cooldown mechanism implemented
    - Minor: Add timezone DST handling
 

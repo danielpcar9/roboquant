@@ -255,6 +255,7 @@ class FTMOSafety(Safety):
                 return False, reason
         
         return True, None
+        
     
     def update_after_trade(self):
         """Update metrics after executing a trade"""

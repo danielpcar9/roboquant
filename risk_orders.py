@@ -15,26 +15,14 @@ from alerts import alert_trade_opened, alert_safety_violation
 # Import error handler
 from error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
 
+# Import consolidated MT5 functions
+from mt5_core import initialize_mt5
+
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 @handle_exception
-def initialize_mt5():
-    """Initialize MT5 connection"""
-    if not mt5.initialize():  # type: ignore
-        logging.error("No se pudo inicializar MT5")
-        return False
-
-    LOGIN = int(os.getenv("MT5_LOGIN", "0"))
-    PASSWORD = os.getenv("MT5_PASSWORD", "")
-    SERVER = os.getenv("MT5_SERVER", "")
-
-    if not mt5.login(LOGIN, password=PASSWORD, server=SERVER):  # type: ignore
-        logging.error("Login fallido")
-        mt5.shutdown()  # type: ignore
-        return False
-    
-    return True
+# initialize_mt5 function removed - using consolidated version from mt5_core.py
 
 @handle_exception
 @retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)

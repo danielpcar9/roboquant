@@ -7,32 +7,15 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Import caching system
-from forex_factory_scraper import fetch_upcoming_events_cached
+
 # Try to import metatrader5, fallback to MetaTrader5 if needed
 try:
     import metatrader5 as mt5
 except ImportError:
     import MetaTrader5 as mt5  # type: ignore
 
-# State machine for event detection
-class TradingMode(Enum):
-    NORMAL = "normal"
-    EVENT_DETECTED = "event_detected"
-    EVENT_WAIT = "event_wait"
-    EVENT_ACTIVE = "event_active"
-    EVENT_COOLDOWN = "event_cooldown"
 
-@dataclass
-class EventState:
-    mode: TradingMode = TradingMode.NORMAL
-    event_detected_at: Optional[datetime] = None
-    candles_waited: int = 0
-    last_event_trade_at: Optional[datetime] = None
-    event_info: Optional[str] = None
-
-# Global event state for persistence between loops
-event_state = EventState()
-from mt5_utils import build_and_send_order, normalize_volume
+from mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops
 from safety import Safety
 # Import security manager
 from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message, RateLimiter
@@ -40,8 +23,9 @@ from security_manager import SecureCredentialManager, InputValidator, sanitize_e
 from config_manager import config_manager
 # Import error handler
 from error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
-# Import MT5 utilities
-from mt5_utils import monitor_and_update_stops
+
+# Import consolidated performance monitoring
+from mt5_core import strategy_performance_monitor as performance_monitor
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -59,14 +43,27 @@ USE_RISK_MANAGEMENT = config_manager.get('USE_RISK_MANAGEMENT')
 LOTS = config_manager.get('LOTS')
 STOP_LOSS_POINTS = config_manager.get('STOP_LOSS_POINTS')
 TAKE_PROFIT_POINTS = config_manager.get('TAKE_PROFIT_POINTS')
-TIMEFRAME = mt5.TIMEFRAME_M5  # Reduced noise, more reliable signals
+TIMEFRAME_NAME = config_manager.get('TIMEFRAME')
+
+# Convert timeframe name to MT5 constant
+TIMEFRAME_MAP = {
+    'M1': mt5.TIMEFRAME_M1,
+    'M5': mt5.TIMEFRAME_M5,
+    'M15': mt5.TIMEFRAME_M15,
+    'M30': mt5.TIMEFRAME_M30,
+    'H1': mt5.TIMEFRAME_H1,
+    'H4': mt5.TIMEFRAME_H4,
+    'D1': mt5.TIMEFRAME_D1,
+    'W1': mt5.TIMEFRAME_W1,
+    'MN1': mt5.TIMEFRAME_MN1
+}
+TIMEFRAME = TIMEFRAME_MAP.get(TIMEFRAME_NAME.upper(), mt5.TIMEFRAME_M5)  # Default to M5
 
 TRADING_HOUR_START = config_manager.get('TRADING_HOUR_START')
 TRADING_HOUR_END = config_manager.get('TRADING_HOUR_END')
 MAGIC_NUMBER = config_manager.get('MAGIC_NUMBER')
 
 # Event-driven trading parameters
-EVENT_WAIT_CANDLES = config_manager.get('EVENT_WAIT_CANDLES')
 EVENT_SIZE_FACTOR = config_manager.get('EVENT_SIZE_FACTOR')
 EVENT_SL_ATR_MULTIPLIER = config_manager.get('EVENT_SL_ATR_MULTIPLIER')
 EVENT_BREAKOUT_ATR_THRESHOLD = config_manager.get('EVENT_BREAKOUT_ATR_THRESHOLD')
@@ -77,32 +74,7 @@ MAX_SPREAD_POINTS = config_manager.get('MAX_SPREAD_POINTS')
 STRATEGY_PERFORMANCE_MONITORING = True
 strategy_execution_times = []
 
-def performance_monitor(func):
-    """Decorator to monitor strategy performance."""
-    def wrapper(*args, **kwargs):
-        if not STRATEGY_PERFORMANCE_MONITORING:
-            return func(*args, **kwargs)
-            
-        start_time = time.perf_counter()
-        try:
-            result = func(*args, **kwargs)
-            end_time = time.perf_counter()
-            execution_time = end_time - start_time
-            strategy_execution_times.append(execution_time)
-            logging.debug(f"Strategy Performance: {func.__name__} executed in {execution_time:.4f} seconds")
-            
-            # Log average execution time every 10 executions
-            if len(strategy_execution_times) % 10 == 0:
-                avg_time = sum(strategy_execution_times[-10:]) / min(10, len(strategy_execution_times))
-                logging.info(f"Average execution time (last 10): {avg_time:.4f} seconds")
-            
-            return result
-        except Exception as e:
-            end_time = time.perf_counter()
-            execution_time = end_time - start_time
-            logging.debug(f"Strategy Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {e}")
-            raise
-    return wrapper
+# performance_monitor function removed - using consolidated version from mt5_core.py
 
 @handle_exception
 def initialize_mt5():
@@ -294,18 +266,7 @@ def get_volume_stats(symbol, lookback=20):
     logging.debug(f"Volume stats for {symbol} - Current: {current_volume}, Average: {avg_volume:.2f}")
     return current_volume, avg_volume
 
-@handle_exception
-@performance_monitor
-def fetch_upcoming_high_impact(minutes_window=120):
-    """Fetch upcoming high impact events from Forex Factory with caching."""
-    try:
-        # Convert minutes to hours for the new function
-        hours_ahead = int(minutes_window / 60)
-        return fetch_upcoming_events_cached(hours_ahead)
-    except Exception as e:
-        logging.warning(f"Failed to fetch upcoming high impact events: {e}")
-        # Return False, None to indicate no events found
-        return (False, None)
+
 
 @handle_exception
 @handle_exception
@@ -451,50 +412,14 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
         logging.error(f"Error executing trade: {sanitize_error_message(str(e))}", exc_info=True)
         return False
 
-@handle_exception
-@performance_monitor
-def handle_event_state(symbol):
-    """Handle event state transitions"""
-    global event_state
-    current_time = datetime.now(timezone.utc)
-    
-    if event_state.mode == TradingMode.NORMAL:
-        try:
-            has_event, info = fetch_upcoming_high_impact()
-            if has_event:
-                event_state.mode = TradingMode.EVENT_DETECTED
-                event_state.event_detected_at = current_time
-                event_state.event_info = info
-                logging.info(f"Event detected: {info}")
-        except Exception as e:
-            # If Forex Factory scraping fails, log the error but continue with normal trading
-            logging.warning(f"Forex Factory scraping failed: {e}. Continuing with normal trading mode.")
-            # We could implement a fallback here if needed
-    elif event_state.mode == TradingMode.EVENT_DETECTED:
-        if event_state.event_detected_at and (current_time - event_state.event_detected_at).seconds >= 60:
-            event_state.mode = TradingMode.EVENT_WAIT
-            event_state.candles_waited = 0
-    elif event_state.mode == TradingMode.EVENT_WAIT:
-        event_state.candles_waited += 1
-        if event_state.candles_waited >= EVENT_WAIT_CANDLES:
-            event_state.mode = TradingMode.EVENT_ACTIVE
-            return True
-    elif event_state.mode == TradingMode.EVENT_ACTIVE:
-        if event_state.last_event_trade_at and (current_time - event_state.last_event_trade_at).seconds/60 >= 30:
-            event_state.mode = TradingMode.NORMAL
-            event_state.event_detected_at = None
-            event_state.candles_waited = 0
-            event_state.last_event_trade_at = None
-        return True
-    return False
+
 
 @handle_exception
 @performance_monitor
 def run_strategy(symbol="XAUUSD"):
     """Main strategy function"""
-    global event_state
     
-    logging.info(f"Running strategy for symbol: {symbol} in mode: {event_state.mode.value}")
+    logging.info(f"Running strategy for symbol: {symbol}")
     
     # Check if we're in trading hours
     if not in_trading_hours():
@@ -510,8 +435,6 @@ def run_strategy(symbol="XAUUSD"):
     if spread > MAX_SPREAD_POINTS:
         logging.info(f"Spread too high: {spread:.2f} points > {MAX_SPREAD_POINTS} points, skipping")
         return
-    
-    is_event_mode = handle_event_state(symbol)
     
     # Check if we already have open positions
     positions = mt5.positions_get(symbol=symbol)  # type: ignore
@@ -562,59 +485,23 @@ def run_strategy(symbol="XAUUSD"):
     # Add volume confirmation
     volume_spike, vol_ratio = get_volume_breakout(symbol)
     
-    # Macro veto - REMOVED: Using Forex Factory instead of FRED
-    
-    if is_event_mode:
-        norm_bull = calculate_normalized_breakout(current_close, upper_channel, atr)
-        norm_bear = calculate_normalized_breakout(current_close, lower_channel, atr)
-        if (bullish_breakout and norm_bull > EVENT_BREAKOUT_ATR_THRESHOLD and volume_spike and momentum_filter):
-            account_info = mt5.account_info()  # type: ignore
-            if account_info:
-                # Use 2.5x ATR for SL as required for FTMO
-                sl_distance = atr * 2.5
-                sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
-                
-                # For event mode, use market structure analysis for TP
-                tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
-                tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
-                
-                # Use 0.75% risk per trade for FTMO
-                lots = compute_lots_from_risk(account_info.balance, 0.75, sl_distance, symbol)
-                if execute_trade(symbol, "BUY", lots, sl_points, tp_points):
-                    event_state.last_event_trade_at = datetime.now(timezone.utc)
-        elif (bearish_breakout and norm_bear > EVENT_BREAKOUT_ATR_THRESHOLD and volume_spike and momentum_filter):
-            account_info = mt5.account_info()  # type: ignore
-            if account_info:
-                # Use 2.5x ATR for SL as required for FTMO
-                sl_distance = atr * 2.5
-                sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
-                
-                # For event mode, use market structure analysis for TP
-                tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
-                tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
-                
-                # Use 0.75% risk per trade for FTMO
-                lots = compute_lots_from_risk(account_info.balance, 0.75, sl_distance, symbol)
-                if execute_trade(symbol, "SELL", lots, sl_points, tp_points):
-                    event_state.last_event_trade_at = datetime.now(timezone.utc)
-    else:
-        # Volume confirmation made optional for more signals during testing
-        if bullish_breakout and momentum_filter:  # Removed volume_spike requirement
-            logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
-            
-            # Use market structure analysis for TP in normal mode as well
-            tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
-            tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
-            
-            execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, tp_points)
-        elif bearish_breakout and momentum_filter:  # Removed volume_spike requirement
-            logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
-            
-            # Use market structure analysis for TP in normal mode as well
-            tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
-            tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
-            
-            execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, tp_points)
+    # Volume confirmation made optional for more signals during testing
+    if bullish_breakout and momentum_filter:  # Removed volume_spike requirement
+        logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
+        
+        # Use market structure analysis for TP in normal mode as well
+        tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
+        tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+        
+        execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, tp_points)
+    elif bearish_breakout and momentum_filter:  # Removed volume_spike requirement
+        logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
+        
+        # Use market structure analysis for TP in normal mode as well
+        tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
+        tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+        
+        execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, tp_points)
 
 @handle_exception
 @performance_monitor

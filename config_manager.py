@@ -41,6 +41,7 @@ class ConfigManager:
             'TRADING_HOUR_START': int(os.getenv('TRADING_HOUR_START', '7')),  # FTMO 7-16h CET
             'TRADING_HOUR_END': int(os.getenv('TRADING_HOUR_END', '16')),
             'MAGIC_NUMBER': int(os.getenv('MAGIC_NUMBER', '123456')),
+            'TIMEFRAME': os.getenv('TIMEFRAME', 'M5'),
             
             # Event-driven trading parameters
             'EVENT_WAIT_CANDLES': int(os.getenv('EVENT_WAIT_CANDLES', '3')),

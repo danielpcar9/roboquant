@@ -14,22 +14,10 @@ class MockMT5:
     TIMEFRAME_W1 = 32769
     TIMEFRAME_MN1 = 49153
 
-def timeframe_to_string(timeframe):
-    """Convert MT5 timeframe constant to string representation"""
-    # Using the mock MT5 class
-    mt5 = MockMT5()
-    timeframe_map = {
-        mt5.TIMEFRAME_M1: 'M1',
-        mt5.TIMEFRAME_M5: 'M5',
-        mt5.TIMEFRAME_M15: 'M15',
-        mt5.TIMEFRAME_M30: 'M30',
-        mt5.TIMEFRAME_H1: 'H1',
-        mt5.TIMEFRAME_H4: 'H4',
-        mt5.TIMEFRAME_D1: 'D1',
-        mt5.TIMEFRAME_W1: 'W1',
-        mt5.TIMEFRAME_MN1: 'MN1'
-    }
-    return timeframe_map.get(timeframe, 'H1')  # Default to H1 if not found
+# Import consolidated MT5 functions
+from mt5_core import timeframe_to_string
+
+# timeframe_to_string function removed - using consolidated version from mt5_core.py
 
 # Test the timeframe conversion
 mt5 = MockMT5()

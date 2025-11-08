@@ -16,6 +16,9 @@ from security_manager import SecureCredentialManager, InputValidator, RateLimite
 # Import config manager
 from config_manager import config_manager
 
+# Import consolidated MT5 functions
+from mt5_core import initialize_mt5
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -48,36 +51,7 @@ DEFAULT_MAGIC = config_manager.get('MAGIC_NUMBER')
 WEBHOOK_ALLOWED_IPS = os.getenv('WEBHOOK_ALLOWED_IPS', '127.0.0.1,::1').split(',')
 
 
-def initialize_mt5():
-    """Initialize MT5 connection"""
-    global mt5_connected
-    try:
-        if not mt5.initialize():  # type: ignore
-            logging.error("Failed to initialize MT5")
-            return False
-        
-        # Try to login with credentials from secure credential manager
-        login = credential_manager.get_credential('MT5_LOGIN')
-        password = credential_manager.get_credential('MT5_PASSWORD')
-        server = credential_manager.get_credential('MT5_SERVER')
-        
-        if login and password and server:
-            try:
-                login_int = int(login)
-                authorized = mt5.login(login_int, password=password, server=server)  # type: ignore
-                if not authorized:
-                    logging.error("Failed to login to MT5")
-                    return False
-            except ValueError as e:
-                logging.error(f"Invalid login format: {sanitize_error_message(str(e))}")
-                return False
-        
-        mt5_connected = True
-        logging.info("MT5 initialized and logged in successfully")
-        return True
-    except Exception as e:
-        logging.error(f"Error initializing MT5: {sanitize_error_message(str(e))}")
-        return False
+# initialize_mt5 function removed - using consolidated version from mt5_core.py
 
 def process_trade_signal(signal_data):
     """Process a trade signal received from webhook"""

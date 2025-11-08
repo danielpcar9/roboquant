@@ -9,36 +9,15 @@ except ImportError:
 from datetime import datetime, timedelta
 import logging
 
+# Import consolidated MT5 functions
+from mt5_core import initialize_mt5, timeframe_to_string
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-def timeframe_to_string(timeframe):
-    """Convert MT5 timeframe constant to string representation"""
-    timeframe_map = {
-        mt5.TIMEFRAME_M1: 'M1',
-        mt5.TIMEFRAME_M5: 'M5',
-        mt5.TIMEFRAME_M15: 'M15',
-        mt5.TIMEFRAME_M30: 'M30',
-        mt5.TIMEFRAME_H1: 'H1',
-        mt5.TIMEFRAME_H4: 'H4',
-        mt5.TIMEFRAME_D1: 'D1',
-        mt5.TIMEFRAME_W1: 'W1',
-        mt5.TIMEFRAME_MN1: 'MN1'
-    }
-    return timeframe_map.get(timeframe, 'H1')  # Default to H1 if not found
+# timeframe_to_string function removed - using consolidated version from mt5_core.py
 
-def initialize_mt5():
-    """Initialize MT5 connection"""
-    try:
-        if not mt5.initialize():  # type: ignore
-            logging.error("Failed to initialize MT5")
-            return False
-            
-        logging.info("MT5 initialized successfully")
-        return True
-    except Exception as e:
-        logging.error(f"Error initializing MT5: {e}")
-        return False
+# initialize_mt5 function removed - using consolidated version from mt5_core.py
 
 def get_historical_data(symbol, timeframe, days_back=365):
     """Get historical data from MT5"""

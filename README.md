@@ -34,7 +34,6 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - [error_handler.py](file://c:\Users\edgar\roboquant\error_handler.py) - Error handling with circuit breaker and retry logic
 - [ml_engine.py](file://c:\Users\edgar\roboquant\ml_engine.py) - Machine learning engine with XGBoost model for hybrid trading signals
 - [post_mortem.py](file://c:\Users\edgar\roboquant\post_mortem.py) - Post-trade analysis and performance metrics
-- [forex_factory_scraper.py](file://c:\Users\edgar\roboquant\forex_factory_scraper.py) - Economic calendar scraper for event detection
 - [api_cache.py](file://c:\Users\edgar\roboquant\api_cache.py) - Caching system for API responses
 - [config_manager.py](file://c:\Users\edgar\roboquant\config_manager.py) - Centralized configuration management
 - [run_donchian.bat](file://c:\Users\edgar\roboquant\run_donchian.bat) - Batch file to run the strategy on Windows
@@ -43,7 +42,6 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - [test_mt5_connection.py](file://c:\Users\edgar\roboquant\test_mt5_connection.py) - Script to test MT5 connection
 - [test_security.py](file://c:\Users\edgar\roboquant\test_security.py) - Test script for security components
 - [test_post_mortem.py](file://c:\Users\edgar\roboquant\test_post_mortem.py) - Test script for post-trade analysis
-- [test_forex_factory_scraper.py](file://c:\Users\edgar\roboquant\test_forex_factory_scraper.py) - Test script for economic calendar scraper
 
 ## Enhanced Security Features
 
@@ -84,18 +82,6 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - Better weighting system for different signal types
 - Enhanced error handling for ML model predictions
 
-## Event-Driven Trading Improvements
-
-### Robust Economic Calendar Integration
-- Enhanced Forex Factory scraper with better error handling
-- Improved caching system with TTL support
-- Better parsing of calendar events with timezone handling
-
-### Event State Management
-- Enhanced state machine for event detection and trading
-- Better tracking of event-related trades
-- Improved cooldown periods between event trades
-
 ## Configuration Management
 
 ### Centralized Configuration
@@ -107,7 +93,6 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 
 ### Comprehensive Test Coverage
 - Added unit tests for post-trade analysis module
-- Added unit tests for economic calendar scraper
 - Enhanced existing test coverage for security components
 
 ## Configuración Actualizada
@@ -150,14 +135,6 @@ Optimized for Exness Pro accounts:
 
 Testing: Run test_complete_setup.py before live trading
 
-## Event Detection System
-
-The bot uses Forex Factory's economic calendar to detect high-impact events:
-- Automatically scrapes upcoming events every 30 minutes
-- No API key required (web scraping with caching)
-- Filters for High Impact events only
-- Respects rate limits with intelligent caching
-
 ## Requirements
 
 - MetaTrader 5
@@ -192,11 +169,7 @@ The bot uses Forex Factory's economic calendar to detect high-impact events:
    ```
    pip install -r requirements.txt
    ```
-4. Install web scraping dependencies:
-   ```
-   pip install beautifulsoup4==4.12.2 lxml==4.9.3 pytz==2023.3
-   ```
-5. Install machine learning dependencies (optional):
+4. Install machine learning dependencies (optional):
    ```
    pip install xgboost==1.7.3
    ```
@@ -393,17 +366,6 @@ This test validates:
 - Trade logging functionality
 - Performance metrics calculation
 - Report generation
-
-### Economic Calendar Scraper Testing
-To test the Forex Factory scraper:
-```
-python test_forex_factory_scraper.py
-```
-
-This test validates:
-- Event fetching functionality
-- Caching system
-- Error handling
 
 ## Disclaimer
 

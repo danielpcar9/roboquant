@@ -1,0 +1,9 @@
+{
+  "test_key": {
+    "timestamp": 1762210038.4922433,
+    "ttl": 60,
+    "data": {
+      "test": "data"
+    }
+  }
+}
