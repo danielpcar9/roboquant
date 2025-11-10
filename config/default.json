@@ -1,0 +1,19 @@
+{
+  "risk_management": {
+    "risk_per_trade_pct": 1.0
+  },
+  "strategy": {
+    "donchian_period": 50
+  },
+  "trading_hours": {
+    "start": 7,
+    "end": 16
+  },
+  "position_limits": {
+    "max_positions": 1
+  },
+  "performance": {
+    "daily_loss_limit_pct": -5.0,
+    "risk_reward_ratio": 2.0
+  }
+}
