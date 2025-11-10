@@ -97,7 +97,7 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
 @safe_mt5_call
 @retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
 def build_and_send_order(symbol, side, volume, sl=None, tp=None, 
-                         deviation=30, retries=3, magic=123456, mt5_module=None):
+                         deviation=30, retries=1, magic=123456, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
     
@@ -120,23 +120,9 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     # Try different approaches to handle the filling mode issue
     order_type = mt5_module.ORDER_TYPE_BUY if side == "BUY" else mt5_module.ORDER_TYPE_SELL  # type: ignore
     
-    # Get the preferred filling mode for this symbol
-    preferred_filling_mode = get_filling_mode(symbol, mt5_module)
-    
-    # List of filling modes to try, starting with the preferred one
-    filling_modes_to_try = [preferred_filling_mode]
-    
-    # Add other common modes as fallbacks
-    common_modes = [
-        mt5_module.ORDER_FILLING_RETURN,  # type: ignore
-        mt5_module.ORDER_FILLING_IOC if hasattr(mt5_module, 'ORDER_FILLING_IOC') else None,  # type: ignore
-        mt5_module.ORDER_FILLING_FOK if hasattr(mt5_module, 'ORDER_FILLING_FOK') else None  # type: ignore
-    ]
-    
-    # Add non-None fallback modes
-    for mode in common_modes:
-        if mode is not None and mode not in filling_modes_to_try:
-            filling_modes_to_try.append(mode)
+    # For Exness accounts, use ORDER_FILLING_RETURN (mode 0) as the primary and only mode
+    # This eliminates unnecessary retries and speeds up order execution
+    filling_modes_to_try = [mt5_module.ORDER_FILLING_FOK]  # type: ignore
     
     last_result = None
     attempts_made = 0
@@ -158,7 +144,7 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
             'magic': magic,
             'comment': 'bot_order',
             'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-            'type_filling': filling_mode
+            'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
         }
         
         # Add SL/TP if provided
@@ -216,7 +202,7 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
                                         'position': int(order_ticket),
                                         'deviation': deviation,
                                         'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-                                        'type_filling': filling_mode
+                                        'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
                                     }
                                     
                                     # Use potentially adjusted SL/TP values
@@ -270,7 +256,7 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
 @performance_monitor
 @safe_mt5_call
 @retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
-def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
+def close_position_by_ticket(ticket, deviation=30, retries=1, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
     
@@ -290,23 +276,9 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
         close_type = mt5_module.ORDER_TYPE_BUY  # type: ignore
         price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
     
-    # Get the preferred filling mode for this symbol
-    preferred_filling_mode = get_filling_mode(symbol, mt5_module)
-    
-    # List of filling modes to try, starting with the preferred one
-    filling_modes_to_try = [preferred_filling_mode]
-    
-    # Add other common modes as fallbacks
-    common_modes = [
-        mt5_module.ORDER_FILLING_RETURN,  # type: ignore
-        mt5_module.ORDER_FILLING_IOC if hasattr(mt5_module, 'ORDER_FILLING_IOC') else None,  # type: ignore
-        mt5_module.ORDER_FILLING_FOK if hasattr(mt5_module, 'ORDER_FILLING_FOK') else None  # type: ignore
-    ]
-    
-    # Add non-None fallback modes
-    for mode in common_modes:
-        if mode is not None and mode not in filling_modes_to_try:
-            filling_modes_to_try.append(mode)
+    # For Exness accounts, use ORDER_FILLING_RETURN (mode 0) as the primary and only mode
+    # This eliminates unnecessary retries and speeds up order execution
+    filling_modes_to_try = [mt5_module.ORDER_FILLING_FOK]  # type: ignore
     
     # Try each filling mode
     for filling_mode in filling_modes_to_try:
@@ -321,7 +293,7 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
             'magic': int(getattr(pos, 'magic', 0)),
             'comment': 'close_by_bot',
             'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-            'type_filling': filling_mode
+            'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
         }
         
         try:
@@ -391,26 +363,12 @@ def monitor_and_update_stops(mt5_module=None):
             # Validate stops
             sl_price, tp_price = validate_and_adjust_stops(symbol, entry_price, sl_price, tp_price, side, mt5_module)
             
-            # Get the preferred filling mode for this symbol
-            preferred_filling_mode = get_filling_mode(symbol, mt5_module)
-            
-            # List of filling modes to try, starting with the preferred one
-            filling_modes_to_try = [preferred_filling_mode]
-            
-            # Add other common modes as fallbacks
-            common_modes = [
-                mt5_module.ORDER_FILLING_RETURN,  # type: ignore
-                mt5_module.ORDER_FILLING_IOC if hasattr(mt5_module, 'ORDER_FILLING_IOC') else None,  # type: ignore
-                mt5_module.ORDER_FILLING_FOK if hasattr(mt5_module, 'ORDER_FILLING_FOK') else None  # type: ignore
-            ]
-            
-            # Add non-None fallback modes
-            for mode in common_modes:
-                if mode is not None and mode not in filling_modes_to_try:
-                    filling_modes_to_try.append(mode)
+            # For Exness accounts, use ORDER_FILLING_RETURN (mode 0) as the primary and only mode
+            # This eliminates unnecessary retries and speeds up order execution
+            filling_modes_to_try = [mt5_module.ORDER_FILLING_FOK]  # type: ignore
             
             # Try each filling mode with retries
-            max_retries = 3
+            max_retries = 1
             for filling_mode in filling_modes_to_try:
                 for attempt in range(1, max_retries + 1):
                     # Try to modify position
@@ -421,7 +379,7 @@ def monitor_and_update_stops(mt5_module=None):
                         'sl': float(sl_price) if sl_price is not None else 0,
                         'tp': float(tp_price) if tp_price is not None else 0,
                         'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-                        'type_filling': filling_mode
+                        'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
                     }
                     
                     # Remove zero values

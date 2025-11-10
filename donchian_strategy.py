@@ -27,8 +27,14 @@ from set_file_manager import get_set_manager
 # Import error handler
 from error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
 
+# Import trade scorer
+from trade_scorer import TradeScorer
+
 # Import consolidated performance monitoring
 from mt5_core import strategy_performance_monitor as performance_monitor
+
+# Add import for mt5 to ensure symbol_info is available
+import metatrader5 as mt5
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -508,29 +514,86 @@ def run_strategy(symbol="XAUUSD"):
     # Check for breakout conditions
     bullish_breakout = current_close > upper_channel
     bearish_breakout = current_close < lower_channel
-    # Reducir momentum_filter a 0.5x for FTMO
+    # Reducir momentum_filter a 0.5x para FTMO
     momentum_filter = current_momentum > (historical_momentum * 0.5)
     
     # Add volume confirmation
     volume_spike, vol_ratio = get_volume_breakout(symbol)
     
+    # Initialize trade scorer
+    trade_scorer = TradeScorer()
+    
     # Volume confirmation made optional for more signals during testing
     if bullish_breakout and momentum_filter:  # Removed volume_spike requirement
         logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
         
+        # Score the trade setup
+        quality = trade_scorer.score_trade_setup(
+            symbol=symbol,
+            price=current_close,
+            upper_channel=upper_channel,
+            lower_channel=lower_channel,
+            current_momentum=current_momentum,
+            historical_momentum=historical_momentum,
+            atr=atr,
+            avg_atr=historical_momentum  # Using historical momentum as proxy for avg ATR
+        )
+        
+        logging.info(f"Trade quality score: {quality['score']}/100, Grade: {quality['grade']}")
+        
+        # Only proceed if trade is recommended (score >= 60)
+        if not quality['trade_recommended']:
+            logging.info(f"Trade not recommended based on quality score ({quality['score']} < 60)")
+            return
+            
+        # Adjust risk by quality
+        score = quality['score']
+        risk_mult = 1.5 if score >= 80 else 1.0 if score >= 70 else 0.75
+        adjusted_lots = LOTS * risk_mult
+        
+        logging.info(f"Quality-based lot adjustment: {LOTS:.2f} -> {adjusted_lots:.2f} (score: {score})")
+        
         # Use market structure analysis for TP in normal mode as well
         tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
-        tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+        symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        tp_points = abs(tp_price - current_close) / symbol_info.point if symbol_info else 300
         
-        execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, tp_points)
+        execute_trade(symbol, "BUY", adjusted_lots, STOP_LOSS_POINTS, tp_points)
     elif bearish_breakout and momentum_filter:  # Removed volume_spike requirement
         logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
         
+        # Score the trade setup
+        quality = trade_scorer.score_trade_setup(
+            symbol=symbol,
+            price=current_close,
+            upper_channel=upper_channel,
+            lower_channel=lower_channel,
+            current_momentum=current_momentum,
+            historical_momentum=historical_momentum,
+            atr=atr,
+            avg_atr=historical_momentum  # Using historical momentum as proxy for avg ATR
+        )
+        
+        logging.info(f"Trade quality score: {quality['score']}/100, Grade: {quality['grade']}")
+        
+        # Only proceed if trade is recommended (score >= 60)
+        if not quality['trade_recommended']:
+            logging.info(f"Trade not recommended based on quality score ({quality['score']} < 60)")
+            return
+            
+        # Adjust risk by quality
+        score = quality['score']
+        risk_mult = 1.5 if score >= 80 else 1.0 if score >= 70 else 0.75
+        adjusted_lots = LOTS * risk_mult
+        
+        logging.info(f"Quality-based lot adjustment: {LOTS:.2f} -> {adjusted_lots:.2f} (score: {score})")
+        
         # Use market structure analysis for TP in normal mode as well
         tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
-        tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+        symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        tp_points = abs(tp_price - current_close) / symbol_info.point if symbol_info else 300
         
-        execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, tp_points)
+        execute_trade(symbol, "SELL", adjusted_lots, STOP_LOSS_POINTS, tp_points)
 
 @handle_exception
 @performance_monitor

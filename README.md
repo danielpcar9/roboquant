@@ -20,6 +20,10 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - Machine learning integration for hybrid trading signals
 - Event-driven trading based on economic calendar
 - Performance monitoring and optimization
+- Trade quality scoring system with 5 heuristics (0-100 points)
+- Market regime detection (trending/ranging) using ADX and slope
+- Adaptive risk management with dynamic SL/TP based on ATR
+- Session filtering based on historical performance
 
 ## Files
 
@@ -36,6 +40,10 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - [post_mortem.py](file://c:\Users\edgar\roboquant\post_mortem.py) - Post-trade analysis and performance metrics
 - [api_cache.py](file://c:\Users\edgar\roboquant\api_cache.py) - Caching system for API responses
 - [config_manager.py](file://c:\Users\edgar\roboquant\config_manager.py) - Centralized configuration management
+- [trade_scorer.py](file://c:\Users\edgar\roboquant\trade_scorer.py) - Trade quality scoring system with 5 heuristics
+- [market_regime.py](file://c:\Users\edgar\roboquant\market_regime.py) - Market regime detection (trending/ranging)
+- [adaptive_risk.py](file://c:\Users\edgar\roboquant\adaptive_risk.py) - Adaptive risk management with dynamic SL/TP
+- [session_filter.py](file://c:\Users\edgar\roboquant\session_filter.py) - Session filtering based on historical performance
 - [run_donchian.bat](file://c:\Users\edgar\roboquant\run_donchian.bat) - Batch file to run the strategy on Windows
 - [run_webhook.bat](file://c:\Users\edgar\roboquant\run_webhook.bat) - Batch file to run the webhook receiver
 - [run_backtest.bat](file://c:\Users\edgar\roboquant\run_backtest.bat) - Batch file to run backtesting
@@ -88,6 +96,33 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - All configuration parameters are now managed through a centralized config manager
 - Easy parameter adjustment through environment variables
 - Secure credential management through the same interface
+
+## Trade Quality Scoring System
+
+The system now includes a comprehensive trade quality scoring mechanism that evaluates trade setups on a 0-100 point scale using 5 heuristics:
+
+1. **Breakout Strength (25 points)**: Measures the strength of the breakout relative to the channel width
+2. **Momentum Ratio (25 points)**: Compares current momentum to historical momentum
+3. **Time Session (20 points)**: Evaluates if the trade is occurring during optimal trading sessions
+4. **ATR Volatility (15 points)**: Assesses volatility using Average True Range
+5. **Spread (15 points)**: Evaluates current market spread conditions
+
+Only trades scoring 60+ points are recommended for execution, with position sizing adjusted based on the score:
+- Score ≥ 80: 1.5x position size
+- Score ≥ 70: 1.0x position size (normal)
+- Score ≥ 60: 0.75x position size
+
+## Market Regime Detection
+
+The system can detect market regimes (trending/ranging) using ADX and slope analysis to adjust trading behavior accordingly.
+
+## Adaptive Risk Management
+
+Dynamic stop loss and take profit levels are calculated based on current market volatility (ATR) to maintain consistent risk levels across different market conditions.
+
+## Session Filtering
+
+Historical performance analysis by trading session helps identify the most favorable times for trading specific instruments.
 
 ## Testing Improvements
 
@@ -199,174 +234,3 @@ Or run directly with Python:
 ```
 python donchian_strategy.py
 ```
-
-### Webhook Receiver
-To receive external trading signals:
-```
-run_webhook.bat
-```
-
-Or run directly:
-```
-python webhook_receiver.py
-```
-
-### Backtesting
-To run backtesting:
-```
-run_backtest.bat
-```
-
-Or run directly:
-```
-python backtest_apex_vectorbt.py
-```
-
-### Performance Dashboard
-To generate a performance dashboard:
-```
-python performance_dashboard.py
-```
-
-### Post-Trade Analysis
-To generate a detailed performance report:
-```
-python post_mortem.py
-```
-
-## Webhook Security
-
-The webhook receiver implements HMAC authentication to prevent unauthorized trading signals:
-
-### For Signal Senders:
-```python
-import hmac
-import hashlib
-import json
-import requests
-
-# Your secret key from .env
-SECRET_KEY = "your_secret_key_here"
-
-# Signal data
-body = json.dumps({"symbol": "XAUUSD", "order_type": "BUY"})
-
-# Calculate signature
-signature = hmac.new(
-    SECRET_KEY.encode(), 
-    body.encode(), 
-    hashlib.sha256
-).hexdigest()
-
-# Send request with signature
-headers = {"X-Webhook-Signature": signature}
-response = requests.post("http://your-server:5000/webhook", data=body, headers=headers)
-```
-
-## How It Works
-
-1. The strategy calculates Donchian channels (highest high and lowest low over the specified period)
-2. It calculates momentum as the average absolute price movement over two periods
-3. When the current price breaks above the upper channel AND momentum is higher than historical average, it enters a long position
-4. When the current price breaks below the lower channel AND momentum is higher than historical average, it enters a short position
-5. Positions are managed with fixed stop loss and take profit levels
-
-## Security Features
-
-This strategy now includes enhanced security features:
-
-### Secure Credential Management
-- Credentials are loaded securely from [.env](file:///C:/Users/edgar/roboquant/.env) without exposing them in logs
-- Automatic validation of webhook secret key length (>32 characters)
-- Encrypted credential storage using keyring library
-
-### Input Validation
-- Symbol validation with regex patterns
-- Volume and price validation with reasonable limits
-- Order type validation (BUY/SELL only)
-
-### Rate Limiting
-- Webhook receiver limits requests to 10 per minute
-- Prevents abuse and denial of service attacks
-- Enhanced rate limiting with global and per-IP tracking
-
-### Error Sanitization
-- Sensitive information is removed from error messages
-- Constant-time signature comparison prevents timing attacks
-
-### Circuit Breaker Pattern
-- Prevents cascading failures during MT5 connection issues
-- Automatic recovery after timeout periods
-
-### IP Whitelisting
-- Webhook receiver supports IP whitelisting for enhanced security
-- Configure allowed IPs via WEBHOOK_ALLOWED_IPS environment variable
-
-## Machine Learning Integration
-
-The system includes a machine learning engine for enhanced trading signals:
-
-### Feature Engineering
-- RSI, MACD, ATR, Donchian channels, and other technical indicators
-- Comprehensive feature set for market analysis
-
-### XGBoost Model
-- Gradient boosting model for pattern recognition
-- Hybrid approach combining technical and ML signals (70/30 ratio)
-
-### Gradual Rollout
-- First logs predictions for monitoring
-- Then validates with paper trading
-- Finally enables live trading after validation
-
-## Backtesting
-
-The backtesting script uses VectorBT to simulate trading performance with proper exit conditions based on stop loss and take profit levels.
-
-## Performance Monitoring
-
-The performance dashboard generates interactive HTML visualizations including:
-- Equity curve
-- Drawdown analysis
-- Win/loss distribution
-- Hourly trading patterns
-- Monthly performance
-- Profit factor evolution
-
-## Post-Trade Analysis
-
-The post-mortem module provides comprehensive trade analysis:
-- Detailed performance metrics (Sharpe ratio, Sortino ratio, Calmar ratio)
-- Time-based performance analysis
-- Best and worst performing hours
-- Maximum drawdown and consecutive loss tracking
-
-## Testing
-
-### Security Testing
-To test the security components:
-```
-python test_security.py
-```
-
-This test validates:
-- Secure credential loading
-- Input validation
-- Rate limiting
-- Error sanitization
-- Constant-time comparison
-
-### Post-Trade Analysis Testing
-To test the post-mortem components:
-```
-python test_post_mortem.py
-```
-
-This test validates:
-- Trade logging functionality
-- Performance metrics calculation
-- Report generation
-
-## Disclaimer
-
-This is a educational example and should not be used for live trading without proper testing and risk management.

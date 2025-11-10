@@ -250,18 +250,24 @@ def get_filling_mode(symbol, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
     
+    # For Exness accounts, use ORDER_FILLING_RETURN as the primary mode
+    # Exness typically uses RETURN mode (mode 0) for most operations
+    if hasattr(mt5_module, 'ORDER_FILLING_RETURN'):  # type: ignore
+        return mt5_module.ORDER_FILLING_RETURN  # type: ignore
+    
+    # Fallback to symbol-specific filling mode if available
     sym = mt5_module.symbol_info(symbol)  # type: ignore
     if not sym:
         logging.warning("Symbol %s info not available", symbol)
-        return mt5_module.ORDER_FILLING_RETURN  # type: ignore
+        return mt5_module.ORDER_FILLING_RETURN if hasattr(mt5_module, 'ORDER_FILLING_RETURN') else 0  # type: ignore
     
     try:
         filling_mode = getattr(sym, 'filling_mode', None)
     except AttributeError:
-        return mt5_module.ORDER_FILLING_RETURN  # type: ignore
+        return mt5_module.ORDER_FILLING_RETURN if hasattr(mt5_module, 'ORDER_FILLING_RETURN') else 0  # type: ignore
     
     if filling_mode is None:
-        return mt5_module.ORDER_FILLING_RETURN  # type: ignore
+        return mt5_module.ORDER_FILLING_RETURN if hasattr(mt5_module, 'ORDER_FILLING_RETURN') else 0  # type: ignore
     
     try:
         # Try FOK first (Fill or Kill)
@@ -283,7 +289,7 @@ def get_filling_mode(symbol, mt5_module=None):
     
     # Default fallback
     logging.warning("Using default ORDER_FILLING_RETURN for %s", symbol)
-    return mt5_module.ORDER_FILLING_RETURN  # type: ignore
+    return mt5_module.ORDER_FILLING_RETURN if hasattr(mt5_module, 'ORDER_FILLING_RETURN') else 0  # type: ignore
 
 def normalize_volume(symbol, requested_volume, mt5_module=None):
     if mt5_module is None:
