@@ -38,8 +38,8 @@ class ConfigManager:
             'STOP_LOSS_POINTS': int(os.getenv('STOP_LOSS_POINTS', '150')),
             'TAKE_PROFIT_POINTS': int(os.getenv('TAKE_PROFIT_POINTS', '300')),
             'MAX_SPREAD_POINTS': int(os.getenv('MAX_SPREAD_POINTS', '150')),
-            'TRADING_HOUR_START': int(os.getenv('TRADING_HOUR_START', '7')),  # FTMO 7-16h CET
-            'TRADING_HOUR_END': int(os.getenv('TRADING_HOUR_END', '16')),
+            'TRADING_HOUR_START': int(os.getenv('TRADING_HOUR_START', '0')),  # Extended hours 0-23
+            'TRADING_HOUR_END': int(os.getenv('TRADING_HOUR_END', '23')),
             'MAGIC_NUMBER': int(os.getenv('MAGIC_NUMBER', '123456')),
             'TIMEFRAME': os.getenv('TIMEFRAME', 'M5'),
             

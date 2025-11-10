@@ -133,9 +133,26 @@ class FTMOManager:
         if not metrics:
             return False, "Failed to get account information"
         
-        # Check trading hours (7-16h CET)
-        trading_start = time(7, 0)  # 7:00 CET
-        trading_end = time(16, 0)   # 16:00 CET
+        # Check trading hours (from configuration)
+        from config_manager import config_manager
+        
+        # Try to get trading hours from set file first, fallback to config_manager
+        try:
+            from set_file_manager import get_set_manager
+            cfg = get_set_manager()
+            if cfg.loaded_file:
+                trading_start_hour = cfg.get('trading_hours.start', config_manager.get('TRADING_HOUR_START', 0))
+                trading_end_hour = cfg.get('trading_hours.end', config_manager.get('TRADING_HOUR_END', 23))
+            else:
+                trading_start_hour = config_manager.get('TRADING_HOUR_START', 0)
+                trading_end_hour = config_manager.get('TRADING_HOUR_END', 23)
+        except:
+            # Fallback to config_manager if set file manager is not available
+            trading_start_hour = config_manager.get('TRADING_HOUR_START', 0)
+            trading_end_hour = config_manager.get('TRADING_HOUR_END', 23)
+        
+        trading_start = time(trading_start_hour, 0)
+        trading_end = time(trading_end_hour, 0)
         
         if not (trading_start <= now_cet.time() <= trading_end):
             return False, f"Outside trading hours ({trading_start.strftime('%H:%M')}-{trading_end.strftime('%H:%M')} CET)"
@@ -152,15 +169,15 @@ class FTMOManager:
         if metrics['trading_days'] < metrics['min_trading_days']:
             return False, f"Minimum trading days not met: {metrics['trading_days']} < {metrics['min_trading_days']}"
         
-        # Check spread
-        tick = mt5.symbol_info_tick(symbol)  # type: ignore
-        if tick:
-            symbol_info = mt5.symbol_info(symbol)  # type: ignore
-            if symbol_info:
-                point = symbol_info.point
-                spread_points = (tick.ask - tick.bid) / point if point > 0 else 0
-                if spread_points > 50:  # 50 points max spread
-                    return False, f"Spread too high: {spread_points:.1f} points > 50 points"
+        # Check spread - REMOVED as per user request
+        # tick = mt5.symbol_info_tick(symbol)  # type: ignore
+        # if tick:
+        #     symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        #     if symbol_info:
+        #         point = symbol_info.point
+        #         spread_points = (tick.ask - tick.bid) / point if point > 0 else 0
+        #         if spread_points > 50:  # 50 points max spread
+        #             return False, f"Spread too high: {spread_points:.1f} points > 50 points"
         
         return True, None
     

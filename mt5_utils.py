@@ -16,7 +16,7 @@ from error_handler import safe_mt5_call, MT5ConnectionError, OrderExecutionError
 from mt5_core import mt5_performance_monitor as performance_monitor
 
 # Import consolidated MT5 utility functions
-from mt5_core import validate_and_adjust_stops, normalize_volume
+from mt5_core import validate_and_adjust_stops, normalize_volume, get_filling_mode
 
 # Performance monitoring
 PERFORMANCE_MONITORING_ENABLED = True
@@ -120,16 +120,23 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     # Try different approaches to handle the filling mode issue
     order_type = mt5_module.ORDER_TYPE_BUY if side == "BUY" else mt5_module.ORDER_TYPE_SELL  # type: ignore
     
-    # List of filling modes to try
-    filling_modes_to_try = [
+    # Get the preferred filling mode for this symbol
+    preferred_filling_mode = get_filling_mode(symbol, mt5_module)
+    
+    # List of filling modes to try, starting with the preferred one
+    filling_modes_to_try = [preferred_filling_mode]
+    
+    # Add other common modes as fallbacks
+    common_modes = [
         mt5_module.ORDER_FILLING_RETURN,  # type: ignore
+        mt5_module.ORDER_FILLING_IOC if hasattr(mt5_module, 'ORDER_FILLING_IOC') else None,  # type: ignore
+        mt5_module.ORDER_FILLING_FOK if hasattr(mt5_module, 'ORDER_FILLING_FOK') else None  # type: ignore
     ]
     
-    # Add other modes if they exist
-    if hasattr(mt5_module, 'ORDER_FILLING_IOC'):  # type: ignore
-        filling_modes_to_try.append(mt5_module.ORDER_FILLING_IOC)  # type: ignore
-    if hasattr(mt5_module, 'ORDER_FILLING_FOK'):  # type: ignore
-        filling_modes_to_try.append(mt5_module.ORDER_FILLING_FOK)  # type: ignore
+    # Add non-None fallback modes
+    for mode in common_modes:
+        if mode is not None and mode not in filling_modes_to_try:
+            filling_modes_to_try.append(mode)
     
     last_result = None
     attempts_made = 0
@@ -283,16 +290,23 @@ def close_position_by_ticket(ticket, deviation=30, mt5_module=None):
         close_type = mt5_module.ORDER_TYPE_BUY  # type: ignore
         price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
     
-    # List of filling modes to try
-    filling_modes_to_try = [
+    # Get the preferred filling mode for this symbol
+    preferred_filling_mode = get_filling_mode(symbol, mt5_module)
+    
+    # List of filling modes to try, starting with the preferred one
+    filling_modes_to_try = [preferred_filling_mode]
+    
+    # Add other common modes as fallbacks
+    common_modes = [
         mt5_module.ORDER_FILLING_RETURN,  # type: ignore
+        mt5_module.ORDER_FILLING_IOC if hasattr(mt5_module, 'ORDER_FILLING_IOC') else None,  # type: ignore
+        mt5_module.ORDER_FILLING_FOK if hasattr(mt5_module, 'ORDER_FILLING_FOK') else None  # type: ignore
     ]
     
-    # Add other modes if they exist
-    if hasattr(mt5_module, 'ORDER_FILLING_IOC'):  # type: ignore
-        filling_modes_to_try.append(mt5_module.ORDER_FILLING_IOC)  # type: ignore
-    if hasattr(mt5_module, 'ORDER_FILLING_FOK'):  # type: ignore
-        filling_modes_to_try.append(mt5_module.ORDER_FILLING_FOK)  # type: ignore
+    # Add non-None fallback modes
+    for mode in common_modes:
+        if mode is not None and mode not in filling_modes_to_try:
+            filling_modes_to_try.append(mode)
     
     # Try each filling mode
     for filling_mode in filling_modes_to_try:
@@ -377,16 +391,23 @@ def monitor_and_update_stops(mt5_module=None):
             # Validate stops
             sl_price, tp_price = validate_and_adjust_stops(symbol, entry_price, sl_price, tp_price, side, mt5_module)
             
-            # Try different approaches to handle the filling mode issue
-            filling_modes_to_try = [
+            # Get the preferred filling mode for this symbol
+            preferred_filling_mode = get_filling_mode(symbol, mt5_module)
+            
+            # List of filling modes to try, starting with the preferred one
+            filling_modes_to_try = [preferred_filling_mode]
+            
+            # Add other common modes as fallbacks
+            common_modes = [
                 mt5_module.ORDER_FILLING_RETURN,  # type: ignore
+                mt5_module.ORDER_FILLING_IOC if hasattr(mt5_module, 'ORDER_FILLING_IOC') else None,  # type: ignore
+                mt5_module.ORDER_FILLING_FOK if hasattr(mt5_module, 'ORDER_FILLING_FOK') else None  # type: ignore
             ]
             
-            # Add other modes if they exist
-            if hasattr(mt5_module, 'ORDER_FILLING_IOC'):  # type: ignore
-                filling_modes_to_try.append(mt5_module.ORDER_FILLING_IOC)  # type: ignore
-            if hasattr(mt5_module, 'ORDER_FILLING_FOK'):  # type: ignore
-                filling_modes_to_try.append(mt5_module.ORDER_FILLING_FOK)  # type: ignore
+            # Add non-None fallback modes
+            for mode in common_modes:
+                if mode is not None and mode not in filling_modes_to_try:
+                    filling_modes_to_try.append(mode)
             
             # Try each filling mode with retries
             max_retries = 3

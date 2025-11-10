@@ -6,8 +6,8 @@
     "donchian_period": 50
   },
   "trading_hours": {
-    "start": 7,
-    "end": 16
+    "start": 0,
+    "end": 23
   },
   "position_limits": {
     "max_positions": 1

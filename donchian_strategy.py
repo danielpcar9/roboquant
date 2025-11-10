@@ -62,6 +62,7 @@ TIMEFRAME_MAP = {
 }
 TIMEFRAME = TIMEFRAME_MAP.get(TIMEFRAME_NAME.upper(), mt5.TIMEFRAME_M5)  # Default to M5
 
+# Initialize with default values from config_manager
 TRADING_HOUR_START = config_manager.get('TRADING_HOUR_START')
 TRADING_HOUR_END = config_manager.get('TRADING_HOUR_END')
 MAGIC_NUMBER = config_manager.get('MAGIC_NUMBER')
@@ -69,18 +70,25 @@ MAGIC_NUMBER = config_manager.get('MAGIC_NUMBER')
 # Override with set file configuration if available
 try:
     cfg = get_set_manager()
-    if cfg.loaded_file:
-        # Risk management
-        RISK_PERCENT = cfg.get('risk_management.risk_per_trade_pct', RISK_PERCENT)
-        
-        # Strategy parameters
-        DONCHIAN_PERIOD = cfg.get('strategy.donchian_period', DONCHIAN_PERIOD)
-        
-        # Trading hours
-        TRADING_HOUR_START = cfg.get('trading_hours.start', TRADING_HOUR_START)
-        TRADING_HOUR_END = cfg.get('trading_hours.end', TRADING_HOUR_END)
-        
-        logging.info(f"Configuration overridden with set file values")
+    set_file = os.getenv('ROBOQUANT_SET_FILE', 'default.json')
+    if set_file:
+        try:
+            cfg.load_set_file(set_file)
+            logging.info(f"Loaded configuration set: {set_file}")
+            
+            # Risk management
+            RISK_PERCENT = cfg.get('risk_management.risk_per_trade_pct', RISK_PERCENT)
+            
+            # Strategy parameters
+            DONCHIAN_PERIOD = cfg.get('strategy.donchian_period', DONCHIAN_PERIOD)
+            
+            # Trading hours
+            TRADING_HOUR_START = cfg.get('trading_hours.start', TRADING_HOUR_START)
+            TRADING_HOUR_END = cfg.get('trading_hours.end', TRADING_HOUR_END)
+            
+            logging.info(f"Configuration overridden with set file values")
+        except Exception as e:
+            logging.warning(f"Failed to load configuration set {set_file}: {e}. Using default values.")
 except Exception as e:
     logging.debug(f"No set file configuration loaded: {e}")
 
