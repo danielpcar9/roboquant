@@ -140,19 +140,33 @@ class FTMOManager:
         try:
             from set_file_manager import get_set_manager
             cfg = get_set_manager()
-            if cfg.loaded_file:
-                trading_start_hour = cfg.get('trading_hours.start', config_manager.get('TRADING_HOUR_START', 0))
-                trading_end_hour = cfg.get('trading_hours.end', config_manager.get('TRADING_HOUR_END', 23))
+            # Load set file if specified
+            set_file = os.getenv('ROBOQUANT_SET_FILE')
+            if set_file:
+                try:
+                    cfg.load_set_file(set_file)
+                    trading_start_hour = cfg.get('trading_hours.start', config_manager.get('TRADING_HOUR_START', 0))
+                    trading_end_hour = cfg.get('trading_hours.end', config_manager.get('TRADING_HOUR_END', 23))
+                    logging.debug(f"Loaded trading hours from set file {set_file}: {trading_start_hour}-{trading_end_hour}")
+                except Exception as e:
+                    logging.warning(f"Failed to load set file {set_file}: {e}")
+                    trading_start_hour = config_manager.get('TRADING_HOUR_START', 0)
+                    trading_end_hour = config_manager.get('TRADING_HOUR_END', 23)
             else:
                 trading_start_hour = config_manager.get('TRADING_HOUR_START', 0)
                 trading_end_hour = config_manager.get('TRADING_HOUR_END', 23)
-        except:
+        except Exception as e:
+            logging.warning(f"Failed to load set file configuration: {e}")
             # Fallback to config_manager if set file manager is not available
             trading_start_hour = config_manager.get('TRADING_HOUR_START', 0)
             trading_end_hour = config_manager.get('TRADING_HOUR_END', 23)
         
         trading_start = time(trading_start_hour, 0)
-        trading_end = time(trading_end_hour, 0)
+        # Fix: When end_hour is 23, we want to include the entire 23rd hour (until 23:59:59)
+        if trading_end_hour == 23:
+            trading_end = time(23, 59, 59)
+        else:
+            trading_end = time(trading_end_hour, 0)
         
         if not (trading_start <= now_cet.time() <= trading_end):
             return False, f"Outside trading hours ({trading_start.strftime('%H:%M')}-{trading_end.strftime('%H:%M')} CET)"

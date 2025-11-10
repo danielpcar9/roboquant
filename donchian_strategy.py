@@ -53,6 +53,7 @@ LOTS = config_manager.get('LOTS')
 STOP_LOSS_POINTS = config_manager.get('STOP_LOSS_POINTS')
 TAKE_PROFIT_POINTS = config_manager.get('TAKE_PROFIT_POINTS')
 TIMEFRAME_NAME = config_manager.get('TIMEFRAME')
+MIN_TRADE_QUALITY_SCORE = config_manager.get('MIN_TRADE_QUALITY_SCORE', 45)  # New parameter for evaluation period
 
 # Convert timeframe name to MT5 constant
 TIMEFRAME_MAP = {
@@ -87,6 +88,7 @@ try:
             
             # Strategy parameters
             DONCHIAN_PERIOD = cfg.get('strategy.donchian_period', DONCHIAN_PERIOD)
+            MIN_TRADE_QUALITY_SCORE = cfg.get('strategy.min_trade_quality_score', MIN_TRADE_QUALITY_SCORE)
             
             # Trading hours
             TRADING_HOUR_START = cfg.get('trading_hours.start', TRADING_HOUR_START)
@@ -541,14 +543,25 @@ def run_strategy(symbol="XAUUSD"):
         
         logging.info(f"Trade quality score: {quality['score']}/100, Grade: {quality['grade']}")
         
-        # Only proceed if trade is recommended (score >= 60)
-        if not quality['trade_recommended']:
-            logging.info(f"Trade not recommended based on quality score ({quality['score']} < 60)")
+        # More flexible threshold for evaluation period - allow trades with score >= MIN_TRADE_QUALITY_SCORE
+        # This will increase trade frequency while still filtering out the worst setups
+        if quality['score'] < MIN_TRADE_QUALITY_SCORE:
+            logging.info(f"Trade not recommended based on quality score ({quality['score']} < {MIN_TRADE_QUALITY_SCORE})")
             return
             
-        # Adjust risk by quality
+        # Adjust risk by quality - more granular adjustment for evaluation period
         score = quality['score']
-        risk_mult = 1.5 if score >= 80 else 1.0 if score >= 70 else 0.75
+        if score >= 80:
+            risk_mult = 1.5  # High confidence - increase position size
+        elif score >= 70:
+            risk_mult = 1.2  # Good confidence - slight increase
+        elif score >= 60:
+            risk_mult = 1.0  # Normal confidence - standard position size
+        elif score >= 50:
+            risk_mult = 0.8  # Lower confidence - reduced position size
+        else:
+            risk_mult = 0.6  # Minimum confidence - much reduced position size
+            
         adjusted_lots = LOTS * risk_mult
         
         logging.info(f"Quality-based lot adjustment: {LOTS:.2f} -> {adjusted_lots:.2f} (score: {score})")
@@ -576,14 +589,25 @@ def run_strategy(symbol="XAUUSD"):
         
         logging.info(f"Trade quality score: {quality['score']}/100, Grade: {quality['grade']}")
         
-        # Only proceed if trade is recommended (score >= 60)
-        if not quality['trade_recommended']:
-            logging.info(f"Trade not recommended based on quality score ({quality['score']} < 60)")
+        # More flexible threshold for evaluation period - allow trades with score >= MIN_TRADE_QUALITY_SCORE
+        # This will increase trade frequency while still filtering out the worst setups
+        if quality['score'] < MIN_TRADE_QUALITY_SCORE:
+            logging.info(f"Trade not recommended based on quality score ({quality['score']} < {MIN_TRADE_QUALITY_SCORE})")
             return
             
-        # Adjust risk by quality
+        # Adjust risk by quality - more granular adjustment for evaluation period
         score = quality['score']
-        risk_mult = 1.5 if score >= 80 else 1.0 if score >= 70 else 0.75
+        if score >= 80:
+            risk_mult = 1.5  # High confidence - increase position size
+        elif score >= 70:
+            risk_mult = 1.2  # Good confidence - slight increase
+        elif score >= 60:
+            risk_mult = 1.0  # Normal confidence - standard position size
+        elif score >= 50:
+            risk_mult = 0.8  # Lower confidence - reduced position size
+        else:
+            risk_mult = 0.6  # Minimum confidence - much reduced position size
+            
         adjusted_lots = LOTS * risk_mult
         
         logging.info(f"Quality-based lot adjustment: {LOTS:.2f} -> {adjusted_lots:.2f} (score: {score})")

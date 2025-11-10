@@ -3,7 +3,8 @@
     "risk_per_trade_pct": 0.75
   },
   "strategy": {
-    "donchian_period": 50
+    "donchian_period": 50,
+    "min_trade_quality_score": 45
   },
   "trading_hours": {
     "start": 0,
