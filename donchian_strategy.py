@@ -548,16 +548,16 @@ def run_strategy(symbol="XAUUSD"):
     bullish_engulfing, bearish_engulfing = detect_engulfing(symbol)
     
     # Volume confirmation made optional for more signals during testing
-    if bullish_breakout and momentum_filter and bullish_engulfing:  # Added engulfing confirmation
-        logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average, Engulfing: {bullish_engulfing}")
+    if bullish_breakout and momentum_filter:  # Removed engulfing confirmation for more signals
+        logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
         
         # Use market structure analysis for TP in normal mode as well
         tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
         tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
         
         execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, tp_points)
-    elif bearish_breakout and momentum_filter and bearish_engulfing:  # Added engulfing confirmation
-        logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average, Engulfing: {bearish_engulfing}")
+    elif bearish_breakout and momentum_filter:  # Removed engulfing confirmation for more signals
+        logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
         
         # Use market structure analysis for TP in normal mode as well
         tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
