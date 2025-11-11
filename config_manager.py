@@ -35,8 +35,8 @@ class ConfigManager:
             'RISK_PERCENT': float(os.getenv('RISK_PERCENT', '0.75')),  # FTMO 0.75% por trade
             'USE_RISK_MANAGEMENT': os.getenv('USE_RISK_MANAGEMENT', 'True').lower() == 'true',
             'LOTS': float(os.getenv('LOTS', '0.01')),
-            'STOP_LOSS_POINTS': int(os.getenv('STOP_LOSS_POINTS', '250')),
-            'TAKE_PROFIT_POINTS': int(os.getenv('TAKE_PROFIT_POINTS', '500')),
+            'STOP_LOSS_POINTS': int(os.getenv('STOP_LOSS_POINTS', '400')),
+            'TAKE_PROFIT_POINTS': int(os.getenv('TAKE_PROFIT_POINTS', '800')),
             'MAX_SPREAD_POINTS': int(os.getenv('MAX_SPREAD_POINTS', '150')),
             'TRADING_HOUR_START': int(os.getenv('TRADING_HOUR_START', '0')),  # Extended hours 0-23
             'TRADING_HOUR_END': int(os.getenv('TRADING_HOUR_END', '23')),

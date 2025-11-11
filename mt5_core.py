@@ -164,9 +164,9 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
         min_stop_distance = getattr(symbol_info, 'distance', 0)
     
     # If we still don't have a minimum distance, use a safe default
-    # For XAUUSD, 150 points should be sufficient based on your config
+    # For XAUUSD, 400 points should be sufficient based on your config
     if min_stop_distance == 0:
-        min_stop_distance = 150  # Default safe value
+        min_stop_distance = 400  # Default safe value
     
     logging.debug(f"Symbol {symbol} min stop distance: {min_stop_distance} points, point: {point}, digits: {digits}")
     

@@ -294,6 +294,31 @@ def get_volume_stats(symbol, lookback=20):
     return current_volume, avg_volume
 
 
+@handle_exception
+@performance_monitor
+def detect_engulfing(symbol):
+    """Detect bullish and bearish engulfing patterns"""
+    rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, 3)  # type: ignore
+    if rates is None or len(rates) < 2:
+        logging.error(f"Failed to get rate data for engulfing pattern detection. Rates: {rates}, Length: {len(rates) if rates else 0}")
+        return False, False
+    
+    prev, current = rates[-2], rates[-1]
+    
+    # Envolvente alcista (bullish)
+    bullish = (prev['close'] < prev['open'] and 
+               current['close'] > current['open'] and
+               current['open'] < prev['close'] and
+               current['close'] > prev['open'])
+    
+    # Envolvente bajista (bearish)
+    bearish = (prev['close'] > prev['open'] and
+               current['close'] < current['open'] and
+               current['open'] > prev['close'] and
+               current['close'] < prev['open'])
+    
+    return bullish, bearish
+
 
 @handle_exception
 @performance_monitor
@@ -519,17 +544,20 @@ def run_strategy(symbol="XAUUSD"):
     # Add volume confirmation
     volume_spike, vol_ratio = get_volume_breakout(symbol)
     
+    # Detect engulfing patterns
+    bullish_engulfing, bearish_engulfing = detect_engulfing(symbol)
+    
     # Volume confirmation made optional for more signals during testing
-    if bullish_breakout and momentum_filter:  # Removed volume_spike requirement
-        logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
+    if bullish_breakout and momentum_filter and bullish_engulfing:  # Added engulfing confirmation
+        logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average, Engulfing: {bullish_engulfing}")
         
         # Use market structure analysis for TP in normal mode as well
         tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
         tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
         
         execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, tp_points)
-    elif bearish_breakout and momentum_filter:  # Removed volume_spike requirement
-        logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
+    elif bearish_breakout and momentum_filter and bearish_engulfing:  # Added engulfing confirmation
+        logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average, Engulfing: {bearish_engulfing}")
         
         # Use market structure analysis for TP in normal mode as well
         tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
