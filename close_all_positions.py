@@ -10,11 +10,8 @@ from dotenv import load_dotenv
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-# Try to import metatrader5, fallback to MetaTrader5 if needed
-try:
-    import metatrader5 as mt5
-except ImportError:
-    import MetaTrader5 as mt5  # type: ignore
+# Import MetaTrader5 (official package name)
+import MetaTrader5 as mt5  # type: ignore
 
 # Import our utility function
 from mt5_utils import close_position_by_ticket

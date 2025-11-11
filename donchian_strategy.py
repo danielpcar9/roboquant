@@ -9,11 +9,8 @@ from typing import Optional
 
 # Import caching system
 
-# Try to import metatrader5, fallback to MetaTrader5 if needed
-try:
-    import metatrader5 as mt5
-except ImportError:
-    import MetaTrader5 as mt5  # type: ignore
+# Import MetaTrader5 (official package name)
+import MetaTrader5 as mt5  # type: ignore
 
 
 from mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops

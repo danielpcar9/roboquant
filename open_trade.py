@@ -2,7 +2,7 @@
 import os
 import logging
 from dotenv import load_dotenv
-import metatrader5 as mt5
+import MetaTrader5 as mt5  # type: ignore
 
 load_dotenv()
 LOGIN = int(os.getenv("MT5_LOGIN", "0"))
@@ -18,22 +18,22 @@ SL_PIPS = 50
 TP_PIPS = 100
 DEVIATION = 20
 
-if not mt5.initialize():
+if not mt5.initialize():  # type: ignore
     logging.error("No se pudo inicializar MT5")
     quit()
 
-if not mt5.login(LOGIN, password=PASSWORD, server=SERVER):
+if not mt5.login(LOGIN, password=PASSWORD, server=SERVER):  # type: ignore
     logging.error("No se pudo logear en MT5")
-    mt5.shutdown()
+    mt5.shutdown()  # type: ignore
     quit()
 
-if not mt5.symbol_select(SYMBOL, True):
+if not mt5.symbol_select(SYMBOL, True):  # type: ignore
     logging.error(f"Símbolo {SYMBOL} no disponible en Market Watch")
-    mt5.shutdown()
+    mt5.shutdown()  # type: ignore
     quit()
 
-sym_info = mt5.symbol_info(SYMBOL)
-tick = mt5.symbol_info_tick(SYMBOL)
+sym_info = mt5.symbol_info(SYMBOL)  # type: ignore
+tick = mt5.symbol_info_tick(SYMBOL)  # type: ignore
 point = sym_info.point
 
 # Calcular precio y niveles
@@ -58,7 +58,7 @@ request = {
     "type_filling": mt5.ORDER_FILLING_IOC,
 }
 
-result = mt5.order_send(request)
+result = mt5.order_send(request)  # type: ignore  # type: ignore
 
 if result.retcode != mt5.TRADE_RETCODE_DONE:
     logging.error(f"Error al abrir orden: {result.retcode} - {result.comment}")
@@ -66,10 +66,10 @@ else:
     logging.info(f"✅ Trade abierto. Ticket: {result.order}")
 
 # Verificar posiciones abiertas
-positions = mt5.positions_get(symbol=SYMBOL)
+positions = mt5.positions_get(symbol=SYMBOL)  # type: ignore  # type: ignore
 if positions:
     logging.info(f"Posiciones abiertas: {len(positions)}")
     for pos in positions:
         logging.info(f"  Ticket: {pos.ticket}, Volume: {pos.volume}, Profit: {pos.profit:.2f}")
 
-mt5.shutdown()
+mt5.shutdown()  # type: ignore

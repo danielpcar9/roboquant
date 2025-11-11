@@ -122,14 +122,10 @@ def check_mt5_connection():
         # Try to import MT5
         mt5_available = False
         try:
-            import metatrader5
+            import MetaTrader5  # type: ignore
             mt5_available = True
         except ImportError:
-            try:
-                import MetaTrader5
-                mt5_available = True
-            except ImportError:
-                pass
+            pass
         
         if mt5_available:
             print("✅ MT5 package imported successfully")

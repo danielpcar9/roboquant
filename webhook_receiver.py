@@ -5,11 +5,8 @@ from flask import Flask, request, jsonify
 import hmac
 import hashlib
 import os
-# Try to import metatrader5, fallback to MetaTrader5 if needed
-try:
-    import metatrader5 as mt5
-except ImportError:
-    import MetaTrader5 as mt5  # type: ignore
+# Import MetaTrader5 (official package name)
+import MetaTrader5 as mt5  # type: ignore
 from mt5_utils import build_and_send_order, normalize_volume
 from safety import Safety
 from security_manager import SecureCredentialManager, InputValidator, RateLimiter, constant_time_compare, sanitize_error_message, ip_whitelist

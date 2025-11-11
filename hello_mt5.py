@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 import logging
-import metatrader5 as mt5
+import MetaTrader5 as mt5  # type: ignore
 
 load_dotenv()
 
@@ -17,8 +17,8 @@ print("INICIANDO CONEXIÓN CON METATRADER 5")
 print("=" * 50)
 
 # Inicializar CON credenciales (funciona con MT5 abierto o cerrado)
-if not mt5.initialize(login=LOGIN, password=PASSWORD, server=SERVER):
-    logging.error("Error inicializando/conectando MT5: %s", mt5.last_error())
+if not mt5.initialize(login=LOGIN, password=PASSWORD, server=SERVER):  # type: ignore
+    logging.error("Error inicializando/conectando MT5: %s", mt5.last_error())  # type: ignore
     quit()
 
 logging.info("MT5 inicializado y conectado")
@@ -27,7 +27,7 @@ print("\n" + "=" * 50)
 print("INFORMACIÓN DE TU CUENTA")
 print("=" * 50)
 
-account_info = mt5.account_info()
+account_info = mt5.account_info()  # type: ignore
 if account_info:
     print(f"Balance: ${account_info.balance:.2f}")
     print(f"Equity: ${account_info.equity:.2f}")
@@ -38,8 +38,8 @@ else:
 
 # Precio Oro (XAUUSD)
 symbol = "XAUUSD"
-if mt5.symbol_select(symbol, True):
-    tick = mt5.symbol_info_tick(symbol)
+if mt5.symbol_select(symbol, True):  # type: ignore
+    tick = mt5.symbol_info_tick(symbol)  # type: ignore
     if tick:
         print(f"\n{symbol}:")
         print(f"BID: ${tick.bid:.2f} | ASK: ${tick.ask:.2f} | Spread: ${tick.ask - tick.bid:.2f}")
@@ -49,5 +49,5 @@ if mt5.symbol_select(symbol, True):
 else:
     print(f"No se pudo seleccionar {symbol}")
 
-mt5.shutdown()
+mt5.shutdown()  # type: ignore
 print("\nConexión cerrada")

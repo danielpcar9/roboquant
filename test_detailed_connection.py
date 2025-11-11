@@ -8,11 +8,8 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(mes
 # Load environment variables
 load_dotenv()
 
-# Try to import metatrader5, fallback to MetaTrader5 if needed
-try:
-    import metatrader5 as mt5
-except ImportError:
-    import MetaTrader5 as mt5  # type: ignore
+# Import MetaTrader5 (official package name)
+import MetaTrader5 as mt5  # type: ignore
 
 def test_mt5_detailed():
     """Detailed MT5 connection test"""

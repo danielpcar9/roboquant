@@ -3,11 +3,8 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 import math
 
-# Try to import metatrader5, fallback to MetaTrader5 if needed
-try:
-    import metatrader5 as mt5
-except ImportError:
-    import MetaTrader5 as mt5  # type: ignore
+# Import MetaTrader5 (official package name)
+import MetaTrader5 as mt5  # type: ignore
 
 class TradeScorer:
     """Trade setup quality scorer with 0-100 point system"""
@@ -17,8 +14,8 @@ class TradeScorer:
         
     def score_trade_setup(self, symbol: str, price: float, upper_channel: float, 
                          lower_channel: float, current_momentum: float, 
-                         historical_momentum: float, atr: float = None, 
-                         avg_atr: float = None) -> Dict[str, Any]:
+                         historical_momentum: float, atr: float | None = None, 
+                         avg_atr: float | None = None) -> Dict[str, Any]:
         """
         Score a trade setup based on multiple heuristics
         

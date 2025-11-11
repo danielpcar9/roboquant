@@ -8,17 +8,8 @@ import logging
 from dotenv import load_dotenv
 from typing import Optional
 
-# Try to import metatrader5, fallback to MetaTrader5 if needed
-try:
-    import metatrader5 as mt5
-except ImportError:
-    import MetaTrader5 as mt5  # type: ignore
-
-# Try to import metatrader5, fallback to MetaTrader5 if needed
-try:
-    import metatrader5 as mt5
-except ImportError:
-    import MetaTrader5 as mt5  # type: ignore
+# Import MetaTrader5 (official package name)
+import MetaTrader5 as mt5  # type: ignore
 
 # Import security manager for credential handling
 from security_manager import SecureCredentialManager, sanitize_error_message

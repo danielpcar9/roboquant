@@ -102,11 +102,8 @@ def alert_daily_summary():
     """Envía resumen diario automático al final del día"""
     try:
         from post_mortem import analyze_recent_trades
-        # Try to import metatrader5, fallback to MetaTrader5 if needed
-        try:
-            import metatrader5 as mt5
-        except ImportError:
-            import MetaTrader5 as mt5  # type: ignore
+        # Import MetaTrader5 (official package name)
+        import MetaTrader5 as mt5  # type: ignore
         
         # Inicializar MT5 para obtener balance
         if not mt5.initialize():  # type: ignore

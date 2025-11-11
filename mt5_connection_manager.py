@@ -8,10 +8,8 @@ from typing import Optional, Tuple
 from security_manager import SecureCredentialManager, sanitize_error_message
 from error_handler import handle_exception, MT5ConnectionError
 
-try:
-    import metatrader5 as mt5
-except ImportError:
-    import MetaTrader5 as mt5  # type: ignore
+# Import MetaTrader5 (official package name)
+import MetaTrader5 as mt5  # type: ignore
 
 logger = logging.getLogger(__name__)
 

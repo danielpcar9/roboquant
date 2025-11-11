@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-import metatrader5 as mt5
+import MetaTrader5 as mt5  # type: ignore
 
 load_dotenv()
 
@@ -26,9 +26,9 @@ print()
 
 # Inicializar MT5
 print("Intentando inicializar MT5...")
-if not mt5.initialize():
+if not mt5.initialize():  # type: ignore
     print("❌ Error al inicializar MT5")
-    print("Error code:", mt5.last_error())
+    print("Error code:", mt5.last_error())  # type: ignore
     quit()
 
 print("✓ MT5 inicializado correctamente")
@@ -36,21 +36,21 @@ print()
 
 # Intentar login
 print("Intentando login...")
-authorized = mt5.login(
-    login=int(login),
+authorized = mt5.login(  # type: ignore
+    login=int(login) if login else 0,
     password=password,
     server=server
-)
+)  # type: ignore
 
 if authorized:
     print("✓ ¡Login exitoso!")
-    account_info = mt5.account_info()
+    account_info = mt5.account_info()  # type: ignore
     if account_info:
         print(f"Balance: {account_info.balance}")
         print(f"Cuenta: {account_info.login}")
 else:
     print("❌ Error de login")
-    error = mt5.last_error()
+    error = mt5.last_error()  # type: ignore
     print(f"Código de error: {error}")
 
-mt5.shutdown()
+mt5.shutdown()  # type: ignore

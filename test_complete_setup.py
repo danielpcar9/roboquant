@@ -12,14 +12,11 @@ try:
 except Exception as e:
     logging.warning(f"Could not load .env file: {e}")
 
-# Try to import metatrader5, fallback to MetaTrader5 if needed
+# Import MetaTrader5 (official package name)
 try:
-    import metatrader5 as mt5
+    import MetaTrader5 as mt5  # type: ignore
 except ImportError:
-    try:
-        import MetaTrader5 as mt5  # type: ignore
-    except ImportError:
-        mt5 = None
+    mt5 = None
 
 # Import project modules
 SAFETY_MODULE_AVAILABLE = False

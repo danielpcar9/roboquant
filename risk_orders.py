@@ -3,11 +3,8 @@ import os
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
-# Try to import metatrader5, fallback to MetaTrader5 if needed
-try:
-    import metatrader5 as mt5
-except ImportError:
-    import MetaTrader5 as mt5  # type: ignore
+# Import MetaTrader5 (official package name)
+import MetaTrader5 as mt5  # type: ignore
 from safety import Safety
 from mt5_utils import build_and_send_order, estimate_lots_by_risk
 from post_mortem import log_trade

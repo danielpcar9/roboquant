@@ -51,7 +51,15 @@ def load_data(symbol="XAUUSD", timeframe="H1", days_back=1825):
             logging.error("❌ DataFrame vacío después de filtrar")
             return None
         
-        if df['close'].isnull().any():
+        # Check for null values - handle both Series and ndarray
+        import numpy as np
+        close_data = df['close']
+        if isinstance(close_data, pd.Series):
+            has_nulls = close_data.isna().any()
+        else:
+            # Assume it's a numpy array
+            has_nulls = np.isnan(close_data).any()
+        if has_nulls:
             logging.warning("⚠️ Datos con valores null, rellenando...")
             df.fillna(method='ffill', inplace=True)
         
@@ -94,19 +102,9 @@ def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1
     logging.info(f"   Donchian: {donchian_period} | Momentum: {momentum_period}/{sample_period}")
     logging.info(f"   SL: {sl_points} pts | TP: {tp_points} pts | Breakout Threshold: {breakout_threshold}")
     
-    # 1. DONCHIAN CHANNELS - Usar función nativa (10x más rápida)
-    try:
-        dc = vbt.DonchianChannel.run(
-            high=df['high'], 
-            low=df['low'], 
-            window=donchian_period
-        )
-        df['donchian_upper'] = dc.upper
-        df['donchian_lower'] = dc.lower
-    except AttributeError:
-        # Fallback si versión vieja de vectorbt
-        df['donchian_upper'] = df['high'].rolling(window=donchian_period).max()
-        df['donchian_lower'] = df['low'].rolling(window=donchian_period).min()
+    # 1. DONCHIAN CHANNELS - Using rolling operations
+    df['donchian_upper'] = df['high'].rolling(window=donchian_period).max()
+    df['donchian_lower'] = df['low'].rolling(window=donchian_period).min()
     
     # 2. MOMENTUM (Average Body Size)
     body = np.abs(df['close'] - df['open'])
@@ -115,15 +113,22 @@ def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1
     
     # 3. ENTRY SIGNALS
     # Long: Precio rompe canal superior + momentum fuerte
+    # Ensure we're working with pandas Series and handle potential NaN values
+    close_series = df['close'].fillna(method='ffill')
+    donchian_upper_series = df['donchian_upper'].fillna(method='ffill')
+    donchian_lower_series = df['donchian_lower'].fillna(method='ffill')
+    momentum_series = df['momentum'].fillna(0)
+    historical_momentum_series = df['historical_momentum'].fillna(0)
+    
     df['long_entry'] = (
-        (df['close'] > df['donchian_upper']) & 
-        (df['momentum'] > df['historical_momentum'])
+        (close_series > donchian_upper_series) & 
+        (momentum_series > historical_momentum_series)
     )
     
     # Short: Precio rompe canal inferior + momentum fuerte
     df['short_entry'] = (
-        (df['close'] < df['donchian_lower']) & 
-        (df['momentum'] > df['historical_momentum'])
+        (close_series < donchian_lower_series) & 
+        (momentum_series > historical_momentum_series)
     )
     
     # 4. SL/TP como FRACCIONES (método correcto para vectorbt)
@@ -334,23 +339,34 @@ def optimize_parameters(df, initial_capital=10000):
                         tp_points=tp
                     )
                     
-                    if portfolio and portfolio.trades.count() >= 10:
-                        sharpe = portfolio.sharpe_ratio()
-                        pf = portfolio.trades.profit_factor()
-                        wr = portfolio.trades.win_rate()
+                    # Check if portfolio is valid and has sufficient trades
+                    if portfolio is not None:
+                        try:
+                            # Safely extract trade count
+                            trade_count = getattr(portfolio.trades, 'count', lambda: 0)()
+                            if trade_count >= 10:
+                                # Safely extract metrics
+                                sharpe = getattr(portfolio, 'sharpe_ratio', lambda: 0)()
+                                pf = getattr(portfolio.trades, 'profit_factor', lambda: 0)()
+                                wr = getattr(portfolio.trades, 'win_rate', lambda: 0)()
+                                
+                                results.append({
+                                    'donchian': donchian,
+                                    'sl': sl,
+                                    'tp': tp,
+                                    'sharpe': sharpe,
+                                    'profit_factor': pf,
+                                    'win_rate': wr,
+                                    'trades': trade_count
+                                })
+                        except Exception:
+                            # Skip this combination if there are issues
+                            pass
                         
-                        results.append({
-                            'donchian': donchian,
-                            'sl': sl,
-                            'tp': tp,
-                            'sharpe': sharpe,
-                            'profit_factor': pf,
-                            'win_rate': wr,
-                            'trades': portfolio.trades.count()
-                        })
-                        
-                        if sharpe > best_sharpe:
-                            best_sharpe = sharpe
+                        # Make sure sharpe is defined
+                        current_sharpe = locals().get('sharpe', -999)
+                        if current_sharpe > best_sharpe:
+                            best_sharpe = current_sharpe
                             best_params = (donchian, sl, tp)
                     
                     logging.info(f"[{current}/{total_combinations}] Donchian={donchian}, SL={sl}, TP={tp}")
@@ -364,11 +380,14 @@ def optimize_parameters(df, initial_capital=10000):
     results_df.to_csv("optimization_results.csv", index=False)
     logging.info("📁 Resultados guardados: optimization_results.csv")
     
-    print(f"\n🏆 MEJORES PARÁMETROS:")
-    print(f"   Donchian: {best_params[0]}")
-    print(f"   SL: {best_params[1]} puntos")
-    print(f"   TP: {best_params[2]} puntos")
-    print(f"   Sharpe: {best_sharpe:.2f}")
+    if best_params is not None:
+        print(f"\n🏆 MEJORES PARÁMETROS:")
+        print(f"   Donchian: {best_params[0]}")
+        print(f"   SL: {best_params[1]} puntos")
+        print(f"   TP: {best_params[2]} puntos")
+        print(f"   Sharpe: {best_sharpe:.2f}")
+    else:
+        print(f"\n⚠️ NO SE ENCONTRARON PARÁMETROS ÓPTIMOS")
     
     return best_params, results_df
 
