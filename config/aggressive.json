@@ -3,7 +3,9 @@
     "risk_per_trade_pct": 2.0
   },
   "strategy": {
-    "donchian_period": 20
+    "donchian_period": 20,
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 1.5
   },
   "trading_hours": {
     "start": 0,
@@ -17,8 +19,12 @@
     "risk_reward_ratio": 2.0
   },
   "trading_parameters": {
-    "stop_loss_points": 400,
-    "take_profit_points": 800,
     "breakout_threshold": 0.0
+  },
+  "trailing": {
+    "enabled": true,
+    "start_pips": 10,
+    "distance_pips": 10,
+    "break_even_enabled": false
   }
 }

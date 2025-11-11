@@ -242,22 +242,36 @@ def calculate_dynamic_stops(symbol, entry_price, order_type, atr):
     # Based on the risk_per_trade_pct in the current configuration
     risk_profile = "HIGH" if RISK_PERCENT > 1.0 else "LOW"
     
-    if risk_profile == "LOW":  # Default profile
-        # SL = 3 * ATR (≈60 pips for XAUUSD)
-        # TP = 6 * ATR (≈120 pips for XAUUSD)
-        sl_distance = 3 * atr
-        tp_distance = 6 * atr
-        
-        sl_price = entry_price - sl_distance if order_type == "BUY" else entry_price + sl_distance
-        tp_price = entry_price + tp_distance if order_type == "BUY" else entry_price - tp_distance
-    else:  # HIGH RISK (aggressive)
-        # SL = 2 * ATR (≈40 pips for XAUUSD)
-        # TP = 1.5 * ATR (≈30 pips for XAUUSD)
-        sl_distance = 2 * atr
-        tp_distance = 1.5 * atr
-        
-        sl_price = entry_price - sl_distance if order_type == "BUY" else entry_price + sl_distance
-        tp_price = entry_price + tp_distance if order_type == "BUY" else entry_price - tp_distance
+    # Get ATR multipliers from configuration
+    cfg = get_set_manager()
+    set_file = os.getenv('ROBOQUANT_SET_FILE', 'default.json')
+    
+    try:
+        if set_file:
+            cfg.load_set_file(set_file)
+            
+        if risk_profile == "LOW":  # Default profile
+            sl_multiplier = cfg.get('strategy.sl_atr_multiplier', 3.0)
+            tp_multiplier = cfg.get('strategy.tp_atr_multiplier', 6.0)
+        else:  # HIGH RISK (aggressive)
+            sl_multiplier = cfg.get('strategy.sl_atr_multiplier', 2.0)
+            tp_multiplier = cfg.get('strategy.tp_atr_multiplier', 1.5)
+    except Exception as e:
+        logging.warning(f"Failed to load ATR multipliers from config, using defaults: {e}")
+        # Fallback to hardcoded values
+        if risk_profile == "LOW":
+            sl_multiplier = 3.0
+            tp_multiplier = 6.0
+        else:
+            sl_multiplier = 2.0
+            tp_multiplier = 1.5
+    
+    # Calculate SL/TP distances based on ATR multipliers
+    sl_distance = sl_multiplier * atr
+    tp_distance = tp_multiplier * atr
+    
+    sl_price = entry_price - sl_distance if order_type == "BUY" else entry_price + sl_distance
+    tp_price = entry_price + tp_distance if order_type == "BUY" else entry_price - tp_distance
     
     logging.info(f"Dynamic stops calculated - Profile: {risk_profile}, SL: {sl_price:.5f}, TP: {tp_price:.5f}")
     return sl_price, tp_price
@@ -604,8 +618,8 @@ def run_strategy(symbol="XAUUSD"):
         bullish_breakout = current_close > upper_channel
         bearish_breakout = current_close < lower_channel
     
-    # Momentum filter: current > historical * 0.5
-    momentum_filter = current_momentum > (historical_momentum * 0.5)
+    # Momentum filter: current > historical * 0.3 (less restrictive)
+    momentum_filter = current_momentum > (historical_momentum * 0.3)
     
     # Add volume confirmation
     volume_spike, vol_ratio = get_volume_breakout(symbol)
@@ -617,10 +631,10 @@ def run_strategy(symbol="XAUUSD"):
     if bullish_breakout and momentum_filter:  # Removed engulfing confirmation for more signals
         logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
         
-        # Calculate pending order price (10 pips above upper channel)
+        # Calculate pending order price (0.5 * ATR above upper channel)
         symbol_info = mt5.symbol_info(symbol)  # type: ignore
         point = symbol_info.point
-        pending_price = upper_channel + (10 * point)  # 10 pips above upper channel
+        pending_price = upper_channel + (0.5 * atr)  # 0.5 * ATR above upper channel
         
         # Calculate dynamic SL/TP based on ATR and risk profile
         sl_price, tp_price = calculate_dynamic_stops(symbol, pending_price, "BUY", atr)
@@ -644,10 +658,10 @@ def run_strategy(symbol="XAUUSD"):
     elif bearish_breakout and momentum_filter:  # Removed engulfing confirmation for more signals
         logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
         
-        # Calculate pending order price (10 pips below lower channel)
+        # Calculate pending order price (0.5 * ATR below lower channel)
         symbol_info = mt5.symbol_info(symbol)  # type: ignore
         point = symbol_info.point
-        pending_price = lower_channel - (10 * point)  # 10 pips below lower channel
+        pending_price = lower_channel - (0.5 * atr)  # 0.5 * ATR below lower channel
         
         # Calculate dynamic SL/TP based on ATR and risk profile
         sl_price, tp_price = calculate_dynamic_stops(symbol, pending_price, "SELL", atr)
@@ -756,12 +770,6 @@ def main():
                 update_trailing_stops()
             except Exception as e:
                 logging.error(f"Error updating trailing stops: {e}", exc_info=True)
-            
-            # Monitor volatility (LOW RISK profile only)
-            try:
-                monitor_volatility(symbol)
-            except Exception as e:
-                logging.error(f"Error monitoring volatility: {e}", exc_info=True)
             
             # UPDATED: Sleep interval adjusted for M5 timeframe (300 seconds = 5 minutes)
             logging.debug("Waiting 300 seconds (5 minutes) before next check...")
@@ -962,29 +970,6 @@ def calculate_candle_atr(candles, index):
     tr3 = abs(candle['low'] - prev_candle['close'])
     
     return max(tr1, tr2, tr3)
-
-
-def monitor_volatility(symbol):
-    """Monitor volatility and log changes (LOW RISK profile only)"""
-    # Only monitor volatility for LOW RISK profile
-    if RISK_PERCENT > 1.0:
-        return
-    
-    # Calculate ATR
-    atr = calculate_atr(symbol)
-    if atr is None:
-        logging.warning(f"Failed to calculate ATR for volatility monitoring: {symbol}")
-        return
-    
-    # Log volatility information
-    symbol_info = mt5.symbol_info(symbol)  # type: ignore
-    if symbol_info:
-        point = symbol_info.point
-        atr_pips = atr / point
-        logging.info(f"Volatility monitor - {symbol}: ATR = {atr_pips:.1f} pips")
-        
-        # Log if significant volatility change (optional)
-        # This could be extended to adjust SL/TP dynamically
 
 
 def update_trailing_stops():
