@@ -13,7 +13,7 @@ from typing import Optional
 import MetaTrader5 as mt5  # type: ignore
 
 
-from mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops
+from mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops, place_pending_order, cancel_expired_pending_orders
 from safety import Safety
 # Import security manager
 from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message, RateLimiter
@@ -205,6 +205,62 @@ def get_current_price(symbol, order_type):
     price = tick.ask if order_type == "BUY" else tick.bid
     logging.debug(f"Current price for {symbol}: {price}")
     return price
+
+
+@handle_exception
+@performance_monitor
+def calculate_dynamic_stops(symbol, entry_price, order_type, atr):
+    """
+    Calculate dynamic SL/TP based on ATR and risk profile.
+    
+    Args:
+        symbol: Trading symbol
+        entry_price: Entry price
+        order_type: "BUY" or "SELL"
+        atr: Average True Range value
+    
+    Returns:
+        tuple: (sl_price, tp_price)
+    """
+    # Get symbol info
+    symbol_info = mt5.symbol_info(symbol)  # type: ignore
+    if not symbol_info:
+        logging.error(f"Failed to get symbol info for {symbol}")
+        # Fallback to fixed values
+        point = 0.01 if 'JPY' not in symbol else 0.001
+        if order_type == "BUY":
+            sl_price = entry_price - (150 * point)
+            tp_price = entry_price + (300 * point)
+        else:
+            sl_price = entry_price + (150 * point)
+            tp_price = entry_price - (300 * point)
+        return sl_price, tp_price
+    
+    point = symbol_info.point
+    
+    # Determine if we're using LOW RISK (default) or HIGH RISK (aggressive) profile
+    # Based on the risk_per_trade_pct in the current configuration
+    risk_profile = "HIGH" if RISK_PERCENT > 1.0 else "LOW"
+    
+    if risk_profile == "LOW":  # Default profile
+        # SL = 3 * ATR (≈60 pips for XAUUSD)
+        # TP = 6 * ATR (≈120 pips for XAUUSD)
+        sl_distance = 3 * atr
+        tp_distance = 6 * atr
+        
+        sl_price = entry_price - sl_distance if order_type == "BUY" else entry_price + sl_distance
+        tp_price = entry_price + tp_distance if order_type == "BUY" else entry_price - tp_distance
+    else:  # HIGH RISK (aggressive)
+        # SL = 2 * ATR (≈40 pips for XAUUSD)
+        # TP = 1.5 * ATR (≈30 pips for XAUUSD)
+        sl_distance = 2 * atr
+        tp_distance = 1.5 * atr
+        
+        sl_price = entry_price - sl_distance if order_type == "BUY" else entry_price + sl_distance
+        tp_price = entry_price + tp_distance if order_type == "BUY" else entry_price - tp_distance
+    
+    logging.info(f"Dynamic stops calculated - Profile: {risk_profile}, SL: {sl_price:.5f}, TP: {tp_price:.5f}")
+    return sl_price, tp_price
 
 @handle_exception
 @performance_monitor
@@ -468,7 +524,7 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
 @handle_exception
 @performance_monitor
 def run_strategy(symbol="XAUUSD"):
-    """Main strategy function"""
+    """Main strategy function with pending orders"""
     
     logging.info(f"Running strategy for symbol: {symbol}")
     
@@ -487,11 +543,21 @@ def run_strategy(symbol="XAUUSD"):
         logging.info(f"Spread too high: {spread:.2f} points > {MAX_SPREAD_POINTS} points, skipping")
         return
     
+    # Cancel expired pending orders
+    cancel_expired_pending_orders(MAGIC_NUMBER)
+    
     # Check if we already have open positions
     positions = mt5.positions_get(symbol=symbol)  # type: ignore
     logging.debug(f"Current positions for {symbol}: {positions}")
     if positions is not None and len(positions) > 0:
         logging.info("Position already open, skipping")
+        return
+    
+    # Check for existing pending orders
+    orders = mt5.orders_get(symbol=symbol)  # type: ignore
+    pending_orders = [order for order in orders if getattr(order, 'magic', 0) == MAGIC_NUMBER] if orders else []
+    if pending_orders:
+        logging.info(f"Pending order already exists for {symbol}, skipping")
         return
     
     # Get Donchian channels
@@ -511,7 +577,7 @@ def run_strategy(symbol="XAUUSD"):
     logging.info(f"Current close price (bid): {current_close}")
     logging.info(f"Upper channel: {upper_channel}, Lower channel: {lower_channel}")
     
-    # Calculate ATR for event-driven trading
+    # Calculate ATR for dynamic SL/TP
     atr = calculate_atr(symbol)
     if atr is None:
         logging.error("ATR failed")
@@ -538,8 +604,8 @@ def run_strategy(symbol="XAUUSD"):
         bullish_breakout = current_close > upper_channel
         bearish_breakout = current_close < lower_channel
     
-    # Reducir momentum_filter a 0.1x for more signals
-    momentum_filter = current_momentum > (historical_momentum * 0.1)
+    # Momentum filter: current > historical * 0.5
+    momentum_filter = current_momentum > (historical_momentum * 0.5)
     
     # Add volume confirmation
     volume_spike, vol_ratio = get_volume_breakout(symbol)
@@ -551,19 +617,56 @@ def run_strategy(symbol="XAUUSD"):
     if bullish_breakout and momentum_filter:  # Removed engulfing confirmation for more signals
         logging.info(f"STRONG BUY signal: Volume {vol_ratio:.2f}x average")
         
-        # Use market structure analysis for TP in normal mode as well
-        tp_price = calculate_take_profit_level(symbol, current_close, "BUY", atr)
-        tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+        # Calculate pending order price (10 pips above upper channel)
+        symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        point = symbol_info.point
+        pending_price = upper_channel + (10 * point)  # 10 pips above upper channel
         
-        execute_trade(symbol, "BUY", LOTS, STOP_LOSS_POINTS, tp_points)
+        # Calculate dynamic SL/TP based on ATR and risk profile
+        sl_price, tp_price = calculate_dynamic_stops(symbol, pending_price, "BUY", atr)
+        
+        # Place pending order
+        result = place_pending_order(
+            symbol=symbol,
+            order_type="BUY_STOP",
+            volume=LOTS,
+            price=pending_price,
+            sl=sl_price,
+            tp=tp_price,
+            magic=MAGIC_NUMBER
+        )
+        
+        if result:
+            logging.info(f"BUY_STOP order placed: Price={pending_price:.5f}, SL={sl_price:.5f}, TP={tp_price:.5f}")
+        else:
+            logging.error("Failed to place BUY_STOP order")
+            
     elif bearish_breakout and momentum_filter:  # Removed engulfing confirmation for more signals
         logging.info(f"STRONG SELL signal: Volume {vol_ratio:.2f}x average")
         
-        # Use market structure analysis for TP in normal mode as well
-        tp_price = calculate_take_profit_level(symbol, current_close, "SELL", atr)
-        tp_points = abs(tp_price - current_close) / mt5.symbol_info(symbol).point  # type: ignore
+        # Calculate pending order price (10 pips below lower channel)
+        symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        point = symbol_info.point
+        pending_price = lower_channel - (10 * point)  # 10 pips below lower channel
         
-        execute_trade(symbol, "SELL", LOTS, STOP_LOSS_POINTS, tp_points)
+        # Calculate dynamic SL/TP based on ATR and risk profile
+        sl_price, tp_price = calculate_dynamic_stops(symbol, pending_price, "SELL", atr)
+        
+        # Place pending order
+        result = place_pending_order(
+            symbol=symbol,
+            order_type="SELL_STOP",
+            volume=LOTS,
+            price=pending_price,
+            sl=sl_price,
+            tp=tp_price,
+            magic=MAGIC_NUMBER
+        )
+        
+        if result:
+            logging.info(f"SELL_STOP order placed: Price={pending_price:.5f}, SL={sl_price:.5f}, TP={tp_price:.5f}")
+        else:
+            logging.error("Failed to place SELL_STOP order")
 
 @handle_exception
 @performance_monitor
@@ -653,6 +756,12 @@ def main():
                 update_trailing_stops()
             except Exception as e:
                 logging.error(f"Error updating trailing stops: {e}", exc_info=True)
+            
+            # Monitor volatility (LOW RISK profile only)
+            try:
+                monitor_volatility(symbol)
+            except Exception as e:
+                logging.error(f"Error monitoring volatility: {e}", exc_info=True)
             
             # UPDATED: Sleep interval adjusted for M5 timeframe (300 seconds = 5 minutes)
             logging.debug("Waiting 300 seconds (5 minutes) before next check...")
@@ -855,9 +964,32 @@ def calculate_candle_atr(candles, index):
     return max(tr1, tr2, tr3)
 
 
+def monitor_volatility(symbol):
+    """Monitor volatility and log changes (LOW RISK profile only)"""
+    # Only monitor volatility for LOW RISK profile
+    if RISK_PERCENT > 1.0:
+        return
+    
+    # Calculate ATR
+    atr = calculate_atr(symbol)
+    if atr is None:
+        logging.warning(f"Failed to calculate ATR for volatility monitoring: {symbol}")
+        return
+    
+    # Log volatility information
+    symbol_info = mt5.symbol_info(symbol)  # type: ignore
+    if symbol_info:
+        point = symbol_info.point
+        atr_pips = atr / point
+        logging.info(f"Volatility monitor - {symbol}: ATR = {atr_pips:.1f} pips")
+        
+        # Log if significant volatility change (optional)
+        # This could be extended to adjust SL/TP dynamically
+
+
 def update_trailing_stops():
     """
-    Update trailing stops for all open positions.
+    Update trailing stops for all open positions with dynamic parameters.
     Moves stop loss closer to current price as it moves in favor of the position.
     """
     # Get all open positions
@@ -884,59 +1016,98 @@ def update_trailing_stops():
         
         point = symbol_info.point
         
-        # Calculate trailing distance (25% of original SL distance)
+        # Determine if we're using LOW RISK (default) or HIGH RISK (aggressive) profile
+        risk_profile = "HIGH" if RISK_PERCENT > 1.0 else "LOW"
+        
+        # Set trailing parameters based on risk profile
+        if risk_profile == "LOW":  # Default profile
+            # Break-even @ 10 pips profit
+            # Trailing start @ 10 pips, distance @ 15 pips
+            break_even_pips = 10
+            trailing_start_pips = 10
+            trailing_distance_pips = 15
+        else:  # HIGH RISK (aggressive)
+            # No break-even
+            # Trailing start @ 10 pips, distance @ 10 pips
+            break_even_pips = 0  # No break-even
+            trailing_start_pips = 10
+            trailing_distance_pips = 10
+        
+        # Calculate profit in pips
         if pos_type == mt5.POSITION_TYPE_BUY:  # type: ignore
-            # For BUY positions, trailing stop moves up
-            original_distance = abs(entry_price - current_sl) if current_sl > 0 else (150 * point)
-            trailing_distance = original_distance * 0.25  # 25% of original distance
-            
-            # Calculate new SL level based on current price
-            current_price = tick.bid
-            new_sl = current_price - trailing_distance
-            
-            # Only update if new SL is better than current SL and above entry price
-            if (current_sl == 0 or new_sl > current_sl) and new_sl > entry_price:
-                # Update the position with new SL
-                request = {
-                    'action': mt5.TRADE_ACTION_SLTP,  # type: ignore
-                    'symbol': symbol,
-                    'position': int(ticket),
-                    'sl': new_sl,
-                    'type_time': mt5.ORDER_TIME_GTC,  # type: ignore
-                    'type_filling': mt5.ORDER_FILLING_RETURN  # type: ignore
-                }
-                
-                result = mt5.order_send(request)  # type: ignore
-                if result and result.retcode == mt5.TRADE_RETCODE_DONE:  # type: ignore
-                    logging.info(f"Trailing stop updated for BUY position {ticket}: SL moved to {new_sl:.5f}")
-                else:
-                    logging.warning(f"Failed to update trailing stop for BUY position {ticket}: {getattr(result, 'comment', 'N/A')}")
+            profit_pips = (tick.bid - entry_price) / point
         else:  # SELL position
-            # For SELL positions, trailing stop moves down
-            original_distance = abs(entry_price - current_sl) if current_sl > 0 else (150 * point)
-            trailing_distance = original_distance * 0.25  # 25% of original distance
-            
-            # Calculate new SL level based on current price
-            current_price = tick.ask
-            new_sl = current_price + trailing_distance
-            
-            # Only update if new SL is better than current SL and below entry price
-            if (current_sl == 0 or new_sl < current_sl) and new_sl < entry_price:
-                # Update the position with new SL
+            profit_pips = (entry_price - tick.ask) / point
+        
+        logging.debug(f"Position {ticket} profit: {profit_pips:.1f} pips (Profile: {risk_profile})")
+        
+        # Break-even logic
+        if break_even_pips > 0 and profit_pips >= break_even_pips:
+            # Move SL to entry price (break-even)
+            if (pos_type == mt5.POSITION_TYPE_BUY and (current_sl == 0 or entry_price > current_sl)) or \
+               (pos_type == mt5.POSITION_TYPE_SELL and (current_sl == 0 or entry_price < current_sl)):
                 request = {
                     'action': mt5.TRADE_ACTION_SLTP,  # type: ignore
                     'symbol': symbol,
                     'position': int(ticket),
-                    'sl': new_sl,
+                    'sl': entry_price,
                     'type_time': mt5.ORDER_TIME_GTC,  # type: ignore
                     'type_filling': mt5.ORDER_FILLING_RETURN  # type: ignore
                 }
                 
                 result = mt5.order_send(request)  # type: ignore
                 if result and result.retcode == mt5.TRADE_RETCODE_DONE:  # type: ignore
-                    logging.info(f"Trailing stop updated for SELL position {ticket}: SL moved to {new_sl:.5f}")
+                    logging.info(f"Break-even SL set for position {ticket} at entry price {entry_price:.5f}")
                 else:
-                    logging.warning(f"Failed to update trailing stop for SELL position {ticket}: {getattr(result, 'comment', 'N/A')}")
+                    logging.warning(f"Failed to set break-even SL for position {ticket}: {getattr(result, 'comment', 'N/A')}")
+        
+        # Trailing stop logic
+        if profit_pips >= trailing_start_pips:
+            # Calculate trailing distance in price terms
+            trailing_distance = trailing_distance_pips * point
+            
+            if pos_type == mt5.POSITION_TYPE_BUY:  # type: ignore
+                # For BUY positions, trailing stop moves up
+                new_sl = tick.bid - trailing_distance
+                
+                # Only update if new SL is better than current SL
+                if current_sl == 0 or new_sl > current_sl:
+                    # Update the position with new SL
+                    request = {
+                        'action': mt5.TRADE_ACTION_SLTP,  # type: ignore
+                        'symbol': symbol,
+                        'position': int(ticket),
+                        'sl': new_sl,
+                        'type_time': mt5.ORDER_TIME_GTC,  # type: ignore
+                        'type_filling': mt5.ORDER_FILLING_RETURN  # type: ignore
+                    }
+                    
+                    result = mt5.order_send(request)  # type: ignore
+                    if result and result.retcode == mt5.TRADE_RETCODE_DONE:  # type: ignore
+                        logging.info(f"Trailing stop updated for BUY position {ticket}: SL moved to {new_sl:.5f} ({profit_pips:.1f} pips profit)")
+                    else:
+                        logging.warning(f"Failed to update trailing stop for BUY position {ticket}: {getattr(result, 'comment', 'N/A')}")
+            else:  # SELL position
+                # For SELL positions, trailing stop moves down
+                new_sl = tick.ask + trailing_distance
+                
+                # Only update if new SL is better than current SL
+                if current_sl == 0 or new_sl < current_sl:
+                    # Update the position with new SL
+                    request = {
+                        'action': mt5.TRADE_ACTION_SLTP,  # type: ignore
+                        'symbol': symbol,
+                        'position': int(ticket),
+                        'sl': new_sl,
+                        'type_time': mt5.ORDER_TIME_GTC,  # type: ignore
+                        'type_filling': mt5.ORDER_FILLING_RETURN  # type: ignore
+                    }
+                    
+                    result = mt5.order_send(request)  # type: ignore
+                    if result and result.retcode == mt5.TRADE_RETCODE_DONE:  # type: ignore
+                        logging.info(f"Trailing stop updated for SELL position {ticket}: SL moved to {new_sl:.5f} ({profit_pips:.1f} pips profit)")
+                    else:
+                        logging.warning(f"Failed to update trailing stop for SELL position {ticket}: {getattr(result, 'comment', 'N/A')}")
 
 
 if __name__ == "__main__":

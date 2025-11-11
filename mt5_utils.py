@@ -2,6 +2,7 @@
 import time
 import logging
 import functools
+from datetime import datetime, timedelta
 from typing import Callable, Any
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
@@ -308,6 +309,137 @@ def close_position_by_ticket(ticket, deviation=30, retries=1, mt5_module=None):
     
     logging.error("Error al cerrar posicion %s despues de intentar todos los modos de llenado", ticket)
     return False
+
+
+@performance_monitor
+@safe_mt5_call
+@retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
+def place_pending_order(symbol, order_type, volume, price, sl=None, tp=None, deviation=30, expiration_hours=4, magic=123456, mt5_module=None):
+    """
+    Place a pending order (Buy Stop or Sell Stop) with optional SL/TP and expiration.
+    
+    Args:
+        symbol: Trading symbol
+        order_type: "BUY_STOP" or "SELL_STOP"
+        volume: Lot size
+        price: Order price
+        sl: Stop loss price (optional)
+        tp: Take profit price (optional)
+        deviation: Price deviation in points
+        expiration_hours: Hours until order expires (default 4 hours)
+        magic: Magic number for order identification
+        mt5_module: MT5 module instance
+    
+    Returns:
+        Order result or None if failed
+    """
+    if mt5_module is None:
+        mt5_module = mt5
+    
+    # Validate inputs
+    if not symbol or not order_type or volume <= 0 or price <= 0:
+        logging.error(f"Invalid parameters for pending order: symbol={symbol}, type={order_type}, volume={volume}, price={price}")
+        return None
+    
+    # Select symbol
+    if not mt5_module.symbol_select(symbol, True):  # type: ignore
+        logging.error(f"Failed to select symbol {symbol} for pending order")
+        return None
+    
+    # Determine order type
+    if order_type == "BUY_STOP":
+        order_type_mt5 = mt5_module.ORDER_TYPE_BUY_STOP  # type: ignore
+    elif order_type == "SELL_STOP":
+        order_type_mt5 = mt5_module.ORDER_TYPE_SELL_STOP  # type: ignore
+    else:
+        logging.error(f"Invalid order type for pending order: {order_type}")
+        return None
+    
+    # Calculate expiration time (4 hours from now)
+    expiration_time = int((datetime.now() + timedelta(hours=expiration_hours)).timestamp())
+    
+    # Prepare order request
+    request = {
+        'action': mt5_module.TRADE_ACTION_PENDING,  # type: ignore
+        'symbol': symbol,
+        'volume': float(volume),
+        'type': order_type_mt5,
+        'price': float(price),
+        'deviation': deviation,
+        'magic': magic,
+        'comment': f'pending_{order_type.lower()}',
+        'type_time': mt5_module.ORDER_TIME_SPECIFIED,  # type: ignore
+        'type_filling': mt5_module.ORDER_FILLING_FOK,  # type: ignore
+        'expiration': expiration_time
+    }
+    
+    # Add SL/TP if provided
+    if sl is not None and sl > 0:
+        request['sl'] = float(sl)
+    if tp is not None and tp > 0:
+        request['tp'] = float(tp)
+    
+    # Send order
+    try:
+        result = mt5_module.order_send(request)  # type: ignore
+        
+        if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+            logging.info(f"Pending order placed successfully: {order_type} {symbol} @ {price}")
+            logging.info(f"Order ticket: {getattr(result, 'order', 'N/A')}")
+            return result
+        else:
+            retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
+            comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
+            logging.error(f"Failed to place pending order: retcode={retcode}, comment={comment}")
+            return None
+    except Exception as e:
+        logging.exception(f"Exception placing pending order: {str(e)}")
+        return None
+
+
+@performance_monitor
+@safe_mt5_call
+def cancel_expired_pending_orders(magic=123456, mt5_module=None):
+    """
+    Cancel pending orders that have expired (older than 4 hours).
+    
+    Args:
+        magic: Magic number to filter orders
+        mt5_module: MT5 module instance
+    """
+    if mt5_module is None:
+        mt5_module = mt5
+    
+    # Get all pending orders
+    orders = mt5_module.orders_get()  # type: ignore
+    if not orders:
+        return
+    
+    # Current time for comparison
+    current_time = datetime.now().timestamp()
+    
+    for order in orders:
+        # Check if order matches our magic number
+        if getattr(order, 'magic', 0) == magic:
+            # Check if order has expiration time
+            expiration = getattr(order, 'expiration', 0)
+            if expiration > 0 and current_time > expiration:
+                # Cancel expired order
+                request = {
+                    'action': mt5_module.TRADE_ACTION_REMOVE,  # type: ignore
+                    'order': int(order.ticket),
+                    'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
+                    'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
+                }
+                
+                try:
+                    result = mt5_module.order_send(request)  # type: ignore
+                    if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+                        logging.info(f"Expired pending order {order.ticket} cancelled successfully")
+                    else:
+                        logging.warning(f"Failed to cancel expired pending order {order.ticket}")
+                except Exception as e:
+                    logging.exception(f"Exception cancelling expired pending order {order.ticket}: {str(e)}")
 
 
 @performance_monitor
