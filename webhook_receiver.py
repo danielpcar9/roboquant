@@ -15,6 +15,8 @@ from config_manager import config_manager
 
 # Import consolidated MT5 functions
 from mt5_core import initialize_mt5
+# Import ATR calculation function
+from donchian_strategy import calculate_atr
 
 # Configure logging
 logging.basicConfig(
@@ -60,8 +62,8 @@ def process_trade_signal(signal_data):
         symbol = signal_data.get('symbol', 'XAUUSD')
         order_type = signal_data.get('order_type', '').upper()
         volume = float(signal_data.get('volume', 0.01))
-        sl_points = float(signal_data.get('sl_points', 150))  # Updated default
-        tp_points = float(signal_data.get('tp_points', 300))  # Updated default
+        sl_points = float(signal_data.get('sl_points', 0))  # Use 0 to indicate ATR-based calculation
+        tp_points = float(signal_data.get('tp_points', 0))  # Use 0 to indicate ATR-based calculation
         magic = int(signal_data.get('magic', 234000))
         
         # Validate inputs
@@ -101,15 +103,40 @@ def process_trade_signal(signal_data):
             logging.error(f"Invalid price: {price}")
             return False
             
-        point = mt5.symbol_info(symbol).point  # type: ignore
+        symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        point = symbol_info.point if symbol_info else 0.01
         
         # Calculate SL and TP
-        if order_type == 'BUY':
-            sl = price - sl_points * point
-            tp = price + tp_points * point
-        else:  # SELL
-            sl = price + sl_points * point
-            tp = price - tp_points * point
+        if sl_points == 0 or tp_points == 0:
+            # Use ATR-based calculation
+            atr = calculate_atr(symbol) if symbol_info else 5.0  # Default ATR estimate
+            sl_multiplier = 3.0  # LOW RISK profile default
+            tp_multiplier = 6.0  # LOW RISK profile default
+            
+            if sl_points == 0:
+                sl_distance = sl_multiplier * atr
+            else:
+                sl_distance = sl_points * point
+                
+            if tp_points == 0:
+                tp_distance = tp_multiplier * atr
+            else:
+                tp_distance = tp_points * point
+                
+            if order_type == 'BUY':
+                sl = price - sl_distance
+                tp = price + tp_distance
+            else:  # SELL
+                sl = price + sl_distance
+                tp = price - tp_distance
+        else:
+            # Use fixed points
+            if order_type == 'BUY':
+                sl = price - sl_points * point
+                tp = price + tp_points * point
+            else:  # SELL
+                sl = price + sl_points * point
+                tp = price - tp_points * point
             
         # Validate calculated prices
         if not InputValidator.validate_price(sl) or not InputValidator.validate_price(tp):

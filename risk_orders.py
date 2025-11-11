@@ -14,6 +14,8 @@ from error_handler import handle_exception, retry_with_exponential_backoff, MT5C
 
 # Import consolidated MT5 functions
 from mt5_core import initialize_mt5
+# Import ATR calculation function
+from donchian_strategy import calculate_atr
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -54,10 +56,19 @@ def execute_risk_order():
     # Calcular entry y stops
     price = tick.ask if side == "BUY" else tick.bid
 
-    # Use more conservative SL/TP values for XAUUSD (in points)
+    # Use ATR-based SL/TP values for XAUUSD
     # XAUUSD typically needs wider stops due to higher volatility
-    sl_points = 200  # Increased from 150 to 200 points for SL
-    tp_points = 400  # Increased from 300 to 400 points for TP (2:1 ratio)
+    # Calculate ATR for dynamic stop placement
+    atr = calculate_atr(symbol, 14)  # 14-period ATR
+    if atr is None:
+        atr = 5.0  # Default ATR estimate
+    
+    # Use ATR multipliers (LOW RISK profile)
+    sl_multiplier = 3.0
+    tp_multiplier = 6.0
+    
+    sl_points = sl_multiplier * atr
+    tp_points = tp_multiplier * atr
 
     # Calculate SL/TP with proper direction
     if side == "BUY":

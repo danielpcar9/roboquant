@@ -226,14 +226,22 @@ def calculate_dynamic_stops(symbol, entry_price, order_type, atr):
     symbol_info = mt5.symbol_info(symbol)  # type: ignore
     if not symbol_info:
         logging.error(f"Failed to get symbol info for {symbol}")
-        # Fallback to fixed values
+        # Fallback to ATR-based values with default multipliers
         point = 0.01 if 'JPY' not in symbol else 0.001
+        # Use default ATR multipliers for fallback
+        sl_multiplier = 3.0  # LOW RISK profile default
+        tp_multiplier = 6.0  # LOW RISK profile default
+        # Estimate ATR if we can't get it
+        estimated_atr = 5.0  # Default ATR estimate
+        sl_distance = sl_multiplier * estimated_atr
+        tp_distance = tp_multiplier * estimated_atr
+        
         if order_type == "BUY":
-            sl_price = entry_price - (150 * point)
-            tp_price = entry_price + (300 * point)
+            sl_price = entry_price - (sl_distance * point)
+            tp_price = entry_price + (tp_distance * point)
         else:
-            sl_price = entry_price + (150 * point)
-            tp_price = entry_price - (300 * point)
+            sl_price = entry_price + (sl_distance * point)
+            tp_price = entry_price - (tp_distance * point)
         return sl_price, tp_price
     
     point = symbol_info.point

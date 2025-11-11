@@ -479,15 +479,25 @@ def monitor_and_update_stops(mt5_module=None):
             if pos.type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
                 side = "BUY"
                 entry_price = pos.price_open
-                # Set reasonable SL/TP based on config
-                sl_price = entry_price - (150 * mt5_module.symbol_info(symbol).point)  # type: ignore
-                tp_price = entry_price + (300 * mt5_module.symbol_info(symbol).point)  # type: ignore
+                # Set reasonable SL/TP based on config - using ATR multipliers
+                symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
+                point = symbol_info.point if symbol_info else 0.01
+                # Use default ATR multipliers (LOW RISK profile)
+                sl_distance = 3.0 * point  # 3.0 ATR multiplier
+                tp_distance = 6.0 * point  # 6.0 ATR multiplier
+                sl_price = entry_price - sl_distance
+                tp_price = entry_price + tp_distance
             else:
                 side = "SELL"
                 entry_price = pos.price_open
-                # Set reasonable SL/TP based on config
-                sl_price = entry_price + (150 * mt5_module.symbol_info(symbol).point)  # type: ignore
-                tp_price = entry_price - (300 * mt5_module.symbol_info(symbol).point)  # type: ignore
+                # Set reasonable SL/TP based on config - using ATR multipliers
+                symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
+                point = symbol_info.point if symbol_info else 0.01
+                # Use default ATR multipliers (LOW RISK profile)
+                sl_distance = 3.0 * point  # 3.0 ATR multiplier
+                tp_distance = 6.0 * point  # 6.0 ATR multiplier
+                sl_price = entry_price + sl_distance
+                tp_price = entry_price - tp_distance
             
             # Validate stops
             sl_price, tp_price = validate_and_adjust_stops(symbol, entry_price, sl_price, tp_price, side, mt5_module)
