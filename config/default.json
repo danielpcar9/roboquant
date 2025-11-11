@@ -3,7 +3,7 @@
     "risk_per_trade_pct": 1.0
   },
   "strategy": {
-    "donchian_period": 50
+    "donchian_period": 20
   },
   "trading_hours": {
     "start": 0,

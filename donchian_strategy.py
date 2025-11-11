@@ -538,8 +538,8 @@ def run_strategy(symbol="XAUUSD"):
         bullish_breakout = current_close > upper_channel
         bearish_breakout = current_close < lower_channel
     
-    # Reducir momentum_filter a 0.3x for more signals
-    momentum_filter = current_momentum > (historical_momentum * 0.3)
+    # Reducir momentum_filter a 0.1x for more signals
+    momentum_filter = current_momentum > (historical_momentum * 0.1)
     
     # Add volume confirmation
     volume_spike, vol_ratio = get_volume_breakout(symbol)

@@ -29,7 +29,7 @@ class ConfigManager:
         """Load all configuration parameters."""
         # Trading parameters
         self._config.update({
-            'DONCHIAN_PERIOD': int(os.getenv('DONCHIAN_PERIOD', '50')),
+            'DONCHIAN_PERIOD': int(os.getenv('DONCHIAN_PERIOD', '20')),
             'MOMENTUM_PERIOD': int(os.getenv('MOMENTUM_PERIOD', '40')),
             'SAMPLE_PERIOD': int(os.getenv('SAMPLE_PERIOD', '1000')),
             'RISK_PERCENT': float(os.getenv('RISK_PERCENT', '0.75')),  # FTMO 0.75% por trade
