@@ -15,5 +15,10 @@
   "performance": {
     "daily_loss_limit_pct": -8.0,
     "risk_reward_ratio": 1.5
+  },
+  "trading_parameters": {
+    "stop_loss_points": 250,
+    "take_profit_points": 500,
+    "breakout_threshold": 0.0
   }
 }

@@ -47,6 +47,7 @@ LOTS = config_manager.get('LOTS')
 STOP_LOSS_POINTS = config_manager.get('STOP_LOSS_POINTS')
 TAKE_PROFIT_POINTS = config_manager.get('TAKE_PROFIT_POINTS')
 TIMEFRAME_NAME = config_manager.get('TIMEFRAME')
+BREAKOUT_THRESHOLD = config_manager.get('BREAKOUT_THRESHOLD')  # New breakout parameter
 
 # Convert timeframe name to MT5 constant
 TIMEFRAME_MAP = {
@@ -483,8 +484,8 @@ def run_strategy(symbol="XAUUSD"):
         logging.error("Failed to get current tick data")
         return
     
-    # Use last price for analysis (real market price) - FIXED FOR FTMO
-    current_close = tick.last
+    # Use bid price for analysis (real market price) - FIXED FOR FTMO
+    current_close = tick.bid
     logging.info(f"Current close price (bid): {current_close}")
     logging.info(f"Upper channel: {upper_channel}, Lower channel: {lower_channel}")
     
@@ -505,8 +506,16 @@ def run_strategy(symbol="XAUUSD"):
     volume_spike = current_volume and avg_volume and current_volume > avg_volume * EVENT_VOLUME_SPIKE_FACTOR
     
     # Check for breakout conditions
-    bullish_breakout = current_close > upper_channel
-    bearish_breakout = current_close < lower_channel
+    # Enhanced breakout detection with configurable threshold
+    if BREAKOUT_THRESHOLD > 0:
+        # Use threshold for stronger breakout confirmation
+        bullish_breakout = current_close > (upper_channel + (BREAKOUT_THRESHOLD * atr))
+        bearish_breakout = current_close < (lower_channel - (BREAKOUT_THRESHOLD * atr))
+    else:
+        # Standard breakout detection
+        bullish_breakout = current_close > upper_channel
+        bearish_breakout = current_close < lower_channel
+    
     # Reducir momentum_filter a 0.3x for more signals
     momentum_filter = current_momentum > (historical_momentum * 0.3)
     

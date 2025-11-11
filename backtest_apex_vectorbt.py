@@ -66,14 +66,15 @@ def load_data(symbol="XAUUSD", timeframe="H1", days_back=1825):
 
 
 def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1000, 
-                     sl_points=150, tp_points=300):
+                     sl_points=250, tp_points=500, breakout_threshold=0.0):
     """
     Genera señales de entrada + SL/TP para backtest
     
     Usa parámetros OPTIMIZADOS para oro:
     - Donchian: 50 (aumentado de 20)
-    - SL: 150 puntos (aumentado de 50 - CRÍTICO)
-    - TP: 300 puntos (mantiene ratio 1:2)
+    - SL: 250 puntos (aumentado de 150 - CRÍTICO)
+    - TP: 500 puntos (mantiene ratio 1:2)
+    - Breakout Threshold: 0.0 (sin umbral adicional)
     
     Args:
         df: DataFrame con OHLC
@@ -82,6 +83,7 @@ def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1
         sample_period: Periodo momentum histórico
         sl_points: Stop Loss en puntos (1 punto = $0.01 para oro)
         tp_points: Take Profit en puntos
+        breakout_threshold: Umbral adicional para confirmación de breakout (en múltiplos de ATR)
     
     Returns:
         DataFrame con señales y stops
@@ -90,7 +92,7 @@ def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1
     
     logging.info(f"📊 Generando señales con parámetros:")
     logging.info(f"   Donchian: {donchian_period} | Momentum: {momentum_period}/{sample_period}")
-    logging.info(f"   SL: {sl_points} pts | TP: {tp_points} pts")
+    logging.info(f"   SL: {sl_points} pts | TP: {tp_points} pts | Breakout Threshold: {breakout_threshold}")
     
     # 1. DONCHIAN CHANNELS - Usar función nativa (10x más rápida)
     try:
@@ -141,8 +143,8 @@ def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1
 
 
 def run_backtest(df, initial_capital=10000, lot_size=0.01, 
-                 donchian_period=30, momentum_period=20, sample_period=500,
-                 sl_points=150, tp_points=300):
+                 donchian_period=50, momentum_period=40, sample_period=1000,
+                 sl_points=250, tp_points=500, breakout_threshold=0.0):
     """
     Ejecuta backtest con VectorBT
     
@@ -155,6 +157,7 @@ def run_backtest(df, initial_capital=10000, lot_size=0.01,
         sample_period: Periodo momentum largo
         sl_points: Stop Loss en puntos
         tp_points: Take Profit en puntos
+        breakout_threshold: Umbral adicional para confirmación de breakout (en múltiplos de ATR)
     
     Returns:
         Portfolio object de vectorbt o None si error

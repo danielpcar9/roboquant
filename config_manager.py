@@ -35,13 +35,14 @@ class ConfigManager:
             'RISK_PERCENT': float(os.getenv('RISK_PERCENT', '0.75')),  # FTMO 0.75% por trade
             'USE_RISK_MANAGEMENT': os.getenv('USE_RISK_MANAGEMENT', 'True').lower() == 'true',
             'LOTS': float(os.getenv('LOTS', '0.01')),
-            'STOP_LOSS_POINTS': int(os.getenv('STOP_LOSS_POINTS', '150')),
-            'TAKE_PROFIT_POINTS': int(os.getenv('TAKE_PROFIT_POINTS', '300')),
+            'STOP_LOSS_POINTS': int(os.getenv('STOP_LOSS_POINTS', '250')),
+            'TAKE_PROFIT_POINTS': int(os.getenv('TAKE_PROFIT_POINTS', '500')),
             'MAX_SPREAD_POINTS': int(os.getenv('MAX_SPREAD_POINTS', '150')),
             'TRADING_HOUR_START': int(os.getenv('TRADING_HOUR_START', '0')),  # Extended hours 0-23
             'TRADING_HOUR_END': int(os.getenv('TRADING_HOUR_END', '23')),
             'MAGIC_NUMBER': int(os.getenv('MAGIC_NUMBER', '123456')),
             'TIMEFRAME': os.getenv('TIMEFRAME', 'M5'),
+            'BREAKOUT_THRESHOLD': float(os.getenv('BREAKOUT_THRESHOLD', '0.0')),  # Additional threshold for breakout confirmation
             
             # Event-driven trading parameters
             'EVENT_WAIT_CANDLES': int(os.getenv('EVENT_WAIT_CANDLES', '3')),
