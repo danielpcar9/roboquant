@@ -443,9 +443,11 @@ def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
         logging.warning(f"Invalid point or SL distance for {symbol}, using default lot size")
         return LOTS
     
-    # Calculate lots: risk_amount / (sl_distance_points * point_value)
-    sl_distance_points = sl_distance / point
-    lots = risk_amount / (sl_distance_points * point_value)
+    # Calculate lots: risk_amount / (sl_distance * point_value)
+    # For XAU/USD: sl_distance is already in price points, point_value is contract size (100 oz)
+    # Risk per lot = sl_distance * point_value = points * ($ per point per lot)
+    # So lots = risk_amount / (sl_distance * point_value)
+    lots = risk_amount / (sl_distance * point_value)
     
     # Ensure minimum lot size
     min_lot = symbol_info.volume_min
@@ -458,7 +460,7 @@ def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     # Normalize to broker requirements
     lots = normalize_volume(symbol, lots)
     
-    logging.debug(f"Computed lots for {symbol}: {lots:.2f} (risk: {risk_amount:.2f}, SL: {sl_distance_points:.1f} points)")
+    logging.debug(f"Computed lots for {symbol}: {lots:.2f} (risk: {risk_amount:.2f}, SL: {sl_distance:.1f} points)")
     return lots
 
 @handle_exception
