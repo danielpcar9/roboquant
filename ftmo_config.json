@@ -1,8 +1,8 @@
 {
   "midnight_balance": 10022.85,
   "initial_balance": 10033.56,
-  "trading_days": 50,
-  "last_reset_date": "2025-11-11",
+  "trading_days": 51,
+  "last_reset_date": "2025-11-12",
   "daily_losses": {},
   "trading_blocked_until": null
 }

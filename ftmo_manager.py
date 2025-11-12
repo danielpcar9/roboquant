@@ -180,15 +180,16 @@ class FTMOManager:
         if metrics['trading_days'] < metrics['min_trading_days']:
             return False, f"Minimum trading days not met: {metrics['trading_days']} < {metrics['min_trading_days']}"
         
-        # Check spread - REMOVED as per user request
-        # tick = mt5.symbol_info_tick(symbol)  # type: ignore
-        # if tick:
-        #     symbol_info = mt5.symbol_info(symbol)  # type: ignore
-        #     if symbol_info:
-        #         point = symbol_info.point
-        #         spread_points = (tick.ask - tick.bid) / point if point > 0 else 0
-        #         if spread_points > 50:  # 50 points max spread
-        #             return False, f"Spread too high: {spread_points:.1f} points > 50 points"
+        # Check spread
+        tick = mt5.symbol_info_tick(symbol)  # type: ignore
+        if tick:
+            symbol_info = mt5.symbol_info(symbol)  # type: ignore
+            if symbol_info:
+                point = symbol_info.point
+                spread_points = (tick.ask - tick.bid) / point if point > 0 else 0
+                max_spread_points = config_manager.get('MAX_SPREAD_POINTS', 300)
+                if spread_points > max_spread_points:
+                    return False, f"Spread too high: {spread_points:.1f} points > {max_spread_points} points"
         
         return True, None
     
