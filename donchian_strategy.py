@@ -937,7 +937,10 @@ def run_strategy(symbol="XAUUSD"):
     positions = mt5.positions_get(symbol=symbol)  # type: ignore
     
     # Get max positions from config, default to 2 if not specified
-    max_positions = cfg.get('position_limits.max_positions', 2)
+    try:
+        max_positions = cfg.get('position_limits.max_positions', 2)
+    except:
+        max_positions = 2
     
     if positions:
         # Count positions by direction
