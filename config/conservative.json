@@ -20,5 +20,17 @@
   },
   "trading_parameters": {
     "breakout_threshold": 0.5
+  },
+  "trailing": {
+    "enabled": true,
+    "start_pips": 10,
+    "distance_pips": 15,
+    "break_even_enabled": true
+  },
+  "news_filter": {
+    "enabled": true,
+    "major_events_only": true,
+    "avoid_events": ["NFP", "CPI", "PPI", "FOMC"],
+    "buffer_minutes": 30
   }
 }

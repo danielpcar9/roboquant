@@ -23,6 +23,8 @@ from config_manager import config_manager
 from set_file_manager import get_set_manager
 # Import error handler
 from error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
+# Import news filter
+from news_filter import news_filter
 
 # Import consolidated performance monitoring
 from mt5_core import strategy_performance_monitor as performance_monitor
@@ -100,6 +102,20 @@ MAX_SPREAD_POINTS = config_manager.get('MAX_SPREAD_POINTS')
 # Performance monitoring
 STRATEGY_PERFORMANCE_MONITORING = True
 strategy_execution_times = []
+
+# Session tracking for breakout strategy
+session_pending_orders = {}  # Track pending orders by session
+last_session = None  # Track the last session
+
+# Load news filter configuration
+try:
+    cfg = get_set_manager()
+    set_file = os.getenv('ROBOQUANT_SET_FILE', 'default.json')
+    if set_file:
+        cfg.load_set_file(set_file)
+        news_filter.load_config(cfg.current_config)
+except Exception as e:
+    logging.warning(f"Failed to load news filter configuration: {e}")
 
 # performance_monitor function removed - using consolidated version from mt5_core.py
 
@@ -228,6 +244,9 @@ def calculate_dynamic_stops(symbol, entry_price, order_type, atr):
         logging.error(f"Failed to get symbol info for {symbol}")
         # Fallback to ATR-based values with default multipliers
         point = 0.01 if 'JPY' not in symbol else 0.001
+        # For NASDAQ, adjust point value
+        if 'NASDAQ' in symbol.upper():
+            point = 0.01  # NASDAQ typically uses 0.01 point increments
         # Use default ATR multipliers for fallback
         sl_multiplier = 3.0  # LOW RISK profile default
         tp_multiplier = 6.0  # LOW RISK profile default
@@ -245,6 +264,10 @@ def calculate_dynamic_stops(symbol, entry_price, order_type, atr):
         return sl_price, tp_price
     
     point = symbol_info.point
+    
+    # Adjust point value for NASDAQ
+    if 'NASDAQ' in symbol.upper():
+        point = 0.01  # NASDAQ typically uses 0.01 point increments
     
     # Determine if we're using LOW RISK (default) or HIGH RISK (aggressive) profile
     # Based on the risk_per_trade_pct in the current configuration
@@ -300,6 +323,9 @@ def get_current_spread(symbol):
         return None
     
     point = symbol_info.point
+    # Adjust point value for NASDAQ
+    if 'NASDAQ' in symbol.upper():
+        point = 0.01  # NASDAQ typically uses 0.01 point increments
     spread_points = (tick.ask - tick.bid) / point if point > 0 else 0
     logging.debug(f"Spread for {symbol}: {spread_points:.2f} points")
     return spread_points
@@ -545,14 +571,311 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
 
 @handle_exception
 @performance_monitor
+def get_current_session():
+    """
+    Get current trading session based on UTC time
+    
+    Sessions:
+    - Asia: 00:00-09:00 UTC
+    - London: 08:00-17:00 UTC
+    - New York: 13:00-22:00 UTC
+    
+    Returns:
+        str: Current session name or None if no session
+    """
+    now = datetime.now(timezone.utc)
+    current_hour = now.hour
+    current_minute = now.minute
+    
+    # Convert to total minutes for easier comparison
+    total_minutes = current_hour * 60 + current_minute
+    
+    # Define session time ranges in minutes (UTC)
+    asia_start = 0 * 60      # 00:00 UTC
+    asia_end = 9 * 60        # 09:00 UTC
+    london_start = 8 * 60    # 08:00 UTC
+    london_end = 17 * 60     # 17:00 UTC
+    ny_start = 13 * 60       # 13:00 UTC
+    ny_end = 22 * 60         # 22:00 UTC
+    
+    # Check which session we're in
+    if asia_start <= total_minutes < asia_end:
+        return "Asia"
+    elif london_start <= total_minutes < london_end:
+        return "London"
+    elif ny_start <= total_minutes < ny_end:
+        return "NewYork"
+    else:
+        return None  # Outside all sessions
+
+
+@handle_exception
+@performance_monitor
+def get_session_high_low(symbol, session_name, days_back=1):
+    """
+    Get the high/low of the previous session
+    
+    Args:
+        symbol: Trading symbol
+        session_name: Session name ("Asia", "London", "NewYork")
+        days_back: How many days back to look for session (default 1)
+        
+    Returns:
+        tuple: (session_high, session_low) or (None, None) if failed
+    """
+    # Define session time ranges in UTC
+    session_times = {
+        "Asia": {"start_hour": 0, "end_hour": 9},
+        "London": {"start_hour": 8, "end_hour": 17},
+        "NewYork": {"start_hour": 13, "end_hour": 22}
+    }
+    
+    if session_name not in session_times:
+        logging.error(f"Unknown session: {session_name}")
+        return None, None
+    
+    session_info = session_times[session_name]
+    
+    # Calculate the date for the session we want to analyze
+    now = datetime.now(timezone.utc)
+    target_date = now - timedelta(days=days_back)
+    
+    # Create datetime objects for session start and end
+    session_start = target_date.replace(
+        hour=session_info["start_hour"], 
+        minute=0, 
+        second=0, 
+        microsecond=0
+    )
+    session_end = target_date.replace(
+        hour=session_info["end_hour"], 
+        minute=0, 
+        second=0, 
+        microsecond=0
+    )
+    
+    # Convert to timestamps for MT5
+    from_ts = int(session_start.timestamp())
+    to_ts = int(session_end.timestamp())
+    
+    # Get rates for the session
+    rates = mt5.copy_rates_range(symbol, TIMEFRAME, from_ts, to_ts)  # type: ignore
+    if rates is None or len(rates) == 0:
+        logging.warning(f"Failed to get rate data for {session_name} session on {target_date.date()}")
+        return None, None
+    
+    # Calculate high and low
+    session_high = max([rate['high'] for rate in rates])
+    session_low = min([rate['low'] for rate in rates])
+    
+    logging.debug(f"{session_name} session {target_date.date()}: High={session_high:.5f}, Low={session_low:.5f}")
+    return session_high, session_low
+
+
+@handle_exception
+@performance_monitor
+def place_session_breakout_orders(symbol, session_name):
+    """
+    Place breakout orders based on previous session high/low
+    
+    Args:
+        symbol: Trading symbol
+        session_name: Session name ("Asia", "London", "NewYork")
+    """
+    global session_pending_orders
+    
+    # Get session high/low from previous day
+    session_high, session_low = get_session_high_low(symbol, session_name, days_back=1)
+    
+    if session_high is None or session_low is None:
+        logging.warning(f"Failed to get {session_name} session high/low, skipping breakout orders")
+        return False
+    
+    # Get symbol info for point value
+    symbol_info = mt5.symbol_info(symbol)  # type: ignore
+    if not symbol_info:
+        logging.error(f"Failed to get symbol info for {symbol}")
+        return False
+    
+    point = symbol_info.point
+    
+    # Adjust point value for NASDAQ
+    if 'NASDAQ' in symbol.upper():
+        point = 0.01  # NASDAQ typically uses 0.01 point increments
+    
+    # Calculate pending order prices (10 pips above/below session high/low)
+    # For XAU/USD, 1 pip = 0.1 points, so 10 pips = 1 point
+    pip_value = point * 10  # Standard pip calculation
+    breakout_distance = 10 * pip_value  # 10 pips
+    
+    buy_price = session_high + breakout_distance
+    sell_price = session_low - breakout_distance
+    
+    # Calculate dynamic SL/TP using ATR
+    atr = calculate_atr(symbol, 14)
+    if atr is None:
+        atr = 5.0  # Default fallback
+    
+    # Calculate SL/TP distances based on ATR
+    sl_distance = 3.0 * atr  # Using default LOW RISK profile
+    tp_distance = 6.0 * atr
+    
+    # Calculate SL/TP for buy order
+    buy_sl = buy_price - sl_distance
+    buy_tp = buy_price + tp_distance
+    
+    # Calculate SL/TP for sell order
+    sell_sl = sell_price + sl_distance
+    sell_tp = sell_price - tp_distance
+    
+    # Place buy stop order
+    buy_result = place_pending_order(
+        symbol=symbol,
+        order_type="BUY_STOP",
+        volume=LOTS,
+        price=buy_price,
+        sl=buy_sl,
+        tp=buy_tp,
+        magic=MAGIC_NUMBER,
+        expiration_hours=4  # Expire after 4 hours
+    )
+    
+    # Place sell stop order
+    sell_result = place_pending_order(
+        symbol=symbol,
+        order_type="SELL_STOP",
+        volume=LOTS,
+        price=sell_price,
+        sl=sell_sl,
+        tp=sell_tp,
+        magic=MAGIC_NUMBER,
+        expiration_hours=4  # Expire after 4 hours
+    )
+    
+    # Track pending orders by session
+    if buy_result or sell_result:
+        session_pending_orders[session_name] = {
+            "buy_order": buy_result.order if buy_result else None,
+            "sell_order": sell_result.order if sell_result else None,
+            "timestamp": datetime.now(timezone.utc)
+        }
+        logging.info(f"Placed session breakout orders for {session_name}: BUY @ {buy_price:.5f}, SELL @ {sell_price:.5f}")
+        return True
+    else:
+        logging.error(f"Failed to place session breakout orders for {session_name}")
+        return False
+
+
+@handle_exception
+@performance_monitor
+def cancel_session_orders(session_name):
+    """
+    Cancel pending orders for a specific session
+    
+    Args:
+        session_name: Session name ("Asia", "London", "NewYork")
+    """
+    global session_pending_orders
+    
+    if session_name not in session_pending_orders:
+        logging.debug(f"No pending orders found for session {session_name}")
+        return True
+    
+    session_orders = session_pending_orders[session_name]
+    
+    # Cancel buy order if it exists
+    if session_orders.get("buy_order"):
+        try:
+            # Prepare cancel request
+            request = {
+                'action': mt5.TRADE_ACTION_REMOVE,  # type: ignore
+                'order': int(session_orders["buy_order"]),
+                'type_time': mt5.ORDER_TIME_GTC,  # type: ignore
+                'type_filling': mt5.ORDER_FILLING_FOK  # type: ignore
+            }
+            
+            result = mt5.order_send(request)  # type: ignore
+            if result and getattr(result, 'retcode', None) == mt5.TRADE_RETCODE_DONE:  # type: ignore
+                logging.info(f"Cancelled buy order {session_orders['buy_order']} for session {session_name}")
+            else:
+                logging.warning(f"Failed to cancel buy order {session_orders['buy_order']} for session {session_name}")
+        except Exception as e:
+            logging.error(f"Error cancelling buy order for session {session_name}: {e}")
+    
+    # Cancel sell order if it exists
+    if session_orders.get("sell_order"):
+        try:
+            # Prepare cancel request
+            request = {
+                'action': mt5.TRADE_ACTION_REMOVE,  # type: ignore
+                'order': int(session_orders["sell_order"]),
+                'type_time': mt5.ORDER_TIME_GTC,  # type: ignore
+                'type_filling': mt5.ORDER_FILLING_FOK  # type: ignore
+            }
+            
+            result = mt5.order_send(request)  # type: ignore
+            if result and getattr(result, 'retcode', None) == mt5.TRADE_RETCODE_DONE:  # type: ignore
+                logging.info(f"Cancelled sell order {session_orders['sell_order']} for session {session_name}")
+            else:
+                logging.warning(f"Failed to cancel sell order {session_orders['sell_order']} for session {session_name}")
+        except Exception as e:
+            logging.error(f"Error cancelling sell order for session {session_name}: {e}")
+    
+    # Remove from tracking
+    del session_pending_orders[session_name]
+    logging.info(f"Cancelled all pending orders for session {session_name}")
+    return True
+
+
+@handle_exception
+@performance_monitor
+def check_existing_session_orders(session_name):
+    """
+    Check if there are already pending orders for a session
+    
+    Args:
+        session_name: Session name ("Asia", "London", "NewYork")
+        
+    Returns:
+        bool: True if orders exist, False otherwise
+    """
+    global session_pending_orders
+    
+    # Check our tracking dictionary
+    if session_name in session_pending_orders:
+        session_orders = session_pending_orders[session_name]
+        # Check if orders are still active
+        if session_orders.get("buy_order") or session_orders.get("sell_order"):
+            # Verify with MT5 that orders still exist
+            orders = mt5.orders_get()  # type: ignore
+            if orders:
+                for order in orders:
+                    if (getattr(order, 'magic', 0) == MAGIC_NUMBER and 
+                        (order.ticket == session_orders.get("buy_order") or 
+                         order.ticket == session_orders.get("sell_order"))):
+                        return True
+            # If we get here, orders may have been filled or cancelled
+            del session_pending_orders[session_name]
+    
+    return False
+
+
+@handle_exception
+@performance_monitor
 def run_strategy(symbol="XAUUSD"):
     """Main strategy function with pending orders"""
+    global last_session, session_pending_orders
     
     logging.info(f"Running strategy for symbol: {symbol}")
     
     # Check if we're in trading hours
     if not in_trading_hours():
         logging.info("Outside trading hours")
+        return
+    
+    # Check for news events that might affect trading
+    if news_filter.is_news_time():
+        logging.info("News event detected, skipping trade execution")
         return
     
     # Check spread first
@@ -575,6 +898,28 @@ def run_strategy(symbol="XAUUSD"):
         logging.info("Position already open, skipping")
         return
     
+    # SESSION BREAKOUT LOGIC
+    # Get current session
+    current_session = get_current_session()
+    
+    # Check if we're at the start of a new session
+    if current_session and current_session != last_session:
+        logging.info(f"New session started: {current_session}")
+        
+        # Cancel previous session orders if they exist
+        if last_session and last_session in session_pending_orders:
+            cancel_session_orders(last_session)
+        
+        # Check if we already have session orders for this session
+        if not check_existing_session_orders(current_session):
+            # Place new session breakout orders
+            place_session_breakout_orders(symbol, current_session)
+        
+        # Update last session
+        last_session = current_session
+        return  # Skip Donchian strategy for now since we placed session orders
+    
+    # Continue with existing Donchian strategy logic if no session change
     # Check for existing pending orders
     orders = mt5.orders_get(symbol=symbol)  # type: ignore
     pending_orders = [order for order in orders if getattr(order, 'magic', 0) == MAGIC_NUMBER] if orders else []
@@ -711,7 +1056,7 @@ def main():
         return
     
     # Select symbol
-    symbol = "XAUUSD"
+    symbol = os.getenv('TRADING_SYMBOL', 'XAUUSD')
     logging.info(f"Selecting symbol: {symbol}")
     if not mt5.symbol_select(symbol, True):  # type: ignore
         logging.error(f"Failed to select symbol {symbol}")
@@ -803,7 +1148,11 @@ def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
     rates = mt5.copy_rates_from_pos(symbol, TIMEFRAME, 1, 50)  # type: ignore
     if rates is None or len(rates) < 20:
         # Fallback to fixed TP if not enough data
-        point = mt5.symbol_info(symbol).point  # type: ignore
+        symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        point = symbol_info.point if symbol_info else 0.01
+        # Adjust point value for NASDAQ
+        if 'NASDAQ' in symbol.upper():
+            point = 0.01  # NASDAQ typically uses 0.01 point increments
         if order_type == "BUY":
             return entry_price + (300 * point)  # 300 points for BUY
         else:
@@ -836,7 +1185,11 @@ def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
         if atr is not None:
             # Use 1.5x ATR as TP distance (more aggressive for intraday)
             tp_distance = atr * 1.5
-            point = mt5.symbol_info(symbol).point  # type: ignore
+            symbol_info = mt5.symbol_info(symbol)  # type: ignore
+            point = symbol_info.point if symbol_info else 0.01
+            # Adjust point value for NASDAQ
+            if 'NASDAQ' in symbol.upper():
+                point = 0.01  # NASDAQ typically uses 0.01 point increments
             tp_points = tp_distance / point
             if order_type == "BUY":
                 tp_level = entry_price + (tp_points * point)
@@ -844,7 +1197,11 @@ def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
                 tp_level = entry_price - (tp_points * point)
         else:
             # Fallback to fixed TP
-            point = mt5.symbol_info(symbol).point  # type: ignore
+            symbol_info = mt5.symbol_info(symbol)  # type: ignore
+            point = symbol_info.point if symbol_info else 0.01
+            # Adjust point value for NASDAQ
+            if 'NASDAQ' in symbol.upper():
+                point = 0.01  # NASDAQ typically uses 0.01 point increments
             if order_type == "BUY":
                 tp_level = entry_price + (300 * point)
             else:
@@ -972,9 +1329,6 @@ def calculate_candle_atr(candles, index):
     tr3 = abs(candle['low'] - prev_candle['close'])
     
     return max(tr1, tr2, tr3)
-
-
-# ... existing code ...
 
 
 if __name__ == "__main__":

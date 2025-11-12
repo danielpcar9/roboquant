@@ -26,5 +26,11 @@
     "start_pips": 10,
     "distance_pips": 10,
     "break_even_enabled": false
+  },
+  "news_filter": {
+    "enabled": true,
+    "major_events_only": true,
+    "avoid_events": ["NFP", "CPI", "PPI", "FOMC"],
+    "buffer_minutes": 30
   }
 }

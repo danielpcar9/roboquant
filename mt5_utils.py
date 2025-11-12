@@ -48,6 +48,9 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
         return 0.01
     
     point = sym_info.point
+    # Adjust point value for NASDAQ
+    if 'NASDAQ' in symbol.upper():
+        point = 0.01  # NASDAQ typically uses 0.01 point increments
     volume_min = sym_info.volume_min
     
     stop_distance_points = abs(entry_price - stop_price) / point
@@ -444,6 +447,137 @@ def cancel_expired_pending_orders(magic=123456, mt5_module=None):
 
 @performance_monitor
 @safe_mt5_call
+@retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
+def update_trailing_stops(mt5_module=None):
+    """
+    Update trailing stops for all open positions based on configuration.
+    Implements smarter trade management with break-even and trailing stops.
+    
+    Default settings:
+    - Volatility feature off
+    - Trailing start at 10 pips
+    - Trailing distance at 15 pips
+    - Trailing mode enabled by default
+    
+    Configuration can be overridden via set files in the "trailing" section.
+    """
+    if mt5_module is None:
+        mt5_module = mt5
+    
+    # Get all open positions
+    positions = mt5_module.positions_get()  # type: ignore
+    if not positions:
+        return
+    
+    # Get set file configuration for trailing stops
+    try:
+        from set_file_manager import get_set_manager
+        cfg = get_set_manager()
+        # Get trailing stop configuration with defaults
+        trailing_enabled = cfg.get('trailing.enabled', True)
+        trailing_start_pips = cfg.get('trailing.start_pips', 10)
+        trailing_distance_pips = cfg.get('trailing.distance_pips', 15)
+        break_even_enabled = cfg.get('trailing.break_even_enabled', True)
+    except Exception as e:
+        # Use default values if configuration cannot be loaded
+        trailing_enabled = True
+        trailing_start_pips = 10
+        trailing_distance_pips = 15
+        break_even_enabled = True
+        logging.debug(f"Using default trailing stop settings: {e}")
+    
+    # If trailing stops are disabled, exit early
+    if not trailing_enabled:
+        return
+    
+    logging.debug(f"Trailing stops update - Enabled: {trailing_enabled}, Start: {trailing_start_pips} pips, Distance: {trailing_distance_pips} pips, BE: {break_even_enabled}")
+    
+    for pos in positions:
+        try:
+            symbol = pos.symbol
+            ticket = pos.ticket
+            profit = pos.profit
+            price_open = pos.price_open
+            sl = pos.sl
+            order_type = pos.type
+            
+            # Get symbol information for point value
+            symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
+            if not symbol_info:
+                logging.warning(f"Could not get symbol info for {symbol}")
+                continue
+                
+            point = symbol_info.point
+            # Adjust point value for NASDAQ
+            if 'NASDAQ' in symbol.upper():
+                point = 0.01  # NASDAQ typically uses 0.01 point increments
+            digits = symbol_info.digits
+            
+            # Convert pips to price units
+            pip_value = point * 10  # Standard pip calculation
+            trailing_start_price = trailing_start_pips * pip_value
+            trailing_distance_price = trailing_distance_pips * pip_value
+            
+            # Calculate current profit in price units
+            if order_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
+                current_price = mt5_module.symbol_info_tick(symbol).bid  # type: ignore
+                profit_price = current_price - price_open
+            else:  # SELL
+                current_price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
+                profit_price = price_open - current_price
+            
+            # Check if profit exceeds trailing start threshold
+            if profit_price >= trailing_start_price:
+                # Calculate new stop loss level based on trailing distance
+                if order_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
+                    new_sl = current_price - trailing_distance_price
+                    # For break-even, ensure SL is at least at entry price
+                    if break_even_enabled and new_sl < price_open:
+                        new_sl = price_open
+                else:  # SELL
+                    new_sl = current_price + trailing_distance_price
+                    # For break-even, ensure SL is at least at entry price
+                    if break_even_enabled and new_sl > price_open:
+                        new_sl = price_open
+                
+                # Only update if new SL is better than current SL
+                should_update = False
+                if order_type == mt5_module.POSITION_TYPE_BUY and (sl == 0 or new_sl > sl):  # type: ignore
+                    should_update = True
+                elif order_type == mt5_module.POSITION_TYPE_SELL and (sl == 0 or new_sl < sl):  # type: ignore
+                    should_update = True
+                
+                if should_update:
+                    # Prepare modification request
+                    request = {
+                        'action': mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+                        'symbol': symbol,
+                        'position': int(ticket),
+                        'sl': round(new_sl, digits),
+                        'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
+                        'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
+                    }
+                    
+                    # Send modification request
+                    try:
+                        result = mt5_module.order_send(request)  # type: ignore
+                        if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+                            logging.info(f"Trailing stop updated for position {ticket}: SL moved to {new_sl:.{digits}f}")
+                        else:
+                            retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
+                            comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
+                            logging.warning(f"Failed to update trailing stop for position {ticket}: retcode={retcode}, comment={comment}")
+                    except Exception as e:
+                        logging.exception(f"Exception updating trailing stop for position {ticket}: {str(e)}")
+            else:
+                logging.debug(f"Position {ticket} profit ({profit_price/point:.1f} pips) below trailing start threshold ({trailing_start_pips} pips)")
+                
+        except Exception as e:
+            logging.exception(f"Error processing position {pos.ticket if hasattr(pos, 'ticket') else 'unknown'}: {str(e)}")
+            continue
+
+@performance_monitor
+@safe_mt5_call
 def monitor_and_update_stops(mt5_module=None):
     """
     Monitor open positions and add SL/TP if missing.
@@ -482,6 +616,9 @@ def monitor_and_update_stops(mt5_module=None):
                 # Set reasonable SL/TP based on config - using ATR multipliers
                 symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
                 point = symbol_info.point if symbol_info else 0.01
+                # Adjust point value for NASDAQ
+                if 'NASDAQ' in symbol.upper():
+                    point = 0.01  # NASDAQ typically uses 0.01 point increments
                 # Use default ATR multipliers (LOW RISK profile)
                 sl_distance = 3.0 * point  # 3.0 ATR multiplier
                 tp_distance = 6.0 * point  # 6.0 ATR multiplier
@@ -493,6 +630,9 @@ def monitor_and_update_stops(mt5_module=None):
                 # Set reasonable SL/TP based on config - using ATR multipliers
                 symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
                 point = symbol_info.point if symbol_info else 0.01
+                # Adjust point value for NASDAQ
+                if 'NASDAQ' in symbol.upper():
+                    point = 0.01  # NASDAQ typically uses 0.01 point increments
                 # Use default ATR multipliers (LOW RISK profile)
                 sl_distance = 3.0 * point  # 3.0 ATR multiplier
                 tp_distance = 6.0 * point  # 6.0 ATR multiplier
