@@ -613,7 +613,7 @@ def get_current_session():
 @performance_monitor
 def get_session_high_low(symbol, session_name, days_back=1):
     """
-    Get the high/low of the previous session
+    Get the high/low of the previous session with fallback mechanism
     
     Args:
         symbol: Trading symbol
@@ -636,40 +636,46 @@ def get_session_high_low(symbol, session_name, days_back=1):
     
     session_info = session_times[session_name]
     
-    # Calculate the date for the session we want to analyze
-    now = datetime.now(timezone.utc)
-    target_date = now - timedelta(days=days_back)
+    # Try up to 3 days back if initial lookup fails
+    max_days_back = min(3, days_back + 2)  # Up to 3 days back total
     
-    # Create datetime objects for session start and end
-    session_start = target_date.replace(
-        hour=session_info["start_hour"], 
-        minute=0, 
-        second=0, 
-        microsecond=0
-    )
-    session_end = target_date.replace(
-        hour=session_info["end_hour"], 
-        minute=0, 
-        second=0, 
-        microsecond=0
-    )
+    for days in range(days_back, max_days_back + 1):
+        # Calculate the date for the session we want to analyze
+        now = datetime.now(timezone.utc)
+        target_date = now - timedelta(days=days)
+        
+        # Create datetime objects for session start and end
+        session_start = target_date.replace(
+            hour=session_info["start_hour"], 
+            minute=0, 
+            second=0, 
+            microsecond=0
+        )
+        session_end = target_date.replace(
+            hour=session_info["end_hour"], 
+            minute=0, 
+            second=0, 
+            microsecond=0
+        )
+        
+        # Convert to timestamps for MT5
+        from_ts = int(session_start.timestamp())
+        to_ts = int(session_end.timestamp())
+        
+        # Get rates for the session
+        rates = mt5.copy_rates_range(symbol, TIMEFRAME, from_ts, to_ts)  # type: ignore
+        if rates is not None and len(rates) > 0:
+            # Calculate high and low
+            session_high = max([rate['high'] for rate in rates])
+            session_low = min([rate['low'] for rate in rates])
+            
+            logging.debug(f"{session_name} session {target_date.date()}: High={session_high:.5f}, Low={session_low:.5f}")
+            return session_high, session_low
+        else:
+            logging.warning(f"Failed to get rate data for {session_name} session on {target_date.date()}, trying {days+1} days back")
     
-    # Convert to timestamps for MT5
-    from_ts = int(session_start.timestamp())
-    to_ts = int(session_end.timestamp())
-    
-    # Get rates for the session
-    rates = mt5.copy_rates_range(symbol, TIMEFRAME, from_ts, to_ts)  # type: ignore
-    if rates is None or len(rates) == 0:
-        logging.warning(f"Failed to get rate data for {session_name} session on {target_date.date()}")
-        return None, None
-    
-    # Calculate high and low
-    session_high = max([rate['high'] for rate in rates])
-    session_low = min([rate['low'] for rate in rates])
-    
-    logging.debug(f"{session_name} session {target_date.date()}: High={session_high:.5f}, Low={session_low:.5f}")
-    return session_high, session_low
+    logging.error(f"Failed to get rate data for {session_name} session after trying up to {max_days_back} days back")
+    return None, None
 
 
 @handle_exception
@@ -684,7 +690,7 @@ def place_session_breakout_orders(symbol, session_name):
     """
     global session_pending_orders
     
-    # Get session high/low from previous day
+    # Get session high/low from previous day with fallback
     session_high, session_low = get_session_high_low(symbol, session_name, days_back=1)
     
     if session_high is None or session_low is None:
