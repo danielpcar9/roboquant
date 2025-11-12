@@ -897,12 +897,76 @@ def run_strategy(symbol="XAUUSD"):
     # Cancel expired pending orders
     cancel_expired_pending_orders(MAGIC_NUMBER)
     
-    # Check if we already have open positions
-    positions = mt5.positions_get(symbol=symbol)  # type: ignore
-    logging.debug(f"Current positions for {symbol}: {positions}")
-    if positions is not None and len(positions) > 0:
-        logging.info("Position already open, skipping")
+    # Initialize breakout variables
+    bullish_breakout = False
+    bearish_breakout = False
+    
+    # Get Donchian channels early for position management
+    upper_channel, lower_channel = get_donchian_channels(symbol, DONCHIAN_PERIOD)
+    if upper_channel is None or lower_channel is None:
+        logging.error("Failed to calculate Donchian channels")
         return
+    
+    # Get current price early for breakout detection
+    tick = mt5.symbol_info_tick(symbol)  # type: ignore
+    if tick is None:
+        logging.error("Failed to get current tick data")
+        return
+    
+    # Use bid price for analysis (real market price) - FIXED FOR FTMO
+    current_close = tick.bid
+    
+    # Calculate ATR for breakout detection
+    atr = calculate_atr(symbol)
+    if atr is None:
+        logging.error("ATR failed")
+        return
+    
+    # Check for breakout conditions early for position management
+    # Enhanced breakout detection with configurable threshold
+    if BREAKOUT_THRESHOLD > 0:
+        # Use threshold for stronger breakout confirmation
+        bullish_breakout = current_close > (upper_channel + (BREAKOUT_THRESHOLD * atr))
+        bearish_breakout = current_close < (lower_channel - (BREAKOUT_THRESHOLD * atr))
+    else:
+        # Standard breakout detection
+        bullish_breakout = current_close > upper_channel
+        bearish_breakout = current_close < lower_channel
+    
+    # Check existing positions and limits
+    positions = mt5.positions_get(symbol=symbol)  # type: ignore
+    
+    # Get max positions from config, default to 2 if not specified
+    max_positions = cfg.get('position_limits.max_positions', 2)
+    
+    if positions:
+        # Count positions by direction
+        buy_positions = sum(1 for p in positions if p.type == mt5.POSITION_TYPE_BUY)  # type: ignore
+        sell_positions = sum(1 for p in positions if p.type == mt5.POSITION_TYPE_SELL)  # type: ignore
+        total_positions = len(positions)
+        
+        # Block if max total positions reached
+        if total_positions >= max_positions:
+            logging.info(f"Max positions reached ({total_positions}/{max_positions}), skipping")
+            return
+        
+        # Block opposite direction trades
+        if bullish_breakout and sell_positions > 0:
+            logging.info(f"Opposite SELL position exists, cannot open BUY")
+            return
+        if bearish_breakout and buy_positions > 0:
+            logging.info(f"Opposite BUY position exists, cannot open SELL")
+            return
+        
+        # Allow same-direction trades if under max_positions
+        if bullish_breakout and buy_positions >= max_positions:
+            logging.info(f"Max BUY positions reached ({buy_positions}/{max_positions})")
+            return
+        if bearish_breakout and sell_positions >= max_positions:
+            logging.info(f"Max SELL positions reached ({sell_positions}/{max_positions})")
+            return
+        
+        logging.info(f"Positions: {buy_positions} BUY, {sell_positions} SELL. Allowing same-direction trade")
     
     # SESSION BREAKOUT LOGIC
     # Get current session
@@ -933,29 +997,6 @@ def run_strategy(symbol="XAUUSD"):
         logging.info(f"Pending order already exists for {symbol}, skipping")
         return
     
-    # Get Donchian channels
-    upper_channel, lower_channel = get_donchian_channels(symbol, DONCHIAN_PERIOD)
-    if upper_channel is None or lower_channel is None:
-        logging.error("Failed to calculate Donchian channels")
-        return
-    
-    # Get current price - FIXED: Use bid/ask instead of last
-    tick = mt5.symbol_info_tick(symbol)  # type: ignore
-    if tick is None:
-        logging.error("Failed to get current tick data")
-        return
-    
-    # Use bid price for analysis (real market price) - FIXED FOR FTMO
-    current_close = tick.bid
-    logging.info(f"Current close price (bid): {current_close}")
-    logging.info(f"Upper channel: {upper_channel}, Lower channel: {lower_channel}")
-    
-    # Calculate ATR for dynamic SL/TP
-    atr = calculate_atr(symbol)
-    if atr is None:
-        logging.error("ATR failed")
-        return
-    
     # Calculate momentum values
     current_momentum = calculate_avg_momentum(symbol, MOMENTUM_PERIOD)
     historical_momentum = calculate_avg_momentum(symbol, SAMPLE_PERIOD)
@@ -966,16 +1007,14 @@ def run_strategy(symbol="XAUUSD"):
     current_volume, avg_volume = get_volume_stats(symbol)
     volume_spike = current_volume and avg_volume and current_volume > avg_volume * EVENT_VOLUME_SPIKE_FACTOR
     
-    # Check for breakout conditions
-    # Enhanced breakout detection with configurable threshold
-    if BREAKOUT_THRESHOLD > 0:
-        # Use threshold for stronger breakout confirmation
-        bullish_breakout = current_close > (upper_channel + (BREAKOUT_THRESHOLD * atr))
-        bearish_breakout = current_close < (lower_channel - (BREAKOUT_THRESHOLD * atr))
-    else:
-        # Standard breakout detection
-        bullish_breakout = current_close > upper_channel
-        bearish_breakout = current_close < lower_channel
+    # Use bid price for analysis (real market price) - FIXED FOR FTMO
+    logging.info(f"Current close price (bid): {current_close}")
+    logging.info(f"Upper channel: {upper_channel}, Lower channel: {lower_channel}")
+    
+    # Calculate ATR for dynamic SL/TP
+    if atr is None:
+        logging.error("ATR failed")
+        return
     
     # Momentum filter: current > historical * 0.3 (less restrictive)
     momentum_filter = current_momentum > (historical_momentum * 0.3)
