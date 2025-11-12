@@ -734,11 +734,30 @@ def place_session_breakout_orders(symbol, session_name):
     sell_sl = sell_price + sl_distance
     sell_tp = sell_price - tp_distance
     
+    # Calculate lot size based on risk management
+    buy_volume = LOTS  # Default to fixed lot size
+    if USE_RISK_MANAGEMENT:
+        try:
+            # Calculate lot size based on 1% risk rule
+            sl_distance = abs(buy_price - buy_sl)
+            account_info = mt5.account_info()  # type: ignore
+            balance = account_info.balance if account_info else 10000.0  # Default $10k account
+            buy_volume = compute_lots_from_risk(
+                balance=balance,
+                risk_pct=RISK_PERCENT,
+                sl_distance=sl_distance,
+                symbol=symbol
+            )
+            logging.info(f"Calculated lot size for BUY order: {buy_volume:.2f}")
+        except Exception as e:
+            logging.warning(f"Failed to calculate dynamic lot size for BUY order, using default: {e}")
+            buy_volume = LOTS
+    
     # Place buy stop order
     buy_result = place_pending_order(
         symbol=symbol,
         order_type="BUY_STOP",
-        volume=LOTS,
+        volume=buy_volume,
         price=buy_price,
         sl=buy_sl,
         tp=buy_tp,
@@ -746,11 +765,30 @@ def place_session_breakout_orders(symbol, session_name):
         expiration_hours=8  # Expire after 8 hours
     )
     
+    # Calculate lot size for sell order
+    sell_volume = LOTS  # Default to fixed lot size
+    if USE_RISK_MANAGEMENT:
+        try:
+            # Calculate lot size based on 1% risk rule
+            sl_distance = abs(sell_price - sell_sl)
+            account_info = mt5.account_info()  # type: ignore
+            balance = account_info.balance if account_info else 10000.0  # Default $10k account
+            sell_volume = compute_lots_from_risk(
+                balance=balance,
+                risk_pct=RISK_PERCENT,
+                sl_distance=sl_distance,
+                symbol=symbol
+            )
+            logging.info(f"Calculated lot size for SELL order: {sell_volume:.2f}")
+        except Exception as e:
+            logging.warning(f"Failed to calculate dynamic lot size for SELL order, using default: {e}")
+            sell_volume = LOTS
+    
     # Place sell stop order
     sell_result = place_pending_order(
         symbol=symbol,
         order_type="SELL_STOP",
-        volume=LOTS,
+        volume=sell_volume,
         price=sell_price,
         sl=sell_sl,
         tp=sell_tp,
@@ -1040,11 +1078,30 @@ def run_strategy(symbol="XAUUSD"):
         # Calculate dynamic SL/TP based on ATR and risk profile
         sl_price, tp_price = calculate_dynamic_stops(symbol, pending_price, "BUY", atr)
         
+        # Calculate lot size based on risk management
+        buy_volume = LOTS  # Default to fixed lot size
+        if USE_RISK_MANAGEMENT:
+            try:
+                # Calculate lot size based on 1% risk rule
+                sl_distance = abs(pending_price - sl_price)
+                account_info = mt5.account_info()  # type: ignore
+                balance = account_info.balance if account_info else 10000.0  # Default $10k account
+                buy_volume = compute_lots_from_risk(
+                    balance=balance,
+                    risk_pct=RISK_PERCENT,
+                    sl_distance=sl_distance,
+                    symbol=symbol
+                )
+                logging.info(f"Calculated lot size for BUY pending order: {buy_volume:.2f}")
+            except Exception as e:
+                logging.warning(f"Failed to calculate dynamic lot size for BUY pending order, using default: {e}")
+                buy_volume = LOTS
+        
         # Place pending order
         result = place_pending_order(
             symbol=symbol,
             order_type="BUY_STOP",
-            volume=LOTS,
+            volume=buy_volume,
             price=pending_price,
             sl=sl_price,
             tp=tp_price,
@@ -1067,11 +1124,30 @@ def run_strategy(symbol="XAUUSD"):
         # Calculate dynamic SL/TP based on ATR and risk profile
         sl_price, tp_price = calculate_dynamic_stops(symbol, pending_price, "SELL", atr)
         
+        # Calculate lot size based on risk management
+        sell_volume = LOTS  # Default to fixed lot size
+        if USE_RISK_MANAGEMENT:
+            try:
+                # Calculate lot size based on 1% risk rule
+                sl_distance = abs(pending_price - sl_price)
+                account_info = mt5.account_info()  # type: ignore
+                balance = account_info.balance if account_info else 10000.0  # Default $10k account
+                sell_volume = compute_lots_from_risk(
+                    balance=balance,
+                    risk_pct=RISK_PERCENT,
+                    sl_distance=sl_distance,
+                    symbol=symbol
+                )
+                logging.info(f"Calculated lot size for SELL pending order: {sell_volume:.2f}")
+            except Exception as e:
+                logging.warning(f"Failed to calculate dynamic lot size for SELL pending order, using default: {e}")
+                sell_volume = LOTS
+        
         # Place pending order
         result = place_pending_order(
             symbol=symbol,
             order_type="SELL_STOP",
-            volume=LOTS,
+            volume=sell_volume,
             price=pending_price,
             sl=sl_price,
             tp=tp_price,
