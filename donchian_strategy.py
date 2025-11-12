@@ -246,7 +246,7 @@ def calculate_dynamic_stops(symbol, entry_price, order_type, atr):
         point = 0.01 if 'JPY' not in symbol else 0.001
         # For NASDAQ, adjust point value
         if 'NASDAQ' in symbol.upper():
-            point = 0.01  # NASDAQ typically uses 0.01 point increments
+            point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
         # Use default ATR multipliers for fallback
         sl_multiplier = 3.0  # LOW RISK profile default
         tp_multiplier = 6.0  # LOW RISK profile default
@@ -267,7 +267,7 @@ def calculate_dynamic_stops(symbol, entry_price, order_type, atr):
     
     # Adjust point value for NASDAQ
     if 'NASDAQ' in symbol.upper():
-        point = 0.01  # NASDAQ typically uses 0.01 point increments
+        point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
     
     # Determine if we're using LOW RISK (default) or HIGH RISK (aggressive) profile
     # Based on the risk_per_trade_pct in the current configuration
@@ -325,7 +325,7 @@ def get_current_spread(symbol):
     point = symbol_info.point
     # Adjust point value for NASDAQ
     if 'NASDAQ' in symbol.upper():
-        point = 0.01  # NASDAQ typically uses 0.01 point increments
+        point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
     spread_points = (tick.ask - tick.bid) / point if point > 0 else 0
     logging.debug(f"Spread for {symbol}: {spread_points:.2f} points")
     return spread_points
@@ -701,7 +701,7 @@ def place_session_breakout_orders(symbol, session_name):
     
     # Adjust point value for NASDAQ
     if 'NASDAQ' in symbol.upper():
-        point = 0.01  # NASDAQ typically uses 0.01 point increments
+        point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
     
     # Calculate pending order prices (10 pips above/below session high/low)
     # For XAU/USD, 1 pip = 0.1 points, so 10 pips = 1 point
@@ -737,7 +737,7 @@ def place_session_breakout_orders(symbol, session_name):
         sl=buy_sl,
         tp=buy_tp,
         magic=MAGIC_NUMBER,
-        expiration_hours=4  # Expire after 4 hours
+        expiration_hours=8  # Expire after 8 hours
     )
     
     # Place sell stop order
@@ -749,7 +749,7 @@ def place_session_breakout_orders(symbol, session_name):
         sl=sell_sl,
         tp=sell_tp,
         magic=MAGIC_NUMBER,
-        expiration_hours=4  # Expire after 4 hours
+        expiration_hours=8  # Expire after 8 hours
     )
     
     # Track pending orders by session
@@ -917,7 +917,7 @@ def run_strategy(symbol="XAUUSD"):
         
         # Update last session
         last_session = current_session
-        return  # Skip Donchian strategy for now since we placed session orders
+        # Continue with Donchian strategy even after placing session orders
     
     # Continue with existing Donchian strategy logic if no session change
     # Check for existing pending orders
@@ -1152,7 +1152,7 @@ def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
         point = symbol_info.point if symbol_info else 0.01
         # Adjust point value for NASDAQ
         if 'NASDAQ' in symbol.upper():
-            point = 0.01  # NASDAQ typically uses 0.01 point increments
+            point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
         if order_type == "BUY":
             return entry_price + (300 * point)  # 300 points for BUY
         else:
@@ -1189,7 +1189,7 @@ def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
             point = symbol_info.point if symbol_info else 0.01
             # Adjust point value for NASDAQ
             if 'NASDAQ' in symbol.upper():
-                point = 0.01  # NASDAQ typically uses 0.01 point increments
+                point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
             tp_points = tp_distance / point
             if order_type == "BUY":
                 tp_level = entry_price + (tp_points * point)
@@ -1201,7 +1201,7 @@ def calculate_take_profit_level(symbol, entry_price, order_type, atr=None):
             point = symbol_info.point if symbol_info else 0.01
             # Adjust point value for NASDAQ
             if 'NASDAQ' in symbol.upper():
-                point = 0.01  # NASDAQ typically uses 0.01 point increments
+                point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
             if order_type == "BUY":
                 tp_level = entry_price + (300 * point)
             else:

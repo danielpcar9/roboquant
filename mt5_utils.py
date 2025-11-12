@@ -50,7 +50,7 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
     point = sym_info.point
     # Adjust point value for NASDAQ
     if 'NASDAQ' in symbol.upper():
-        point = 0.01  # NASDAQ typically uses 0.01 point increments
+        point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
     volume_min = sym_info.volume_min
     
     stop_distance_points = abs(entry_price - stop_price) / point
@@ -510,7 +510,7 @@ def update_trailing_stops(mt5_module=None):
             point = symbol_info.point
             # Adjust point value for NASDAQ
             if 'NASDAQ' in symbol.upper():
-                point = 0.01  # NASDAQ typically uses 0.01 point increments
+                point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
             digits = symbol_info.digits
             
             # Convert pips to price units
@@ -618,7 +618,7 @@ def monitor_and_update_stops(mt5_module=None):
                 point = symbol_info.point if symbol_info else 0.01
                 # Adjust point value for NASDAQ
                 if 'NASDAQ' in symbol.upper():
-                    point = 0.01  # NASDAQ typically uses 0.01 point increments
+                    point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
                 # Use default ATR multipliers (LOW RISK profile)
                 sl_distance = 3.0 * point  # 3.0 ATR multiplier
                 tp_distance = 6.0 * point  # 6.0 ATR multiplier
@@ -632,7 +632,7 @@ def monitor_and_update_stops(mt5_module=None):
                 point = symbol_info.point if symbol_info else 0.01
                 # Adjust point value for NASDAQ
                 if 'NASDAQ' in symbol.upper():
-                    point = 0.01  # NASDAQ typically uses 0.01 point increments
+                    point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
                 # Use default ATR multipliers (LOW RISK profile)
                 sl_distance = 3.0 * point  # 3.0 ATR multiplier
                 tp_distance = 6.0 * point  # 6.0 ATR multiplier
