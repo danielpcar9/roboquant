@@ -13,7 +13,7 @@ from typing import Optional
 import MetaTrader5 as mt5  # type: ignore
 
 
-from mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops, place_pending_order, cancel_expired_pending_orders
+from mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops, place_pending_order, cancel_expired_pending_orders, update_trailing_stops
 from safety import Safety
 # Import security manager
 from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message, RateLimiter
@@ -1241,6 +1241,12 @@ def main():
                 monitor_and_update_stops()
             except Exception as e:
                 logging.error(f"Error monitoring positions: {e}", exc_info=True)
+            
+            # Update trailing stops
+            try:
+                update_trailing_stops()
+            except Exception as e:
+                logging.error(f"Error updating trailing stops: {e}", exc_info=True)
             
             # UPDATED: Sleep interval adjusted for M5 timeframe (300 seconds = 5 minutes)
             logging.debug("Waiting 300 seconds (5 minutes) before next check...")
