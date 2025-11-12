@@ -711,18 +711,19 @@ def place_session_breakout_orders(symbol, session_name):
     if 'NASDAQ' in symbol.upper():
         point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
     
-    # Calculate pending order prices (10 pips above/below session high/low)
-    # For XAU/USD, 1 pip = 0.1 points, so 10 pips = 1 point
-    pip_value = point * 10  # Standard pip calculation
-    breakout_distance = 10 * pip_value  # 10 pips
-    
-    buy_price = session_high + breakout_distance
-    sell_price = session_low - breakout_distance
-    
     # Calculate dynamic SL/TP using ATR
     atr = calculate_atr(symbol, 14)
     if atr is None:
         atr = 5.0  # Default fallback
+    
+    # Calculate pending order prices (closer distance based on ATR to avoid error 10015)
+    # For XAU/USD, 1 pip = 0.1 points, so 10 pips = 1 point
+    pip_value = point * 10  # Standard pip calculation
+    # Use distance based on ATR (more conservative) to keep orders closer to market price
+    breakout_distance = min(10 * pip_value, atr * 0.5)
+    
+    buy_price = session_high + breakout_distance
+    sell_price = session_low - breakout_distance
     
     # Calculate SL/TP distances based on ATR
     sl_distance = 3.0 * atr  # Using default LOW RISK profile
