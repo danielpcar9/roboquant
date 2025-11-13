@@ -699,6 +699,38 @@ def place_session_breakout_orders(symbol, session_name):
         logging.warning(f"Failed to get {session_name} session high/low, skipping breakout orders")
         return False
     
+    # Check existing positions to avoid placing opposite orders
+    positions = mt5.positions_get(symbol=symbol)  # type: ignore
+    if positions:
+        # Count positions by direction
+        buy_positions = sum(1 for p in positions if p.type == mt5.POSITION_TYPE_BUY)  # type: ignore
+        sell_positions = sum(1 for p in positions if p.type == mt5.POSITION_TYPE_SELL)  # type: ignore
+        
+        logging.info(f"Existing positions - BUY: {buy_positions}, SELL: {sell_positions}")
+        
+        # If we have positions in both directions, don't place any new orders
+        if buy_positions > 0 and sell_positions > 0:
+            logging.info("Both BUY and SELL positions exist, skipping session breakout orders to avoid conflict")
+            return False
+        
+        # If we have a BUY position, don't place a SELL order
+        if buy_positions > 0:
+            logging.info("BUY position exists, will only place BUY_STOP order for session breakout")
+            place_sell_order = False
+        else:
+            place_sell_order = True
+            
+        # If we have a SELL position, don't place a BUY order
+        if sell_positions > 0:
+            logging.info("SELL position exists, will only place SELL_STOP order for session breakout")
+            place_buy_order = False
+        else:
+            place_buy_order = True
+    else:
+        # No existing positions, place both orders
+        place_buy_order = True
+        place_sell_order = True
+    
     # Get symbol info for point value
     symbol_info = mt5.symbol_info(symbol)  # type: ignore
     if not symbol_info:
@@ -783,17 +815,21 @@ def place_session_breakout_orders(symbol, session_name):
             logging.warning(f"Failed to calculate dynamic lot size for BUY order, using default: {e}")
             buy_volume = LOTS
     
-    # Place buy stop order
-    buy_result = place_pending_order(
-        symbol=symbol,
-        order_type="BUY_STOP",
-        volume=buy_volume,
-        price=buy_price,
-        sl=buy_sl,
-        tp=buy_tp,
-        magic=MAGIC_NUMBER,
-        expiration_hours=8  # Expire after 8 hours
-    )
+    # Place buy stop order only if allowed
+    buy_result = None
+    if place_buy_order:
+        buy_result = place_pending_order(
+            symbol=symbol,
+            order_type="BUY_STOP",
+            volume=buy_volume,
+            price=buy_price,
+            sl=buy_sl,
+            tp=buy_tp,
+            magic=MAGIC_NUMBER,
+            expiration_hours=8  # Expire after 8 hours
+        )
+    else:
+        logging.info("Skipping BUY_STOP order placement due to existing opposite position")
     
     # Calculate lot size for sell order
     sell_volume = LOTS  # Default to fixed lot size
@@ -814,17 +850,21 @@ def place_session_breakout_orders(symbol, session_name):
             logging.warning(f"Failed to calculate dynamic lot size for SELL order, using default: {e}")
             sell_volume = LOTS
     
-    # Place sell stop order
-    sell_result = place_pending_order(
-        symbol=symbol,
-        order_type="SELL_STOP",
-        volume=sell_volume,
-        price=sell_price,
-        sl=sell_sl,
-        tp=sell_tp,
-        magic=MAGIC_NUMBER,
-        expiration_hours=8  # Expire after 8 hours
-    )
+    # Place sell stop order only if allowed
+    sell_result = None
+    if place_sell_order:
+        sell_result = place_pending_order(
+            symbol=symbol,
+            order_type="SELL_STOP",
+            volume=sell_volume,
+            price=sell_price,
+            sl=sell_sl,
+            tp=sell_tp,
+            magic=MAGIC_NUMBER,
+            expiration_hours=8  # Expire after 8 hours
+        )
+    else:
+        logging.info("Skipping SELL_STOP order placement due to existing opposite position")
     
     # Track pending orders by session
     if buy_result or sell_result:
@@ -833,11 +873,18 @@ def place_session_breakout_orders(symbol, session_name):
             "sell_order": sell_result.order if sell_result else None,
             "timestamp": datetime.now(timezone.utc)
         }
-        logging.info(f"Placed session breakout orders for {session_name}: BUY @ {buy_price:.5f}, SELL @ {sell_price:.5f}")
+        buy_info = f"BUY @ {buy_price:.5f}" if place_buy_order else "BUY skipped"
+        sell_info = f"SELL @ {sell_price:.5f}" if place_sell_order else "SELL skipped"
+        logging.info(f"Placed session breakout orders for {session_name}: {buy_info}, {sell_info}")
         return True
-    else:
+    elif place_buy_order or place_sell_order:
+        # We intended to place orders but failed
         logging.error(f"Failed to place session breakout orders for {session_name}")
         return False
+    else:
+        # No orders were intended to be placed
+        logging.info(f"No session breakout orders placed for {session_name} due to existing positions")
+        return True
 
 
 @handle_exception
