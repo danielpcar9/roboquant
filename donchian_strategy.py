@@ -722,18 +722,45 @@ def place_session_breakout_orders(symbol, session_name):
     # Use distance based on ATR (more conservative) to keep orders closer to market price
     breakout_distance = min(10 * pip_value, atr * 0.5)
     
-    buy_price = session_high + breakout_distance
-    sell_price = session_low - breakout_distance
+    # Get current market price to ensure orders are placed at valid distances
+    current_tick = mt5.symbol_info_tick(symbol)  # type: ignore
+    if current_tick is None:
+        logging.error(f"Failed to get current tick data for {symbol}")
+        return False
+    
+    current_ask = current_tick.ask
+    current_bid = current_tick.bid
+    
+    # Calculate buy and sell prices ensuring they are at valid distances from current market
+    # BUY_STOP orders must be placed above current ask price
+    # SELL_STOP orders must be placed below current bid price
+    min_buy_price = current_ask + (5 * pip_value)  # Minimum 5 pips above current ask
+    max_buy_price = current_ask + (50 * pip_value)  # Maximum 50 pips above current ask
+    
+    min_sell_price = current_bid - (50 * pip_value)  # Maximum 50 pips below current bid
+    max_sell_price = current_bid - (5 * pip_value)  # Minimum 5 pips below current bid
+    
+    # Calculate initial breakout prices
+    raw_buy_price = session_high + breakout_distance
+    raw_sell_price = session_low - breakout_distance
+    
+    # Adjust prices to be within valid ranges
+    buy_price = max(min_buy_price, min(max_buy_price, raw_buy_price))
+    sell_price = max(min_sell_price, min(max_sell_price, raw_sell_price))
+    
+    logging.info(f"Session breakout prices - BUY: {raw_buy_price:.5f}, SELL: {raw_sell_price:.5f}")
+    logging.info(f"Adjusted prices - BUY: {buy_price:.5f}, SELL: {sell_price:.5f}")
+    logging.info(f"Current market - BID: {current_bid:.5f}, ASK: {current_ask:.5f}")
     
     # Calculate SL/TP distances based on ATR
     sl_distance = 3.0 * atr  # Using default LOW RISK profile
     tp_distance = 6.0 * atr
     
-    # Calculate SL/TP for buy order
+    # Calculate SL/TP for buy order using adjusted price
     buy_sl = buy_price - sl_distance
     buy_tp = buy_price + tp_distance
     
-    # Calculate SL/TP for sell order
+    # Calculate SL/TP for sell order using adjusted price
     sell_sl = sell_price + sl_distance
     sell_tp = sell_price - tp_distance
     
@@ -742,13 +769,13 @@ def place_session_breakout_orders(symbol, session_name):
     if USE_RISK_MANAGEMENT:
         try:
             # Calculate lot size based on 1% risk rule
-            sl_distance = abs(buy_price - buy_sl)
+            buy_sl_distance = abs(buy_price - buy_sl)
             account_info = mt5.account_info()  # type: ignore
             balance = account_info.balance if account_info else 10000.0  # Default $10k account
             buy_volume = compute_lots_from_risk(
                 balance=balance,
                 risk_pct=RISK_PERCENT,
-                sl_distance=sl_distance,
+                sl_distance=buy_sl_distance,
                 symbol=symbol
             )
             logging.info(f"Calculated lot size for BUY order: {buy_volume:.2f}")
@@ -773,13 +800,13 @@ def place_session_breakout_orders(symbol, session_name):
     if USE_RISK_MANAGEMENT:
         try:
             # Calculate lot size based on 1% risk rule
-            sl_distance = abs(sell_price - sell_sl)
+            sell_sl_distance = abs(sell_price - sell_sl)
             account_info = mt5.account_info()  # type: ignore
             balance = account_info.balance if account_info else 10000.0  # Default $10k account
             sell_volume = compute_lots_from_risk(
                 balance=balance,
                 risk_pct=RISK_PERCENT,
-                sl_distance=sl_distance,
+                sl_distance=sell_sl_distance,
                 symbol=symbol
             )
             logging.info(f"Calculated lot size for SELL order: {sell_volume:.2f}")
