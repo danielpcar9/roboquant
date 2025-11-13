@@ -1102,10 +1102,41 @@ def run_strategy(symbol="XAUUSD"):
         
         # Calculate pending order price (0.5 * ATR above upper channel)
         symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        if not symbol_info:
+            logging.error(f"Failed to get symbol info for {symbol}")
+            return
         point = symbol_info.point
-        pending_price = upper_channel + (0.5 * atr)  # 0.5 * ATR above upper channel
         
-        # Calculate dynamic SL/TP based on ATR and risk profile
+        # Adjust point value for NASDAQ
+        if 'NASDAQ' in symbol.upper():
+            point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
+        
+        # Calculate breakout distance
+        breakout_distance = 0.5 * atr
+        raw_pending_price = upper_channel + breakout_distance
+        
+        # Get current market price to ensure orders are placed at valid distances
+        current_tick = mt5.symbol_info_tick(symbol)  # type: ignore
+        if current_tick is None:
+            logging.error(f"Failed to get current tick data for {symbol}")
+            return
+        
+        current_ask = current_tick.ask
+        current_bid = current_tick.bid
+        
+        # For BUY_STOP orders, they must be placed above current ask price
+        # But not too far above to avoid error 10015
+        pip_value = point * 10  # Standard pip calculation
+        min_buy_price = current_ask + (5 * pip_value)   # Minimum 5 pips above current ask
+        max_buy_price = current_ask + (50 * pip_value)  # Maximum 50 pips above current ask
+        
+        # Adjust price to be within valid range
+        pending_price = max(min_buy_price, min(max_buy_price, raw_pending_price))
+        
+        logging.info(f"Raw BUY_STOP price: {raw_pending_price:.5f}, Adjusted price: {pending_price:.5f}")
+        logging.info(f"Current market - BID: {current_bid:.5f}, ASK: {current_ask:.5f}")
+        
+        # Calculate dynamic SL/TP based on ATR and risk profile using adjusted price
         sl_price, tp_price = calculate_dynamic_stops(symbol, pending_price, "BUY", atr)
         
         # Calculate lot size based on risk management
@@ -1113,13 +1144,13 @@ def run_strategy(symbol="XAUUSD"):
         if USE_RISK_MANAGEMENT:
             try:
                 # Calculate lot size based on 1% risk rule
-                sl_distance = abs(pending_price - sl_price)
+                buy_sl_distance = abs(pending_price - sl_price)
                 account_info = mt5.account_info()  # type: ignore
                 balance = account_info.balance if account_info else 10000.0  # Default $10k account
                 buy_volume = compute_lots_from_risk(
                     balance=balance,
                     risk_pct=RISK_PERCENT,
-                    sl_distance=sl_distance,
+                    sl_distance=buy_sl_distance,
                     symbol=symbol
                 )
                 logging.info(f"Calculated lot size for BUY pending order: {buy_volume:.2f}")
@@ -1148,10 +1179,41 @@ def run_strategy(symbol="XAUUSD"):
         
         # Calculate pending order price (0.5 * ATR below lower channel)
         symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        if not symbol_info:
+            logging.error(f"Failed to get symbol info for {symbol}")
+            return
         point = symbol_info.point
-        pending_price = lower_channel - (0.5 * atr)  # 0.5 * ATR below lower channel
         
-        # Calculate dynamic SL/TP based on ATR and risk profile
+        # Adjust point value for NASDAQ
+        if 'NASDAQ' in symbol.upper():
+            point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
+        
+        # Calculate breakout distance
+        breakout_distance = 0.5 * atr
+        raw_pending_price = lower_channel - breakout_distance
+        
+        # Get current market price to ensure orders are placed at valid distances
+        current_tick = mt5.symbol_info_tick(symbol)  # type: ignore
+        if current_tick is None:
+            logging.error(f"Failed to get current tick data for {symbol}")
+            return
+        
+        current_ask = current_tick.ask
+        current_bid = current_tick.bid
+        
+        # For SELL_STOP orders, they must be placed below current bid price
+        # But not too far below to avoid error 10015
+        pip_value = point * 10  # Standard pip calculation
+        min_sell_price = current_bid - (50 * pip_value)  # Maximum 50 pips below current bid
+        max_sell_price = current_bid - (5 * pip_value)   # Minimum 5 pips below current bid
+        
+        # Adjust price to be within valid range
+        pending_price = max(min_sell_price, min(max_sell_price, raw_pending_price))
+        
+        logging.info(f"Raw SELL_STOP price: {raw_pending_price:.5f}, Adjusted price: {pending_price:.5f}")
+        logging.info(f"Current market - BID: {current_bid:.5f}, ASK: {current_ask:.5f}")
+        
+        # Calculate dynamic SL/TP based on ATR and risk profile using adjusted price
         sl_price, tp_price = calculate_dynamic_stops(symbol, pending_price, "SELL", atr)
         
         # Calculate lot size based on risk management
@@ -1159,13 +1221,13 @@ def run_strategy(symbol="XAUUSD"):
         if USE_RISK_MANAGEMENT:
             try:
                 # Calculate lot size based on 1% risk rule
-                sl_distance = abs(pending_price - sl_price)
+                sell_sl_distance = abs(pending_price - sl_price)
                 account_info = mt5.account_info()  # type: ignore
                 balance = account_info.balance if account_info else 10000.0  # Default $10k account
                 sell_volume = compute_lots_from_risk(
                     balance=balance,
                     risk_pct=RISK_PERCENT,
-                    sl_distance=sl_distance,
+                    sl_distance=sell_sl_distance,
                     symbol=symbol
                 )
                 logging.info(f"Calculated lot size for SELL pending order: {sell_volume:.2f}")
