@@ -243,6 +243,60 @@ def test_generate_performance_report():
         except OSError:
             pass
 
+def test_mt5_metrics():
+    """Test MT5 metrics functionality."""
+    print("Testing MT5 metrics functionality...")
+    
+    try:
+        # Import the MT5 metrics functions
+        from post_mortem import (
+            get_mt5_trade_history,
+            calculate_profit_factor_from_trades,
+            calculate_sharpe_ratio_from_trades,
+            calculate_win_rate_from_trades,
+            get_mt5_performance_report,
+            print_mt5_performance_report
+        )
+        
+        # Test with empty trades (normal case when no MT5 connection)
+        empty_trades = []
+        pf = calculate_profit_factor_from_trades(empty_trades)
+        sharpe = calculate_sharpe_ratio_from_trades(empty_trades)
+        win_rate = calculate_win_rate_from_trades(empty_trades)
+        
+        assert pf == 0.0
+        assert sharpe == 0.0
+        assert win_rate == 0.0
+        
+        # Test with sample trades
+        sample_trades = [
+            {'profit': 100, 'time': datetime.now()},
+            {'profit': 50, 'time': datetime.now()},
+            {'profit': -30, 'time': datetime.now()},
+            {'profit': -20, 'time': datetime.now()}
+        ]
+        
+        pf = calculate_profit_factor_from_trades(sample_trades)
+        sharpe = calculate_sharpe_ratio_from_trades(sample_trades)
+        win_rate = calculate_win_rate_from_trades(sample_trades)
+        
+        # With sample trades: wins=150, losses=50, so PF=3.0
+        assert pf == 3.0
+        assert win_rate == 50.0  # 2 wins out of 4 trades
+        
+        # Test report generation with empty trades
+        report = get_mt5_performance_report(days_back=1)
+        assert 'error' in report
+        
+        print("✓ MT5 metrics tests passed")
+        return True
+        
+    except Exception as e:
+        print(f"✗ MT5 metrics tests failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def main():
     """Run all post_mortem tests."""
     print("Running post_mortem component tests...\n")
@@ -250,7 +304,8 @@ def main():
     tests = [
         test_log_trade,
         test_analyze_recent_trades,
-        test_generate_performance_report
+        test_generate_performance_report,
+        test_mt5_metrics
     ]
     
     passed = 0

@@ -2,8 +2,16 @@ import os
 import logging
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
+
+# Try to import MT5, but make it optional to avoid issues in environments without MT5
+try:
+    import MetaTrader5 as mt5
+    MT5_AVAILABLE = True
+except ImportError:
+    mt5 = None
+    MT5_AVAILABLE = False
 
 TRADE_COLUMNS = [
     'timestamp_open', 'timestamp_close', 'ticket', 'symbol',
@@ -238,3 +246,243 @@ def generate_performance_report(output_file: str = "performance_report.txt") -> 
         
     except Exception as e:
         logging.error("Error generating performance report: %s", e)
+
+def get_mt5_trade_history(days_back=30, magic_number=None, mt5_module=None):
+    """
+    Get closed trades from MT5 history
+    
+    Args:
+        days_back: Number of days to look back
+        magic_number: Filter by magic number (optional)
+        mt5_module: MT5 module (for testing)
+        
+    Returns:
+        List of trades with profit/loss
+    """
+    # Use provided MT5 module or global one
+    mt5_to_use = mt5_module if mt5_module else mt5
+    
+    # Check if MT5 is available
+    if not mt5_to_use or not MT5_AVAILABLE:
+        logging.warning("MT5 not available for history analysis")
+        return []
+    
+    # Get history for the specified period
+    from_date = datetime.now() - timedelta(days=days_back)
+    to_date = datetime.now()
+    
+    # Get deals from history
+    deals = mt5_to_use.history_deals_get(from_date, to_date)
+    
+    if not deals or len(deals) == 0:
+        logging.warning("No trade history found")
+        return []
+    
+    # Convert to list and filter
+    trades = []
+    for deal in deals:
+        # Filter by magic number if specified
+        if magic_number and getattr(deal, 'magic', None) != magic_number:
+            continue
+        
+        # Only consider exit deals (not balance operations)
+        if getattr(deal, 'entry', None) == mt5_to_use.DEAL_ENTRY_OUT:
+            trades.append({
+                'time': datetime.fromtimestamp(deal.time),
+                'symbol': deal.symbol,
+                'profit': deal.profit,
+                'volume': deal.volume,
+                'type': 'BUY' if deal.type == mt5_to_use.DEAL_TYPE_BUY else 'SELL'
+            })
+    
+    return trades
+
+def calculate_profit_factor_from_trades(trades):
+    """
+    Calculate Profit Factor from trades
+    Profit Factor = Gross Profit / Gross Loss
+    
+    Args:
+        trades: List of trades with profit field
+        
+    Returns:
+        float: Profit factor
+    """
+    if not trades:
+        return 0.0
+    
+    gross_profit = sum(t['profit'] for t in trades if t['profit'] > 0)
+    gross_loss = abs(sum(t['profit'] for t in trades if t['profit'] < 0))
+    
+    if gross_loss == 0:
+        return float('inf') if gross_profit > 0 else 0.0
+    
+    profit_factor = gross_profit / gross_loss
+    return profit_factor
+
+def calculate_sharpe_ratio_from_trades(trades, risk_free_rate=0.02):
+    """
+    Calculate Sharpe Ratio from trades
+    Sharpe Ratio = (Mean Return - Risk Free Rate) / Standard Deviation of Returns
+    
+    Args:
+        trades: List of trades with profit field
+        risk_free_rate: Annual risk-free rate (default 2%)
+        
+    Returns:
+        float: Sharpe ratio (annualized)
+    """
+    if not trades or len(trades) < 2:
+        return 0.0
+    
+    # Calculate returns
+    returns = [t['profit'] for t in trades]
+    
+    # Calculate statistics
+    mean_return = np.mean(returns)
+    std_return = np.std(returns)
+    
+    if std_return == 0:
+        return 0.0
+    
+    # Annualize (assuming daily trades, adjust if needed)
+    trading_days = len(trades)
+    annual_factor = np.sqrt(252 / trading_days) if trading_days > 0 else 1
+    
+    # Calculate Sharpe Ratio
+    sharpe = (mean_return - risk_free_rate / 252) / std_return * annual_factor
+    
+    return sharpe
+
+def calculate_win_rate_from_trades(trades):
+    """Calculate win rate percentage from trades"""
+    if not trades:
+        return 0.0
+    
+    winning_trades = sum(1 for t in trades if t['profit'] > 0)
+    total_trades = len(trades)
+    
+    return (winning_trades / total_trades) * 100 if total_trades > 0 else 0.0
+
+def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None):
+    """
+    Generate comprehensive performance report from MT5 history
+    
+    Args:
+        days_back: Number of days to analyze
+        magic_number: Filter by magic number (optional)
+        mt5_module: MT5 module (for testing)
+        
+    Returns:
+        dict: Performance metrics
+    """
+    trades = get_mt5_trade_history(days_back, magic_number, mt5_module)
+    
+    if not trades:
+        return {
+            'error': 'No trades found in the specified period',
+            'days_analyzed': days_back
+        }
+    
+    # Calculate all metrics
+    profit_factor = calculate_profit_factor_from_trades(trades)
+    sharpe_ratio = calculate_sharpe_ratio_from_trades(trades)
+    win_rate = calculate_win_rate_from_trades(trades)
+    
+    # Calculate average win and loss
+    wins = [t['profit'] for t in trades if t['profit'] > 0]
+    losses = [t['profit'] for t in trades if t['profit'] < 0]
+    avg_win = np.mean(wins) if wins else 0.0
+    avg_loss = np.mean(losses) if losses else 0.0
+    
+    # Calculate maximum drawdown
+    if trades:
+        # Sort trades by time
+        sorted_trades = sorted(trades, key=lambda x: x['time'])
+        
+        # Calculate cumulative profit
+        cumulative = []
+        total = 0
+        for trade in sorted_trades:
+            total += trade['profit']
+            cumulative.append(total)
+        
+        # Calculate drawdown
+        peak = cumulative[0] if cumulative else 0
+        max_dd = 0
+        
+        for value in cumulative:
+            if value > peak:
+                peak = value
+            dd = peak - value
+            if dd > max_dd:
+                max_dd = dd
+    else:
+        max_dd = 0
+    
+    # Total profit
+    total_profit = sum(t['profit'] for t in trades)
+    
+    # Build report
+    report = {
+        'period': f'Last {days_back} days',
+        'total_trades': len(trades),
+        'total_profit': round(total_profit, 2),
+        'profit_factor': round(profit_factor, 2),
+        'sharpe_ratio': round(sharpe_ratio, 2),
+        'win_rate': round(win_rate, 2),
+        'average_win': round(avg_win, 2),
+        'average_loss': round(avg_loss, 2),
+        'max_drawdown': round(max_dd, 2),
+        'trades': trades
+    }
+    
+    return report
+
+def print_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None):
+    """Print formatted performance report from MT5 history"""
+    report = get_mt5_performance_report(days_back, magic_number, mt5_module)
+    
+    if 'error' in report:
+        print(f"\n{report['error']}")
+        return
+    
+    # Rating helper
+    def rate_pf(pf):
+        if pf >= 2.0: return "EXCELLENT"
+        if pf >= 1.5: return "GOOD"
+        if pf >= 1.0: return "ACCEPTABLE"
+        return "POOR"
+    
+    def rate_sharpe(sr):
+        if sr >= 3.0: return "EXCELLENT"
+        if sr >= 2.0: return "VERY GOOD"
+        if sr >= 1.0: return "GOOD"
+        return "SUBOPTIMAL"
+    
+    print("\n" + "="*60)
+    print(f"MT5 PERFORMANCE REPORT - {report['period']}")
+    print("="*60)
+    
+    print(f"\nTRADING ACTIVITY:")
+    print(f"  Total Trades: {report['total_trades']}")
+    print(f"  Total Profit: ${report['total_profit']:.2f}")
+    print(f"  Win Rate: {report['win_rate']:.2f}%")
+    
+    print(f"\nKEY METRICS:")
+    pf_rating = rate_pf(report['profit_factor'])
+    print(f"  Profit Factor: {report['profit_factor']:.2f} ({pf_rating})")
+    
+    sr_rating = rate_sharpe(report['sharpe_ratio'])
+    print(f"  Sharpe Ratio: {report['sharpe_ratio']:.2f} ({sr_rating})")
+    
+    print(f"\nRISK METRICS:")
+    print(f"  Max Drawdown: ${report['max_drawdown']:.2f}")
+    print(f"  Average Win: ${report['average_win']:.2f}")
+    print(f"  Average Loss: ${report['average_loss']:.2f}")
+    
+    if report['average_loss'] != 0:
+        rr_ratio = abs(report['average_win'] / report['average_loss'])
+        print(f"  Risk/Reward Ratio: 1:{rr_ratio:.2f}")
+    
+    print("="*60 + "\n")
