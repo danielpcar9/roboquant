@@ -701,6 +701,7 @@ def place_session_breakout_orders(symbol, session_name):
     
     # Check existing positions to avoid placing opposite orders
     positions = mt5.positions_get(symbol=symbol)  # type: ignore
+    logging.info(f"Checking positions for {symbol} - Found {len(positions) if positions else 0} positions")
     if positions:
         # Count positions by direction
         buy_positions = sum(1 for p in positions if p.type == mt5.POSITION_TYPE_BUY)  # type: ignore
@@ -726,10 +727,13 @@ def place_session_breakout_orders(symbol, session_name):
             place_buy_order = False
         else:
             place_buy_order = True
+        
+        logging.info(f"Order placement flags - BUY: {place_buy_order}, SELL: {place_sell_order}")
     else:
         # No existing positions, place both orders
         place_buy_order = True
         place_sell_order = True
+        logging.info("No existing positions, will place both BUY_STOP and SELL_STOP orders")
     
     # Get symbol info for point value
     symbol_info = mt5.symbol_info(symbol)  # type: ignore
