@@ -137,7 +137,7 @@ def group_deals_by_position(deals: List) -> Dict[int, Dict]:
 
 def create_trade_dataframe(positions: Dict[int, Dict]) -> pd.DataFrame:
     """
-    Create DataFrame from grouped positions in Quant Analyzer format.
+    Create DataFrame from grouped positions in MT4-compatible format for Quant Analyzer.
     
     Args:
         positions: Dictionary of position data
@@ -151,24 +151,25 @@ def create_trade_dataframe(positions: Dict[int, Dict]) -> pd.DataFrame:
         entry = data['entry_deal']
         exit_deal = data['exit_deal']
         
-        # Determine trade type
-        trade_type = 'buy' if entry.type == mt5.ORDER_TYPE_BUY else 'sell'
+        # Determine trade type (0 = buy, 1 = sell for MT4 compatibility)
+        trade_type = 0 if entry.type == mt5.ORDER_TYPE_BUY else 1
         
         # Calculate profit (already in exit deal, but recalculate for clarity)
         profit = exit_deal.profit
         
         trade = {
             'Ticket': position_id,
-            'OpenTime': datetime.fromtimestamp(entry.time).strftime('%Y.%m.%d %H:%M'),
+            'Open Time': datetime.fromtimestamp(entry.time).strftime('%Y.%m.%d %H:%M'),
             'Type': trade_type,
             'Size': entry.volume,
-            'Symbol': entry.symbol,
-            'OpenPrice': entry.price,
-            'StopLoss': 0.0,  # MT5 deals don't store SL/TP, would need to query orders
-            'TakeProfit': 0.0,
-            'CloseTime': datetime.fromtimestamp(exit_deal.time).strftime('%Y.%m.%d %H:%M'),
-            'ClosePrice': exit_deal.price,
+            'Item': entry.symbol,
+            'Price': entry.price,
+            'S / L': 0.0,  # MT5 deals don't store SL/TP
+            'T / P': 0.0,
+            'Close Time': datetime.fromtimestamp(exit_deal.time).strftime('%Y.%m.%d %H:%M'),
+            'Price.1': exit_deal.price,  # Close price
             'Commission': data['commission'],
+            'Taxes': 0.0,  # Not used in MT5
             'Swap': data['swap'],
             'Profit': profit
         }
@@ -177,7 +178,7 @@ def create_trade_dataframe(positions: Dict[int, Dict]) -> pd.DataFrame:
     
     # Create DataFrame and sort by open time
     df = pd.DataFrame(trades)
-    df = df.sort_values('OpenTime')
+    df = df.sort_values('Open Time')
     
     return df
 
@@ -325,8 +326,8 @@ def main():
         # Create DataFrame
         df = create_trade_dataframe(positions)
         
-        # Export to CSV
-        df.to_csv(OUTPUT_FILE, index=False)
+        # Export to CSV with UTF-8 encoding and proper formatting for Quant Analyzer
+        df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8-sig', sep=',', lineterminator='\n')
         logging.info(f"Successfully exported {len(df)} trades to {OUTPUT_FILE}")
         
         # Calculate and print statistics
