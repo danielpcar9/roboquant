@@ -24,7 +24,7 @@ logging.basicConfig(
 # ============================================================================
 DAYS_BACK = 90  # Number of days to look back for trade history
 MAGIC_NUMBER: Optional[int] = None  # Filter by magic number (None = all trades)
-OUTPUT_FILE = "trades.csv"  # Output CSV file name
+OUTPUT_FILE = "trades_export.txt"  # Output file (using .txt for better compatibility)
 
 
 def initialize_mt5() -> bool:
@@ -326,8 +326,8 @@ def main():
         # Create DataFrame
         df = create_trade_dataframe(positions)
         
-        # Export to CSV with UTF-8 encoding and proper formatting for Quant Analyzer
-        df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8-sig', sep=',', lineterminator='\n')
+        # Export to tab-delimited text file for maximum compatibility
+        df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8', sep='\t', lineterminator='\r\n')
         logging.info(f"Successfully exported {len(df)} trades to {OUTPUT_FILE}")
         
         # Calculate and print statistics
