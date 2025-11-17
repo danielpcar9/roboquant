@@ -24,7 +24,7 @@ logging.basicConfig(
 # ============================================================================
 DAYS_BACK = 90  # Number of days to look back for trade history
 MAGIC_NUMBER: Optional[int] = None  # Filter by magic number (None = all trades)
-OUTPUT_FILE = "trades_export.txt"  # Output file (using .txt for better compatibility)
+OUTPUT_FILE = "mt5_statement.html"  # Output file in HTML format like MT4/MT5 statements
 
 
 def initialize_mt5() -> bool:
@@ -137,7 +137,7 @@ def group_deals_by_position(deals: List) -> Dict[int, Dict]:
 
 def create_trade_dataframe(positions: Dict[int, Dict]) -> pd.DataFrame:
     """
-    Create DataFrame from grouped positions in MT4-compatible format for Quant Analyzer.
+    Create DataFrame from grouped positions in MT4 statement format for Quant Analyzer.
     
     Args:
         positions: Dictionary of position data
@@ -163,15 +163,15 @@ def create_trade_dataframe(positions: Dict[int, Dict]) -> pd.DataFrame:
             'Type': trade_type,
             'Size': entry.volume,
             'Item': entry.symbol,
-            'Price': entry.price,
-            'S / L': 0.0,  # MT5 deals don't store SL/TP
+            'Price': round(entry.price, 5),
+            'S / L': 0.0,
             'T / P': 0.0,
             'Close Time': datetime.fromtimestamp(exit_deal.time).strftime('%Y.%m.%d %H:%M'),
-            'Price.1': exit_deal.price,  # Close price
-            'Commission': data['commission'],
-            'Taxes': 0.0,  # Not used in MT5
-            'Swap': data['swap'],
-            'Profit': profit
+            'Price': round(exit_deal.price, 5),  # Close price in same column
+            'Commission': round(data['commission'], 2),
+            'Taxes': 0.0,
+            'Swap': round(data['swap'], 2),
+            'Profit': round(profit, 2)
         }
         
         trades.append(trade)
@@ -272,23 +272,103 @@ def print_import_instructions(output_file: str):
     print("QUANT ANALYZER IMPORT INSTRUCTIONS")
     print("=" * 70)
     print(f"1. Open Quant Analyzer")
-    print(f"2. Go to: File → Import → CSV/Text File")
+    print(f"2. Go to: File → Import → MT4/MT5 Statement (HTML)")
     print(f"3. Select file: {output_file}")
-    print(f"4. Map columns if needed (should auto-detect format)")
-    print(f"5. Click 'Import' to analyze your trades")
-    print("\nColumn mapping:")
-    print("  - Ticket → Position ID")
-    print("  - OpenTime → Entry Time (YYYY.MM.DD HH:MM)")
-    print("  - Type → Trade Direction (buy/sell)")
-    print("  - Size → Volume/Lots")
-    print("  - Symbol → Trading Instrument")
-    print("  - OpenPrice → Entry Price")
-    print("  - CloseTime → Exit Time")
-    print("  - ClosePrice → Exit Price")
-    print("  - Commission → Trading Commission")
-    print("  - Swap → Overnight Fees")
-    print("  - Profit → Net P&L")
+    print(f"4. Quant Analyzer will automatically parse the MT5 statement format")
+    print(f"5. Your trades will be imported and ready for analysis")
+    print("\nNote: The HTML file mimics MT4/MT5 account statement format,")
+    print("which Quant Analyzer recognizes natively.")
     print("=" * 70 + "\n")
+
+
+def generate_html_statement(df: pd.DataFrame, stats: Dict) -> str:
+    """
+    Generate HTML statement in MT4/MT5 format.
+    
+    Args:
+        df: DataFrame with trade data
+        stats: Dictionary with statistics
+        
+    Returns:
+        HTML string
+    """
+    html = f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>MT5 Account Statement</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; font-size: 12px; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
+        th {{ background-color: #ddd; padding: 8px; text-align: left; border: 1px solid #999; }}
+        td {{ padding: 6px; border: 1px solid #ccc; }}
+        .profit {{ color: green; }}
+        .loss {{ color: red; }}
+        h2 {{ color: #333; }}
+    </style>
+</head>
+<body>
+    <h2>Closed Transactions</h2>
+    <table>
+        <tr>
+            <th>Ticket</th>
+            <th>Open Time</th>
+            <th>Type</th>
+            <th>Size</th>
+            <th>Item</th>
+            <th>Price</th>
+            <th>S / L</th>
+            <th>T / P</th>
+            <th>Close Time</th>
+            <th>Price</th>
+            <th>Commission</th>
+            <th>Taxes</th>
+            <th>Swap</th>
+            <th>Profit</th>
+        </tr>
+'''
+    
+    for _, row in df.iterrows():
+        profit_class = 'profit' if row['Profit'] > 0 else 'loss'
+        trade_type_str = 'buy' if row['Type'] == 0 else 'sell'
+        
+        html += f'''        <tr>
+            <td>{row['Ticket']}</td>
+            <td>{row['Open Time']}</td>
+            <td>{trade_type_str}</td>
+            <td>{row['Size']}</td>
+            <td>{row['Item']}</td>
+            <td>{row['Price']}</td>
+            <td>{row['S / L']}</td>
+            <td>{row['T / P']}</td>
+            <td>{row['Close Time']}</td>
+            <td>{row['Price']}</td>
+            <td>{row['Commission']}</td>
+            <td>{row['Taxes']}</td>
+            <td>{row['Swap']}</td>
+            <td class="{profit_class}">{row['Profit']:.2f}</td>
+        </tr>
+'''
+    
+    html += f'''    </table>
+    <h2>Summary</h2>
+    <table style="width: 50%;">
+        <tr><td><b>Total Trades:</b></td><td>{stats['total_trades']}</td></tr>
+        <tr><td><b>Winning Trades:</b></td><td>{stats['win_count']}</td></tr>
+        <tr><td><b>Losing Trades:</b></td><td>{stats['loss_count']}</td></tr>
+        <tr><td><b>Win Rate:</b></td><td>{stats['win_rate']:.2f}%</td></tr>
+        <tr><td><b>Net Profit:</b></td><td class="{'profit' if stats['net_profit'] > 0 else 'loss'}">${stats['net_profit']:.2f}</td></tr>
+        <tr><td><b>Gross Profit:</b></td><td class="profit">${stats['gross_profit']:.2f}</td></tr>
+        <tr><td><b>Gross Loss:</b></td><td class="loss">${stats['gross_loss']:.2f}</td></tr>
+        <tr><td><b>Profit Factor:</b></td><td>{stats['profit_factor']:.2f}</td></tr>
+        <tr><td><b>Average Win:</b></td><td class="profit">${stats['avg_win']:.2f}</td></tr>
+        <tr><td><b>Average Loss:</b></td><td class="loss">${stats['avg_loss']:.2f}</td></tr>
+    </table>
+</body>
+</html>
+'''
+    
+    return html
 
 
 def main():
@@ -326,12 +406,15 @@ def main():
         # Create DataFrame
         df = create_trade_dataframe(positions)
         
-        # Export to tab-delimited text file for maximum compatibility
-        df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8', sep='\t', lineterminator='\r\n')
-        logging.info(f"Successfully exported {len(df)} trades to {OUTPUT_FILE}")
-        
         # Calculate and print statistics
         stats = calculate_statistics(df)
+        
+        # Export to HTML format like MT4/MT5 account statements
+        html_content = generate_html_statement(df, stats)
+        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        logging.info(f"Successfully exported {len(df)} trades to {OUTPUT_FILE}")
+        
         print_statistics(stats)
         
         # Print import instructions
