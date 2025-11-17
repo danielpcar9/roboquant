@@ -770,11 +770,11 @@ def place_session_breakout_orders(symbol, session_name):
     # Calculate buy and sell prices ensuring they are at valid distances from current market
     # BUY_STOP orders must be placed above current ask price
     # SELL_STOP orders must be placed below current bid price
-    min_buy_price = current_ask + (5 * pip_value)  # Minimum 5 pips above current ask
+    min_buy_price = current_ask + (20 * pip_value)  # Minimum 20 pips above current ask
     max_buy_price = current_ask + (50 * pip_value)  # Maximum 50 pips above current ask
     
     min_sell_price = current_bid - (50 * pip_value)  # Maximum 50 pips below current bid
-    max_sell_price = current_bid - (5 * pip_value)  # Minimum 5 pips below current bid
+    max_sell_price = current_bid - (20 * pip_value)  # Minimum 20 pips below current bid
     
     # Calculate initial breakout prices
     raw_buy_price = session_high + breakout_distance
@@ -783,6 +783,21 @@ def place_session_breakout_orders(symbol, session_name):
     # Adjust prices to be within valid ranges
     buy_price = max(min_buy_price, min(max_buy_price, raw_buy_price))
     sell_price = max(min_sell_price, min(max_sell_price, raw_sell_price))
+
+    # Enforce a minimum gap between pending orders to avoid opposite triggers near market
+    gap_points = buy_price - sell_price
+    min_gap_points = 40 * pip_value  # Ensure at least 40 pips gap between orders
+    if gap_points < min_gap_points:
+        logging.info(f"Pending order gap too small ({gap_points:.5f} pts). Applying single-side placement to avoid opposite triggers.")
+        # Choose the side farther from current price to reduce immediate whipsaw
+        buy_dist = abs(buy_price - current_ask)
+        sell_dist = abs(current_bid - sell_price)
+        if buy_dist >= sell_dist:
+            place_sell_order = False
+            logging.info("Selecting BUY_STOP only due to gap constraint")
+        else:
+            place_buy_order = False
+            logging.info("Selecting SELL_STOP only due to gap constraint")
     
     logging.info(f"Session breakout prices - BUY: {raw_buy_price:.5f}, SELL: {raw_sell_price:.5f}")
     logging.info(f"Adjusted prices - BUY: {buy_price:.5f}, SELL: {sell_price:.5f}")
