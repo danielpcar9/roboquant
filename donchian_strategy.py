@@ -786,7 +786,7 @@ def place_session_breakout_orders(symbol, session_name):
 
     # Enforce a minimum gap between pending orders to avoid opposite triggers near market
     gap_points = buy_price - sell_price
-    min_gap_points = 40 * pip_value  # Ensure at least 40 pips gap between orders
+    min_gap_points = max(0.5 * atr, 60 * pip_value)  # Dynamic gap: max(0.5*ATR, 60 pips)
     if gap_points < min_gap_points:
         logging.info(f"Pending order gap too small ({gap_points:.5f} pts). Applying single-side placement to avoid opposite triggers.")
         # Choose the side farther from current price to reduce immediate whipsaw
