@@ -11,6 +11,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import logging
 import sys
+import os
+from pathlib import Path
 from typing import Optional, List, Dict
 
 # Configure logging
@@ -24,7 +26,10 @@ logging.basicConfig(
 # ============================================================================
 DAYS_BACK = 90  # Number of days to look back for trade history
 MAGIC_NUMBER: Optional[int] = None  # Filter by magic number (None = all trades)
-OUTPUT_FILE = "mt5_statement.html"  # Output file in HTML format like MT4/MT5 statements
+
+# Save to user's home directory for easy access
+HOME_PATH = Path.home()
+OUTPUT_FILE = str(HOME_PATH / "mt5_statement.html")
 
 
 def initialize_mt5() -> bool:
