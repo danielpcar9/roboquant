@@ -120,6 +120,65 @@ except Exception as e:
 
 # performance_monitor function removed - using consolidated version from mt5_core.py
 
+class MarketDataService:
+    """Responsible for fetching and calculating market indicators. Single Responsibility Principle."""
+    
+    @staticmethod
+    @handle_exception
+    @performance_monitor
+    def get_donchian_channels(symbol, period):
+        """Calculate Donchian channels"""
+        return get_donchian_channels(symbol, period)
+    
+    @staticmethod
+    @handle_exception
+    @performance_monitor
+    def calculate_momentum(symbol, lookback):
+        """Calculate average momentum"""
+        return calculate_avg_momentum(symbol, lookback)
+    
+    @staticmethod
+    @handle_exception
+    @performance_monitor
+    def calculate_atr(symbol, period=14):
+        """Calculate ATR"""
+        return calculate_atr(symbol, period)
+    
+    @staticmethod
+    @handle_exception
+    @performance_monitor
+    def get_current_price(symbol, order_type):
+        """Get current price based on order type"""
+        return get_current_price(symbol, order_type)
+    
+    @staticmethod
+    @handle_exception
+    @performance_monitor
+    def get_spread(symbol):
+        """Get current spread"""
+        return get_current_spread(symbol)
+    
+    @staticmethod
+    @handle_exception
+    @performance_monitor
+    def get_volume_stats(symbol, lookback=20):
+        """Get volume statistics"""
+        return get_volume_stats(symbol, lookback)
+
+class RiskCalculator:
+    """Responsible for all risk-related calculations. Single Responsibility Principle."""
+    
+    @staticmethod
+    def calculate_dynamic_stops(symbol, entry_price, order_type, atr):
+        """Calculate dynamic SL/TP"""
+        return calculate_dynamic_stops(symbol, entry_price, order_type, atr)
+    
+    @staticmethod
+    def compute_lot_size(balance, risk_pct, sl_distance, symbol):
+        """Calculate lot size based on risk"""
+        return compute_lots_from_risk(balance, risk_pct, sl_distance, symbol)
+
+
 @handle_exception
 def initialize_mt5():
     """Initialize MT5 connection"""
@@ -1329,6 +1388,32 @@ def run_strategy(symbol="XAUUSD"):
         else:
             logging.error("Failed to place SELL_STOP order")
 
+class DonchianStrategy:
+    """
+    Object-oriented orchestrator that delegates to existing functions.
+    Behavior remains identical; this class only wraps calls for clearer responsibilities.
+    Follows Dependency Inversion: depends on abstractions (MT5Gateway, services) not implementations.
+    """
+    def __init__(self, mt5_gateway: MT5Gateway = None, market_data: MarketDataService = None, risk_calc: RiskCalculator = None):
+        self.mt5_gateway = mt5_gateway or MT5Gateway()
+        self.market_data = market_data or MarketDataService()
+        self.risk_calc = risk_calc or RiskCalculator()
+    
+    def run_strategy(self, symbol="XAUUSD"):
+        return run_strategy(symbol)
+    
+    def monitor_positions(self):
+        try:
+            monitor_and_update_stops()
+        except Exception as e:
+            logging.error(f"Error monitoring positions: {e}", exc_info=True)
+    
+    def update_trailing(self):
+        try:
+            update_trailing_stops()
+        except Exception as e:
+            logging.error(f"Error updating trailing stops: {e}", exc_info=True)
+
 @handle_exception
 @performance_monitor
 def main():
@@ -1360,6 +1445,7 @@ def main():
     # Initialize FTMO safety module
     from safety import FTMOSafety
     safety = FTMOSafety(mt5_module=mt5)
+    ds = DonchianStrategy()
     
     logging.info("Donchian Breakout Strategy started")
     logging.info(f"Parameters: Donchian Period={DONCHIAN_PERIOD}, Momentum Period={MOMENTUM_PERIOD}")
@@ -1381,7 +1467,7 @@ def main():
                 logging.info(ftmo_manager.get_ftmo_dashboard())
             except Exception as e:
                 logging.debug(f"Failed to show FTMO dashboard: {e}")
-            run_strategy(symbol)
+            ds.run_strategy(symbol)
         
         # Import the monitoring function
         from mt5_utils import monitor_and_update_stops
@@ -1404,17 +1490,17 @@ def main():
                         logging.info(ftmo_manager.get_ftmo_dashboard())
                     except Exception as e:
                         logging.debug(f"Failed to show FTMO dashboard: {e}")
-                run_strategy(symbol)
+                ds.run_strategy(symbol)
             
             # Monitor positions and add SL/TP if missing
             try:
-                monitor_and_update_stops()
+                ds.monitor_positions()
             except Exception as e:
                 logging.error(f"Error monitoring positions: {e}", exc_info=True)
             
             # Update trailing stops
             try:
-                update_trailing_stops()
+                ds.update_trailing()
             except Exception as e:
                 logging.error(f"Error updating trailing stops: {e}", exc_info=True)
             
