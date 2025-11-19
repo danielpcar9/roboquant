@@ -12,8 +12,8 @@
     "require_adx_confirmation": false
   },
   "trading_hours": {
-    "start": 6,
-    "end": 20,
+    "start": 0,
+    "end": 23,
     "preferred_sessions": ["OVERLAP", "EUROPEAN"]
   },
   "position_limits": {

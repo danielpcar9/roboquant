@@ -13,7 +13,7 @@ from typing import Optional
 import MetaTrader5 as mt5  # type: ignore
 
 
-from mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops, place_pending_order, cancel_expired_pending_orders, update_trailing_stops
+from mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops, place_pending_order, cancel_expired_pending_orders, update_trailing_stops, MT5Gateway
 from safety import Safety
 # Import security manager
 from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message, RateLimiter
@@ -105,6 +105,7 @@ strategy_execution_times = []
 
 # Session tracking for breakout strategy
 session_pending_orders = {}  # Track pending orders by session
+mt5_gateway = MT5Gateway()
 last_session = None  # Track the last session
 
 # Load news filter configuration
@@ -848,7 +849,7 @@ def place_session_breakout_orders(symbol, session_name):
     # Place buy stop order only if allowed
     buy_result = None
     if place_buy_order:
-        buy_result = place_pending_order(
+        buy_result = mt5_gateway.place_pending_order(
             symbol=symbol,
             order_type="BUY_STOP",
             volume=buy_volume,
@@ -883,7 +884,7 @@ def place_session_breakout_orders(symbol, session_name):
     # Place sell stop order only if allowed
     sell_result = None
     if place_sell_order:
-        sell_result = place_pending_order(
+        sell_result = mt5_gateway.place_pending_order(
             symbol=symbol,
             order_type="SELL_STOP",
             volume=sell_volume,

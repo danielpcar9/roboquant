@@ -19,6 +19,29 @@ from mt5_core import validate_and_adjust_stops, normalize_volume, get_filling_mo
 # Performance monitoring
 PERFORMANCE_MONITORING_ENABLED = True
 
+class MT5Gateway:
+    """Object-oriented wrapper around MT5 utility functions.
+    Preserves existing behavior by delegating to module-level functions.
+    """
+    def build_and_send_order(self, symbol, side, volume, sl=None, tp=None, deviation=30, retries=1, magic=123456, mt5_module=None):
+        return build_and_send_order(symbol, side, volume, sl, tp, deviation, retries, magic, mt5_module)
+
+    def place_pending_order(self, symbol, order_type, volume, price, sl=None, tp=None, deviation=30, expiration_hours=4, magic=123456, mt5_module=None):
+        return place_pending_order(symbol, order_type, volume, price, sl, tp, deviation, expiration_hours, magic, mt5_module)
+
+    def cancel_expired_pending_orders(self, magic=123456, mt5_module=None):
+        return cancel_expired_pending_orders(magic, mt5_module)
+
+    def update_trailing_stops(self, mt5_module=None):
+        return update_trailing_stops(mt5_module)
+
+    def monitor_and_update_stops(self, mt5_module=None):
+        return monitor_and_update_stops(mt5_module)
+
+    def close_position_by_ticket(self, ticket, deviation=30, retries=1, mt5_module=None):
+        return close_position_by_ticket(ticket, deviation, retries, mt5_module)
+
+
 
 # validate_and_adjust_stops function removed - using consolidated version from mt5_core.py
 
