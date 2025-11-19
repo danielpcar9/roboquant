@@ -40,6 +40,44 @@ class MT5Gateway:
 
     def close_position_by_ticket(self, ticket, deviation=30, retries=1, mt5_module=None):
         return close_position_by_ticket(ticket, deviation, retries, mt5_module)
+    
+    def get_open_positions(self, mt5_module=None):
+        """Get all open positions"""
+        if mt5_module is None:
+            mt5_module = mt5
+        positions = mt5_module.positions_get()
+        if positions is None:
+            logging.error("Failed to get positions")
+            return []
+        return positions
+    
+    def close_all_positions(self, mt5_module=None):
+        """Close all open positions. Returns (closed_count, error_count)"""
+        if mt5_module is None:
+            mt5_module = mt5
+        
+        positions = self.get_open_positions(mt5_module)
+        if not positions:
+            logging.info("No open positions to close")
+            return 0, 0
+        
+        closed_count = 0
+        error_count = 0
+        
+        for position in positions:
+            ticket = position.ticket
+            try:
+                success = self.close_position_by_ticket(ticket, mt5_module=mt5_module)
+                if success:
+                    closed_count += 1
+                else:
+                    error_count += 1
+            except Exception as e:
+                logging.error(f"Error closing position {ticket}: {e}")
+                error_count += 1
+        
+        logging.info(f"Closed {closed_count} positions, {error_count} errors")
+        return closed_count, error_count
 
 
 

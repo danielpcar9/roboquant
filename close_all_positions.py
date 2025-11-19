@@ -13,24 +13,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
 
-# Import our utility function
-from mt5_utils import close_position_by_ticket
+# Import our MT5Gateway
+from mt5_utils import MT5Gateway
 
 # Import consolidated MT5 functions
 from mt5_core import initialize_mt5
 
-# initialize_mt5 function removed - using consolidated version from mt5_core.py
-
-def get_open_positions():
-    """Get all open positions"""
-    positions = mt5.positions_get()  # type: ignore
-    if positions is None:
-        logging.error("Failed to get positions")
-        return []
-    return positions
-
 def close_all_positions():
-    """Main function to close all open positions"""
+    """Main function to close all open positions using MT5Gateway"""
     print("=== Cerrando todas las posiciones ===")
     
     # Initialize MT5
@@ -39,9 +29,10 @@ def close_all_positions():
         return False
     
     try:
-        # Get all open positions
-        positions = get_open_positions()
+        gateway = MT5Gateway()
         
+        # Get positions count first
+        positions = gateway.get_open_positions()
         if not positions:
             print("No hay posiciones abiertas para cerrar.")
             mt5.shutdown()  # type: ignore
@@ -50,30 +41,8 @@ def close_all_positions():
         total_positions = len(positions)
         print(f"Posiciones encontradas: {total_positions}")
         
-        closed_count = 0
-        error_count = 0
-        
-        # Close each position
-        for i, position in enumerate(positions, 1):
-            ticket = position.ticket
-            symbol = position.symbol
-            volume = float(position.volume)
-            
-            print(f"[{i}/{total_positions}] Cerrando ticket {ticket} ({symbol}, {volume} lotes)...", end=" ")
-            
-            try:
-                # Close the position using our utility function
-                success = close_position_by_ticket(ticket)
-                if success:
-                    print("✅")
-                    closed_count += 1
-                else:
-                    print("❌")
-                    error_count += 1
-            except Exception as e:
-                logging.error(f"Error closing position {ticket}: {e}")
-                print("❌")
-                error_count += 1
+        # Close all using gateway
+        closed_count, error_count = gateway.close_all_positions()
         
         # Print summary
         print("\nRESUMEN:")
