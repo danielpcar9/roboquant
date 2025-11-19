@@ -2,6 +2,6 @@
 echo.
 echo 📊 Exporting MT5 Data...
 echo.
-python export_mt5_data.py
+python scripts\export_mt5_data.py
 echo.
 pause
