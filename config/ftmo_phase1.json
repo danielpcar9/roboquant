@@ -17,9 +17,9 @@
     "preferred_sessions": ["OVERLAP", "EUROPEAN"]
   },
   "position_limits": {
-    "max_positions": 1,
-    "max_positions_per_symbol": 1,
-    "allow_pyramiding": false,
+    "max_positions": 2,
+    "max_positions_per_symbol": 2,
+    "allow_pyramiding": true,
     "min_pending_gap_pips": 40
   },
   "performance": {
