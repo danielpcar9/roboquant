@@ -108,7 +108,7 @@ class FTMOManager:
             'trading_days': self.trading_days,
             'daily_loss_limit': -4.0,  # 4% daily loss limit
             'drawdown_limit': -9.0,     # 9% overall drawdown limit
-            'min_trading_days': 4
+            'min_trading_days': 1       # Changed from 4 to 1 for testing
         }
     
     def is_trade_allowed(self, symbol: str = "XAUUSD") -> Tuple[bool, Optional[str]]:
