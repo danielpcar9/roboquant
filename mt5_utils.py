@@ -478,12 +478,18 @@ def update_trailing_stops(mt5_module=None):
         trailing_start_pips = cfg.get('trailing.start_pips', 10)
         trailing_distance_pips = cfg.get('trailing.distance_pips', 15)
         break_even_enabled = cfg.get('trailing.break_even_enabled', True)
+        partial_tp_enabled = cfg.get('trailing.partial_tp_enabled', False)
+        partial_tp_percent = cfg.get('trailing.partial_tp_percent', 50.0)
+        partial_tp_at_r = cfg.get('trailing.partial_tp_at_r', 1.0)
     except Exception as e:
         # Use default values if configuration cannot be loaded
         trailing_enabled = True
         trailing_start_pips = 10
         trailing_distance_pips = 15
         break_even_enabled = True
+        partial_tp_enabled = False
+        partial_tp_percent = 50.0
+        partial_tp_at_r = 1.0
         logging.debug(f"Using default trailing stop settings: {e}")
     
     # If trailing stops are disabled, exit early
@@ -528,6 +534,37 @@ def update_trailing_stops(mt5_module=None):
             
             # Check if profit exceeds trailing start threshold
             if profit_price >= trailing_start_price:
+                # Check for partial TP if enabled and not yet executed
+                if partial_tp_enabled:
+                    # Calculate 1R profit level (entry + SL distance)
+                    sl_distance = abs(price_open - sl) if sl > 0 else trailing_start_price
+                    one_r_profit = sl_distance * partial_tp_at_r
+                    
+                    # If profit >= 1R and volume hasn't been reduced yet
+                    if profit_price >= one_r_profit and pos.volume == normalize_volume(symbol, pos.volume, mt5_module):
+                        # Close partial position
+                        partial_volume = round(pos.volume * (partial_tp_percent / 100.0), 2)
+                        if partial_volume >= symbol_info.volume_min:
+                            try:
+                                close_request = {
+                                    'action': mt5_module.TRADE_ACTION_DEAL,
+                                    'symbol': symbol,
+                                    'volume': partial_volume,
+                                    'type': mt5_module.ORDER_TYPE_SELL if order_type == mt5_module.POSITION_TYPE_BUY else mt5_module.ORDER_TYPE_BUY,
+                                    'position': int(ticket),
+                                    'price': current_price,
+                                    'deviation': 30,
+                                    'magic': int(getattr(pos, 'magic', 0)),
+                                    'comment': 'partial_tp',
+                                    'type_time': mt5_module.ORDER_TIME_GTC,
+                                    'type_filling': mt5_module.ORDER_FILLING_FOK
+                                }
+                                result = mt5_module.order_send(close_request)
+                                if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:
+                                    logging.info(f"Partial TP ({partial_tp_percent}%) executed for position {ticket} at 1R profit")
+                            except Exception as e:
+                                logging.exception(f"Error executing partial TP for position {ticket}: {str(e)}")
+                
                 # Calculate new stop loss level based on trailing distance
                 if order_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
                     new_sl = current_price - trailing_distance_price

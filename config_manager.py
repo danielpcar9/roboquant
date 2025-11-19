@@ -46,6 +46,15 @@ class ConfigManager:
             'TIMEFRAME': os.getenv('TIMEFRAME', 'M5'),
             'BREAKOUT_THRESHOLD': float(os.getenv('BREAKOUT_THRESHOLD', '0.0')),  # Additional threshold for breakout confirmation
             
+            # Trailing stop and exit management
+            'TRAILING_ENABLED': os.getenv('TRAILING_ENABLED', 'True').lower() == 'true',
+            'TRAILING_START_PIPS': int(os.getenv('TRAILING_START_PIPS', '10')),
+            'TRAILING_DISTANCE_PIPS': int(os.getenv('TRAILING_DISTANCE_PIPS', '15')),
+            'BREAK_EVEN_ENABLED': os.getenv('BREAK_EVEN_ENABLED', 'True').lower() == 'true',
+            'PARTIAL_TP_ENABLED': os.getenv('PARTIAL_TP_ENABLED', 'False').lower() == 'true',
+            'PARTIAL_TP_PERCENT': float(os.getenv('PARTIAL_TP_PERCENT', '50.0')),  # Close 50% at 1R
+            'PARTIAL_TP_AT_R': float(os.getenv('PARTIAL_TP_AT_R', '1.0')),  # At 1:1 risk/reward
+            
             # Event-driven trading parameters
             'EVENT_WAIT_CANDLES': int(os.getenv('EVENT_WAIT_CANDLES', '3')),
             'EVENT_SIZE_FACTOR': float(os.getenv('EVENT_SIZE_FACTOR', '0.25')),

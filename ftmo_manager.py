@@ -92,8 +92,11 @@ class FTMOManager:
         today_str = datetime.now(cet).strftime('%Y-%m-%d')
         daily_loss = ((current_balance - self.midnight_balance) / self.midnight_balance * 100) if self.midnight_balance > 0 else 0
         
-        # Calculate overall drawdown from initial balance
-        overall_drawdown = ((self.initial_balance - equity) / self.initial_balance * 100) if self.initial_balance > 0 else 0
+        # Calculate overall drawdown from peak balance (initial)
+        # Drawdown = (Peak - Current) / Peak × 100
+        # When equity drops, drawdown is POSITIVE (e.g., 5% drawdown)
+        # Formula corrected: was inverted, showing negative when losing money
+        overall_drawdown = max(0, ((self.initial_balance - equity) / self.initial_balance * 100)) if self.initial_balance > 0 else 0
         
         return {
             'current_balance': current_balance,
@@ -172,7 +175,11 @@ class FTMOManager:
         if metrics['daily_loss_percent'] < metrics['daily_loss_limit']:
             return False, f"Daily loss limit exceeded: {metrics['daily_loss_percent']:.2f}% < {metrics['daily_loss_limit']}%"
         
-        # Check overall drawdown limit (-9%)
+        # Check overall drawdown limit (9%)
+        # Circuit breaker: block at 8.5% to prevent breach
+        circuit_breaker_threshold = 8.5
+        if metrics['overall_drawdown_percent'] >= circuit_breaker_threshold:
+            return False, f"Circuit breaker triggered: Overall drawdown {metrics['overall_drawdown_percent']:.2f}% >= {circuit_breaker_threshold}% (limit: 9%)"
         if metrics['overall_drawdown_percent'] > abs(metrics['drawdown_limit']):
             return False, f"Overall drawdown limit exceeded: {metrics['overall_drawdown_percent']:.2f}% > {abs(metrics['drawdown_limit'])}%"
         
@@ -234,6 +241,37 @@ METRICS:
 STATUS: {"TRADE ALLOWED" if self.is_trade_allowed()[0] else "TRADING BLOCKED"}
 """
         return dashboard
+
+    def get_risk_scale_factor(self) -> float:
+        """
+        Get risk scaling factor based on current drawdown.
+        Reduces risk as drawdown increases to protect capital.
+        
+        Returns:
+            float: Risk multiplier (0.25 to 1.0)
+        """
+        metrics = self.get_current_metrics()
+        if not metrics:
+            return 1.0
+        
+        dd = metrics['overall_drawdown_percent']
+        
+        # Risk scaling tiers:
+        # DD < 3%: 100% risk
+        # 3-5%: 70% risk
+        # 5-7%: 50% risk
+        # 7-8%: 35% risk
+        # >8%: 25% risk (emergency)
+        if dd < 3.0:
+            return 1.0
+        elif dd < 5.0:
+            return 0.7
+        elif dd < 7.0:
+            return 0.5
+        elif dd < 8.0:
+            return 0.35
+        else:
+            return 0.25
 
 # Global FTMO manager instance
 ftmo_manager = FTMOManager()

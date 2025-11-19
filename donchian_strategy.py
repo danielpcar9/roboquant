@@ -523,14 +523,25 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
             logging.error("Failed to get account info")
             return False
         from mt5_utils import estimate_lots_by_risk
+        # Apply adaptive risk scaling based on current drawdown
+        try:
+            from ftmo_manager import ftmo_manager
+            risk_scale = ftmo_manager.get_risk_scale_factor()
+            scaled_risk = RISK_PERCENT * risk_scale
+            if risk_scale < 1.0:
+                logging.info(f"Risk scaled down: {RISK_PERCENT}% → {scaled_risk:.2f}% (factor: {risk_scale:.2f})")
+        except Exception as e:
+            logging.warning(f"Failed to get risk scale factor, using full risk: {e}")
+            scaled_risk = RISK_PERCENT
+        
         calculated_lots = estimate_lots_by_risk(
             symbol=symbol,
             entry_price=price,
             stop_price=sl,
-            risk_pct=RISK_PERCENT,
+            risk_pct=scaled_risk,
             mt5_module=mt5
         )
-        logging.info(f"Risk: {RISK_PERCENT}% = ${account_info.balance * RISK_PERCENT / 100:.2f}, Lots: {calculated_lots}")
+        logging.info(f"Risk: {scaled_risk:.2f}% = ${account_info.balance * scaled_risk / 100:.2f}, Lots: {calculated_lots}")
         lots = calculated_lots
     
     # Validate final volume

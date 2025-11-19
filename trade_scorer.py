@@ -137,30 +137,39 @@ class TradeScorer:
             return 0
     
     def _score_momentum_ratio(self, momentum_ratio: float) -> int:
-        """Score momentum ratio (0-25 points)"""
-        if momentum_ratio > 1.5:
+        """Score momentum ratio (0-25 points) - refined for better quality"""
+        # Require positive momentum (current > historical) for full points
+        if momentum_ratio >= 1.5:
             return 25
-        elif momentum_ratio > 1.2:
+        elif momentum_ratio >= 1.2:
             return 20
-        elif momentum_ratio > 1.0:
-            return 15
-        elif momentum_ratio > 0.8:
-            return 10
+        elif momentum_ratio >= 1.0:
+            return 15  # Still allow trades at breakeven momentum
+        elif momentum_ratio >= 0.9:  # Slightly below historical
+            return 12  # Reduced but still tradeable
+        elif momentum_ratio >= 0.8:
+            return 8
         else:
-            return 0
+            return 5  # Very low score for weak momentum
     
     def _score_time_session(self) -> int:
-        """Score based on trading session (0-20 points)"""
+        """Score based on trading session (0-20 points) - enhanced for overlap periods"""
         current_hour_utc = datetime.now(timezone.utc).hour
         
-        # Best sessions: 7-10h and 13-16h UTC
-        if (7 <= current_hour_utc <= 10) or (13 <= current_hour_utc <= 16):
+        # Best sessions: London/NY overlap 13-16h UTC (highest liquidity)
+        if 13 <= current_hour_utc <= 16:
             return 20
-        # Good sessions: 6-7h, 10-13h, 16-17h UTC
-        elif (6 <= current_hour_utc <= 17) and not (11 <= current_hour_utc <= 12):
-            return 10
+        # Good: London open 7-10h UTC
+        elif 7 <= current_hour_utc <= 10:
+            return 18
+        # Acceptable: Late London/Early NY 10-13h, 16-17h UTC
+        elif (10 <= current_hour_utc <= 12) or (16 <= current_hour_utc <= 17):
+            return 12
+        # Moderate: Extended hours 6-7h, 17-20h UTC
+        elif (6 <= current_hour_utc <= 6) or (17 <= current_hour_utc <= 20):
+            return 8
         else:
-            return 0
+            return 0  # Low liquidity periods
     
     def _score_atr_volatility(self, atr_ratio: float) -> int:
         """Score ATR volatility (0-15 points)"""
