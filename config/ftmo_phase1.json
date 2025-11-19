@@ -35,6 +35,9 @@
   },
   "trailing": {
     "enabled": true,
+    "use_atr": true,
+    "start_atr_mult": 1.0,
+    "distance_atr_mult": 1.5,
     "start_pips": 50,
     "distance_pips": 50,
     "break_even_enabled": true,

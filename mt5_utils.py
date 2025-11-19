@@ -542,6 +542,10 @@ def update_trailing_stops(mt5_module=None):
         partial_tp_enabled = cfg.get('trailing.partial_tp_enabled', False)
         partial_tp_percent = cfg.get('trailing.partial_tp_percent', 50.0)
         partial_tp_at_r = cfg.get('trailing.partial_tp_at_r', 1.0)
+        # ATR-based trailing configuration
+        use_atr = cfg.get('trailing.use_atr', True)
+        start_atr_mult = cfg.get('trailing.start_atr_mult', 1.0)
+        distance_atr_mult = cfg.get('trailing.distance_atr_mult', 1.5)
     except Exception as e:
         # Use default values if configuration cannot be loaded
         trailing_enabled = True
@@ -551,6 +555,10 @@ def update_trailing_stops(mt5_module=None):
         partial_tp_enabled = False
         partial_tp_percent = 50.0
         partial_tp_at_r = 1.0
+        # ATR-based trailing defaults
+        use_atr = True
+        start_atr_mult = 1.0
+        distance_atr_mult = 1.5
         logging.debug(f"Using default trailing stop settings: {e}")
     
     # If trailing stops are disabled, exit early
@@ -581,9 +589,21 @@ def update_trailing_stops(mt5_module=None):
             digits = symbol_info.digits
             
             # Convert pips to price units
-            pip_value = point * 10  # Standard pip calculation
-            trailing_start_price = trailing_start_pips * pip_value
-            trailing_distance_price = trailing_distance_pips * pip_value
+            pip_value = point * 10
+            
+            # Determine trailing thresholds: ATR-based preferred
+            try:
+                from donchian_strategy import calculate_atr
+                atr = calculate_atr(symbol)
+            except Exception:
+                atr = None
+            
+            if use_atr and atr and atr > 0:
+                trailing_start_price = float(start_atr_mult) * float(atr)
+                trailing_distance_price = float(distance_atr_mult) * float(atr)
+            else:
+                trailing_start_price = trailing_start_pips * pip_value
+                trailing_distance_price = trailing_distance_pips * pip_value
             
             # Calculate current profit in price units
             if order_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
