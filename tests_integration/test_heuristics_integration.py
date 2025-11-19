@@ -5,10 +5,10 @@ import os
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from trade_scorer import TradeScorer
-from market_regime import market_regime_detector
-from adaptive_risk import adaptive_risk_manager
-from session_filter import session_filter
+from analysis.trade_scorer import TradeScorer
+from core.market_regime import market_regime_detector
+from risk.adaptive_risk import adaptive_risk_manager
+from core.session_filter import session_filter
 
 def test_heuristics_integration():
     """Test the integration of all heuristic components"""

@@ -101,7 +101,7 @@ Time: {}
 def alert_daily_summary():
     """Envía resumen diario automático al final del día"""
     try:
-        from post_mortem import analyze_recent_trades
+        from analysis.post_mortem import analyze_recent_trades
         # Import MetaTrader5 (official package name)
         import MetaTrader5 as mt5  # type: ignore
         

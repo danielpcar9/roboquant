@@ -225,7 +225,7 @@ class FTMOSafety(Safety):
         
         # Import FTMO manager
         try:
-            from ftmo_manager import ftmo_manager
+            from risk.ftmo_manager import ftmo_manager
             self.ftmo_manager = ftmo_manager
         except ImportError:
             logging.error("Failed to import FTMO manager")

@@ -8,13 +8,13 @@ from typing import Callable, Any
 import MetaTrader5 as mt5  # type: ignore
 
 # Import error handling components
-from error_handler import safe_mt5_call, MT5ConnectionError, OrderExecutionError, MT5_ERROR_CODES, retry_with_exponential_backoff
+from services.error_handler import safe_mt5_call, MT5ConnectionError, OrderExecutionError, MT5_ERROR_CODES, retry_with_exponential_backoff
 
 # Import consolidated performance monitoring
-from mt5_core import mt5_performance_monitor as performance_monitor
+from brokers.mt5_core import mt5_performance_monitor as performance_monitor
 
 # Import consolidated MT5 utility functions
-from mt5_core import validate_and_adjust_stops, normalize_volume, get_filling_mode
+from brokers.mt5_core import validate_and_adjust_stops, normalize_volume, get_filling_mode
 
 # Performance monitoring
 PERFORMANCE_MONITORING_ENABLED = True
@@ -532,7 +532,7 @@ def update_trailing_stops(mt5_module=None):
     
     # Get set file configuration for trailing stops
     try:
-        from set_file_manager import get_set_manager
+        from config.set_file_manager import get_set_manager
         cfg = get_set_manager()
         # Get trailing stop configuration with defaults
         trailing_enabled = cfg.get('trailing.enabled', True)
@@ -593,7 +593,7 @@ def update_trailing_stops(mt5_module=None):
             
             # Determine trailing thresholds: ATR-based preferred
             try:
-                from donchian_strategy import calculate_atr
+                from core.donchian_strategy import calculate_atr
                 atr = calculate_atr(symbol)
             except Exception:
                 atr = None
@@ -738,13 +738,13 @@ def monitor_and_update_stops(mt5_module=None):
                     point = 1.0
                 # Use ATR-based SL/TP distances
                 try:
-                    from donchian_strategy import calculate_atr
+                    from core.donchian_strategy import calculate_atr
                     atr = calculate_atr(symbol)
                 except Exception:
                     atr = point * 50  # fallback
                 # Multipliers from set file if available
                 try:
-                    from set_file_manager import get_set_manager
+                    from config.set_file_manager import get_set_manager
                     cfg = get_set_manager()
                     sl_mult = cfg.get('strategy.sl_atr_multiplier', 3.0)
                     tp_mult = cfg.get('strategy.tp_atr_multiplier', 6.0)
@@ -765,13 +765,13 @@ def monitor_and_update_stops(mt5_module=None):
                     point = 1.0
                 # Use ATR-based SL/TP distances
                 try:
-                    from donchian_strategy import calculate_atr
+                    from core.donchian_strategy import calculate_atr
                     atr = calculate_atr(symbol)
                 except Exception:
                     atr = point * 50  # fallback
                 # Multipliers from set file if available
                 try:
-                    from set_file_manager import get_set_manager
+                    from config.set_file_manager import get_set_manager
                     cfg = get_set_manager()
                     sl_mult = cfg.get('strategy.sl_atr_multiplier', 3.0)
                     tp_mult = cfg.get('strategy.tp_atr_multiplier', 6.0)

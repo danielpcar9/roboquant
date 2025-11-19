@@ -7,16 +7,16 @@ import hashlib
 import os
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
-from mt5_utils import build_and_send_order, normalize_volume, MT5Gateway
-from safety import Safety
-from security_manager import SecureCredentialManager, InputValidator, RateLimiter, constant_time_compare, sanitize_error_message, ip_whitelist
+from brokers.mt5_utils import build_and_send_order, normalize_volume, MT5Gateway
+from risk.safety import Safety
+from services.security_manager import SecureCredentialManager, InputValidator, RateLimiter, constant_time_compare, sanitize_error_message, ip_whitelist
 # Import config manager
-from config_manager import config_manager
+from config.config_manager import config_manager
 
 # Import consolidated MT5 functions
-from mt5_core import initialize_mt5
+from brokers.mt5_core import initialize_mt5
 # Import ATR calculation function
-from donchian_strategy import calculate_atr
+from core.donchian_strategy import calculate_atr
 
 # Configure logging
 logging.basicConfig(

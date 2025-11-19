@@ -22,7 +22,7 @@ except ImportError:
 SAFETY_MODULE_AVAILABLE = False
 Safety = None
 try:
-    from safety import Safety
+    from risk.safety import Safety
     SAFETY_MODULE_AVAILABLE = True
 except ImportError:
     logging.warning("Safety module not available")

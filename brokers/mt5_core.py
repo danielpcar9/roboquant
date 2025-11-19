@@ -12,7 +12,7 @@ from typing import Optional
 import MetaTrader5 as mt5  # type: ignore
 
 # Import security manager for credential handling
-from security_manager import SecureCredentialManager, sanitize_error_message
+from services.security_manager import SecureCredentialManager, sanitize_error_message
 
 # Initialize credential manager
 credential_manager = SecureCredentialManager()

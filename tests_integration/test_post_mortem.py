@@ -8,7 +8,7 @@ import tempfile
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from post_mortem import log_trade, analyze_recent_trades, generate_performance_report, TRADE_COLUMNS
+from analysis.post_mortem import log_trade, analyze_recent_trades, generate_performance_report, TRADE_COLUMNS
 
 def test_log_trade():
     """Test log_trade functionality."""
@@ -249,7 +249,7 @@ def test_mt5_metrics():
     
     try:
         # Import the MT5 metrics functions
-        from post_mortem import (
+        from analysis.post_mortem import (
             get_mt5_trade_history,
             calculate_profit_factor_from_trades,
             calculate_sharpe_ratio_from_trades,

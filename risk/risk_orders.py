@@ -5,17 +5,17 @@ from datetime import datetime
 from dotenv import load_dotenv
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
-from safety import Safety
-from mt5_utils import build_and_send_order, estimate_lots_by_risk
-from post_mortem import log_trade
-from alerts import alert_trade_opened, alert_safety_violation
+from risk.safety import Safety
+from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
+from analysis.post_mortem import log_trade
+from services.alerts import alert_trade_opened, alert_safety_violation
 # Import error handler
-from error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
+from services.error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
 
 # Import consolidated MT5 functions
-from mt5_core import initialize_mt5
+from brokers.mt5_core import initialize_mt5
 # Import ATR calculation function
-from donchian_strategy import calculate_atr
+from core.donchian_strategy import calculate_atr
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -142,7 +142,7 @@ def execute_risk_order():
 
     except Exception as e:
         logging.exception("Error al ejecutar orden")
-        from alerts import telegram_alert
+        from services.alerts import telegram_alert
         telegram_alert("Error al ejecutar orden: " + str(e))
         return False
     finally:

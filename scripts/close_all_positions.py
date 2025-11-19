@@ -14,10 +14,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 import MetaTrader5 as mt5  # type: ignore
 
 # Import our MT5Gateway
-from mt5_utils import MT5Gateway
+from brokers.mt5_utils import MT5Gateway
 
 # Import consolidated MT5 functions
-from mt5_core import initialize_mt5
+from brokers.mt5_core import initialize_mt5
 
 def close_all_positions():
     """Main function to close all open positions using MT5Gateway"""

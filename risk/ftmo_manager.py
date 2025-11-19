@@ -134,11 +134,11 @@ class FTMOManager:
             return False, "Failed to get account information"
         
         # Check trading hours (from configuration)
-        from config_manager import config_manager
+        from config.config_manager import config_manager
         
         # Try to get trading hours from set file first, fallback to config_manager
         try:
-            from set_file_manager import get_set_manager
+            from config.set_file_manager import get_set_manager
             cfg = get_set_manager()
             # Load set file if specified
             set_file = os.getenv('ROBOQUANT_SET_FILE')

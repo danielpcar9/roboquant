@@ -5,7 +5,7 @@ Centralized configuration management for RoboQuant trading system.
 
 import os
 from typing import Any, Optional
-from security_manager import SecureCredentialManager
+from services.security_manager import SecureCredentialManager
 
 class ConfigManager:
     """Manages all configuration parameters for the trading system."""

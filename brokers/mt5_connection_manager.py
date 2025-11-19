@@ -5,8 +5,8 @@ Eliminates duplication across the codebase and provides consistent error handlin
 
 import logging
 from typing import Optional, Tuple
-from security_manager import SecureCredentialManager, sanitize_error_message
-from error_handler import handle_exception, MT5ConnectionError
+from services.security_manager import SecureCredentialManager, sanitize_error_message
+from services.error_handler import handle_exception, MT5ConnectionError
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore

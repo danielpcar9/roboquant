@@ -13,21 +13,21 @@ from typing import Optional
 import MetaTrader5 as mt5  # type: ignore
 
 
-from mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops, place_pending_order, cancel_expired_pending_orders, update_trailing_stops, MT5Gateway
-from safety import Safety
+from brokers.mt5_utils import build_and_send_order, normalize_volume, monitor_and_update_stops, place_pending_order, cancel_expired_pending_orders, update_trailing_stops, MT5Gateway
+from risk.safety import Safety
 # Import security manager
-from security_manager import SecureCredentialManager, InputValidator, sanitize_error_message, RateLimiter
+from services.security_manager import SecureCredentialManager, InputValidator, sanitize_error_message, RateLimiter
 # Import config manager
-from config_manager import config_manager
+from config.config_manager import config_manager
 # Import set file manager
-from set_file_manager import get_set_manager
+from config.set_file_manager import get_set_manager
 # Import error handler
-from error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
+from services.error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
 # Import news filter
-from news_filter import news_filter
+from services.news_filter import news_filter
 
 # Import consolidated performance monitoring
-from mt5_core import strategy_performance_monitor as performance_monitor
+from brokers.mt5_core import strategy_performance_monitor as performance_monitor
 
 # Set up logging with more detailed level
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -582,10 +582,10 @@ def execute_trade(symbol, order_type, lots, sl_points, tp_points):
         if account_info is None:
             logging.error("Failed to get account info")
             return False
-        from mt5_utils import estimate_lots_by_risk
+        from brokers.mt5_utils import estimate_lots_by_risk
         # Apply adaptive risk scaling based on current drawdown
         try:
-            from ftmo_manager import ftmo_manager
+            from risk.ftmo_manager import ftmo_manager
             risk_scale = ftmo_manager.get_risk_scale_factor()
             scaled_risk = RISK_PERCENT * risk_scale
             if risk_scale < 1.0:
@@ -1443,7 +1443,7 @@ def main():
         return
     
     # Initialize FTMO safety module
-    from safety import FTMOSafety
+    from risk.safety import FTMOSafety
     safety = FTMOSafety(mt5_module=mt5)
     ds = DonchianStrategy()
     
@@ -1463,14 +1463,14 @@ def main():
             logging.info("Safety checks passed")
             # Show FTMO dashboard
             try:
-                from ftmo_manager import ftmo_manager
+                from risk.ftmo_manager import ftmo_manager
                 logging.info(ftmo_manager.get_ftmo_dashboard())
             except Exception as e:
                 logging.debug(f"Failed to show FTMO dashboard: {e}")
             ds.run_strategy(symbol)
         
         # Import the monitoring function
-        from mt5_utils import monitor_and_update_stops
+        from brokers.mt5_utils import monitor_and_update_stops
         
         # Then continue with the loop
         while True:
@@ -1486,7 +1486,7 @@ def main():
                 import random
                 if random.randint(1, 10) == 1:  # Roughly every 50 minutes
                     try:
-                        from ftmo_manager import ftmo_manager
+                        from risk.ftmo_manager import ftmo_manager
                         logging.info(ftmo_manager.get_ftmo_dashboard())
                     except Exception as e:
                         logging.debug(f"Failed to show FTMO dashboard: {e}")

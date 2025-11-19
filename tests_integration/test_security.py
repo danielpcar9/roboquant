@@ -7,7 +7,7 @@ import os
 import tempfile
 import time
 from dotenv import load_dotenv
-from security_manager import SecureCredentialManager, InputValidator, RateLimiter, sanitize_error_message, constant_time_compare, ip_whitelist
+from services.security_manager import SecureCredentialManager, InputValidator, RateLimiter, sanitize_error_message, constant_time_compare, ip_whitelist
 
 def test_secure_credential_manager():
     """Test SecureCredentialManager functionality."""

@@ -5,7 +5,7 @@ import os
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from session_filter import session_filter
+from core.session_filter import session_filter
 
 def test_session_filter():
     """Test the SessionFilter implementation"""
