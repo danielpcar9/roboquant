@@ -714,12 +714,25 @@ def monitor_and_update_stops(mt5_module=None):
                 # Set reasonable SL/TP based on config - using ATR multipliers
                 symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
                 point = symbol_info.point if symbol_info else 0.01
-                # Adjust point value for NASDAQ
                 if 'NASDAQ' in symbol.upper():
-                    point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
-                # Use default ATR multipliers (LOW RISK profile)
-                sl_distance = 3.0 * point  # 3.0 ATR multiplier
-                tp_distance = 6.0 * point  # 6.0 ATR multiplier
+                    point = 1.0
+                # Use ATR-based SL/TP distances
+                try:
+                    from donchian_strategy import calculate_atr
+                    atr = calculate_atr(symbol)
+                except Exception:
+                    atr = point * 50  # fallback
+                # Multipliers from set file if available
+                try:
+                    from set_file_manager import get_set_manager
+                    cfg = get_set_manager()
+                    sl_mult = cfg.get('strategy.sl_atr_multiplier', 3.0)
+                    tp_mult = cfg.get('strategy.tp_atr_multiplier', 6.0)
+                except Exception:
+                    sl_mult = 3.0
+                    tp_mult = 6.0
+                sl_distance = sl_mult * atr
+                tp_distance = tp_mult * atr
                 sl_price = entry_price - sl_distance
                 tp_price = entry_price + tp_distance
             else:
@@ -728,12 +741,25 @@ def monitor_and_update_stops(mt5_module=None):
                 # Set reasonable SL/TP based on config - using ATR multipliers
                 symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
                 point = symbol_info.point if symbol_info else 0.01
-                # Adjust point value for NASDAQ
                 if 'NASDAQ' in symbol.upper():
-                    point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
-                # Use default ATR multipliers (LOW RISK profile)
-                sl_distance = 3.0 * point  # 3.0 ATR multiplier
-                tp_distance = 6.0 * point  # 6.0 ATR multiplier
+                    point = 1.0
+                # Use ATR-based SL/TP distances
+                try:
+                    from donchian_strategy import calculate_atr
+                    atr = calculate_atr(symbol)
+                except Exception:
+                    atr = point * 50  # fallback
+                # Multipliers from set file if available
+                try:
+                    from set_file_manager import get_set_manager
+                    cfg = get_set_manager()
+                    sl_mult = cfg.get('strategy.sl_atr_multiplier', 3.0)
+                    tp_mult = cfg.get('strategy.tp_atr_multiplier', 6.0)
+                except Exception:
+                    sl_mult = 3.0
+                    tp_mult = 6.0
+                sl_distance = sl_mult * atr
+                tp_distance = tp_mult * atr
                 sl_price = entry_price + sl_distance
                 tp_price = entry_price - tp_distance
             

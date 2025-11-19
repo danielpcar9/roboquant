@@ -35,8 +35,8 @@
   },
   "trailing": {
     "enabled": true,
-    "start_pips": 10,
-    "distance_pips": 15,
+    "start_pips": 50,
+    "distance_pips": 50,
     "break_even_enabled": true,
     "partial_tp_enabled": false,
     "partial_tp_percent": 50.0,
