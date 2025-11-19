@@ -710,12 +710,12 @@ def monitor_and_update_stops(mt5_module=None):
         return
     
     for pos in positions:
-        # Check if position has SL/TP
+        # Check if position has SL
         sl = getattr(pos, 'sl', 0)
-        tp = getattr(pos, 'tp', 0)
         
-        # If SL or TP is missing or zero, try to add them
-        if sl == 0 or tp == 0:
+        # Only add SL/TP if SL is missing (avoid overwriting trailing stops)
+        # TP can be zero if trailing removed it, but we preserve SL
+        if sl == 0:
             symbol = pos.symbol
             ticket = pos.ticket
             
