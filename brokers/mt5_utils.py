@@ -652,11 +652,17 @@ def update_trailing_stops(mt5_module=None):
                     # For break-even, ensure SL is at least at entry price
                     if break_even_enabled and new_sl < price_open:
                         new_sl = price_open
+                    # CRITICAL: Never allow SL to move backwards (always lock in gains)
+                    if sl > 0 and new_sl < sl:
+                        new_sl = sl  # Keep current SL if calculated one would be worse
                 else:  # SELL
                     new_sl = current_price + trailing_distance_price
                     # For break-even, ensure SL is at least at entry price
                     if break_even_enabled and new_sl > price_open:
                         new_sl = price_open
+                    # CRITICAL: Never allow SL to move backwards (always lock in gains)
+                    if sl > 0 and new_sl > sl:
+                        new_sl = sl  # Keep current SL if calculated one would be worse
                 
                 # Only update if new SL is better than current SL
                 should_update = False
