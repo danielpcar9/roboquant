@@ -665,19 +665,23 @@ def update_trailing_stops(mt5_module=None):
                         new_sl = sl  # Keep current SL if calculated one would be worse
                 
                 # Only update if new SL is better than current SL
+                rounded_new_sl = round(new_sl, digits)
+                rounded_sl = round(sl, digits) if sl > 0 else 0
                 should_update = False
-                if order_type == mt5_module.POSITION_TYPE_BUY and (sl == 0 or new_sl > sl):  # type: ignore
+                if order_type == mt5_module.POSITION_TYPE_BUY and (sl == 0 or rounded_new_sl > rounded_sl):  # type: ignore
                     should_update = True
-                elif order_type == mt5_module.POSITION_TYPE_SELL and (sl == 0 or new_sl < sl):  # type: ignore
+                elif order_type == mt5_module.POSITION_TYPE_SELL and (sl == 0 or rounded_new_sl < rounded_sl):  # type: ignore
                     should_update = True
                 
                 if should_update:
+                    # Debug log: show previous vs calculated SL
+                    logging.debug(f"Trailing calc for {symbol} ticket {ticket}: prev_sl={rounded_sl:.{digits}f}, calc_sl={rounded_new_sl:.{digits}f}, price={current_price:.{digits}f}, type={'BUY' if order_type == mt5_module.POSITION_TYPE_BUY else 'SELL'}")
                     # Prepare modification request
                     request = {
                         'action': mt5_module.TRADE_ACTION_SLTP,  # type: ignore
                         'symbol': symbol,
                         'position': int(ticket),
-                        'sl': round(new_sl, digits),
+                        'sl': rounded_new_sl,
                         'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
                         'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
                     }
@@ -686,7 +690,7 @@ def update_trailing_stops(mt5_module=None):
                     try:
                         result = mt5_module.order_send(request)  # type: ignore
                         if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-                            logging.info(f"Trailing stop updated for position {ticket}: SL moved to {new_sl:.{digits}f}")
+                            logging.info(f"Trailing stop updated for position {ticket}: SL moved to {rounded_new_sl:.{digits}f}")
                         else:
                             retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
                             comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
