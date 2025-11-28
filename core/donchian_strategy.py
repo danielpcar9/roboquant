@@ -857,7 +857,16 @@ def place_session_breakout_orders(symbol, session_name):
 
     # Enforce a minimum gap between pending orders to avoid opposite triggers near market
     gap_points = buy_price - sell_price
-    min_gap_points = max(0.5 * atr, 60 * pip_value)  # Dynamic gap: max(0.5*ATR, 60 pips)
+    # Read min gap from config (pips), fallback to 60
+    try:
+        cfg = get_set_manager()
+        set_file = os.getenv('ROBOQUANT_SET_FILE', 'default.json')
+        if set_file:
+            cfg.load_set_file(set_file)
+        min_gap_pips = cfg.get('position_limits.min_pending_gap_pips', 60)
+    except Exception:
+        min_gap_pips = 60
+    min_gap_points = max(0.5 * atr, float(min_gap_pips) * pip_value)
     if gap_points < min_gap_points:
         logging.info(f"Pending order gap too small ({gap_points:.5f} pts). Applying single-side placement to avoid opposite triggers.")
         # Choose the side farther from current price to reduce immediate whipsaw

@@ -20,7 +20,7 @@
     "max_positions": 2,
     "max_positions_per_symbol": 2,
     "allow_pyramiding": true,
-    "min_pending_gap_pips": 40
+    "min_pending_gap_pips": 120
   },
   "performance": {
     "daily_loss_limit_pct": -4.0,
