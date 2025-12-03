@@ -25,6 +25,8 @@ from config.set_file_manager import get_set_manager
 from services.error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
 # Import news filter
 from services.news_filter import news_filter
+# Import market regime detector
+from core.market_regime import market_regime_detector
 
 # Import consolidated performance monitoring
 from brokers.mt5_core import strategy_performance_monitor as performance_monitor
@@ -1107,6 +1109,38 @@ def run_strategy(symbol="XAUUSD"):
     if spread > MAX_SPREAD_POINTS:
         logging.info(f"Spread too high: {spread:.2f} points > {MAX_SPREAD_POINTS} points, skipping")
         return
+    
+    # CHECK MARKET REGIME (ADX FILTER)
+    # Get ADX filter settings from configuration
+    try:
+        cfg = get_set_manager()
+        require_adx = cfg.get('strategy.require_adx_confirmation', False)
+        adx_threshold = cfg.get('strategy.adx_threshold', 20)
+        adx_period = cfg.get('strategy.adx_period', 14)
+    except:
+        require_adx = False
+        adx_threshold = 20
+        adx_period = 14
+    
+    # Apply ADX filter if enabled
+    if require_adx:
+        regime, adx_value, slope_value = market_regime_detector.detect_regime(
+            symbol, 
+            adx_period=adx_period,
+            adx_threshold=adx_threshold
+        )
+        
+        if regime == "RANGING":
+            # The market_regime_detector already logs detailed ADX+DI info
+            logging.info(f"Market is RANGING, skipping trade")
+            logging.info("ADX filter prevents trading in ranging markets to avoid false breakouts")
+            return
+        elif regime == "UNKNOWN":
+            logging.warning(f"Unable to determine market regime, skipping trade as precaution")
+            return
+        else:
+            # market_regime_detector already logs detailed trending info
+            logging.info(f"Market is TRENDING (ADX: {adx_value:.2f} > {adx_threshold}), proceeding with strategy")
     
     # Cancel expired pending orders
     cancel_expired_pending_orders(MAGIC_NUMBER)

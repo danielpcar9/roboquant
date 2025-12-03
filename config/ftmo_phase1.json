@@ -1,6 +1,6 @@
 {
   "risk_management": {
-    "risk_per_trade_pct": 1.0,
+    "risk_per_trade_pct": 0.5,
     "adaptive_risk_scaling": true
   },
   "strategy": {
@@ -9,7 +9,9 @@
     "sl_atr_multiplier": 3.0,
     "tp_atr_multiplier": 6.0,
     "min_momentum_ratio": 0.9,
-    "require_adx_confirmation": false
+    "require_adx_confirmation": true,
+    "adx_threshold": 18,
+    "adx_period": 14
   },
   "trading_hours": {
     "start": 0,
@@ -24,8 +26,8 @@
   },
   "performance": {
     "daily_loss_limit_pct": -4.0,
-    "overall_dd_limit_pct": 9.0,
-    "circuit_breaker_pct": 8.5,
+    "overall_dd_limit_pct": 10.0,
+    "circuit_breaker_pct": 8.0,
     "risk_reward_ratio": 2.0
   },
   "trading_parameters": {
@@ -36,20 +38,20 @@
   "trailing": {
     "enabled": true,
     "use_atr": true,
-    "start_atr_mult": 1.0,
-    "distance_atr_mult": 1.5,
-    "start_pips": 50,
-    "distance_pips": 50,
+    "start_atr_mult": 1.5,
+    "distance_atr_mult": 2.0,
+    "start_pips": 80,
+    "distance_pips": 80,
     "break_even_enabled": true,
-    "partial_tp_enabled": false,
+    "partial_tp_enabled": true,
     "partial_tp_percent": 50.0,
-    "partial_tp_at_r": 1.0
+    "partial_tp_at_r": 2.0
   },
   "news_filter": {
     "enabled": true,
-    "major_events_only": true,
-    "avoid_events": ["NFP", "CPI", "PPI", "FOMC"],
-    "buffer_minutes": 30
+    "major_events_only": false,
+    "avoid_events": ["NFP", "CPI", "FOMC", "Retail Sales", "GDP", "Rate Decision"],
+    "buffer_minutes": 45
   },
   "safety": {
     "kill_switch_on_breach": true,

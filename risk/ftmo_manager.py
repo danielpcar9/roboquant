@@ -11,10 +11,11 @@ import MetaTrader5 as mt5  # type: ignore
 class FTMOManager:
     """FTMO Challenge Compliance Manager"""
     
-    def __init__(self, config_file: str = "ftmo_config.json"):
+    def __init__(self, config_file: str = "ftmo_config.json", ftmo_starting_balance: float = 10000.0):
         self.config_file = config_file
         self.midnight_balance = 0.0
         self.initial_balance = 0.0
+        self.ftmo_starting_balance = ftmo_starting_balance  # The actual FTMO account starting balance
         self.trading_days = 0
         self.last_reset_date = None
         self.daily_losses = {}  # date -> loss
@@ -38,6 +39,7 @@ class FTMOManager:
                     config = json.load(f)
                     self.midnight_balance = config.get('midnight_balance', 0.0)
                     self.initial_balance = config.get('initial_balance', 0.0)
+                    self.ftmo_starting_balance = config.get('ftmo_starting_balance', 10000.0)
                     self.trading_days = config.get('trading_days', 0)
                     self.last_reset_date = datetime.fromisoformat(config['last_reset_date']) if config.get('last_reset_date') else None
                     self.daily_losses = config.get('daily_losses', {})
@@ -52,6 +54,7 @@ class FTMOManager:
             config = {
                 'midnight_balance': self.midnight_balance,
                 'initial_balance': self.initial_balance,
+                'ftmo_starting_balance': self.ftmo_starting_balance,
                 'trading_days': self.trading_days,
                 'last_reset_date': self.last_reset_date.isoformat() if self.last_reset_date else None,
                 'daily_losses': self.daily_losses,
@@ -92,22 +95,27 @@ class FTMOManager:
         today_str = datetime.now(cet).strftime('%Y-%m-%d')
         daily_loss = ((current_balance - self.midnight_balance) / self.midnight_balance * 100) if self.midnight_balance > 0 else 0
         
-        # Calculate overall drawdown from peak balance (initial)
-        # Drawdown = (Peak - Current) / Peak × 100
-        # When equity drops, drawdown is POSITIVE (e.g., 5% drawdown)
-        # Formula corrected: was inverted, showing negative when losing money
-        overall_drawdown = max(0, ((self.initial_balance - equity) / self.initial_balance * 100)) if self.initial_balance > 0 else 0
+        # Calculate overall drawdown from FTMO starting balance (clamped at 0% if equity >= starting)
+        # Drawdown = max(0, (Starting Balance - Equity) / Starting Balance * 100)
+        floor_balance = self.ftmo_starting_balance * 0.90
+        overall_drawdown = max(0.0, ((self.ftmo_starting_balance - equity) / self.ftmo_starting_balance * 100)) if self.ftmo_starting_balance > 0 else 0
+        buffer_to_floor_usd = max(0.0, equity - floor_balance)
+        buffer_to_floor_pct = (buffer_to_floor_usd / self.ftmo_starting_balance * 100) if self.ftmo_starting_balance > 0 else 0
         
         return {
             'current_balance': current_balance,
             'equity': equity,
             'midnight_balance': self.midnight_balance,
             'initial_balance': self.initial_balance,
+            'ftmo_starting_balance': self.ftmo_starting_balance,
             'daily_loss_percent': daily_loss,
             'overall_drawdown_percent': overall_drawdown,
+            'buffer_to_floor_usd': buffer_to_floor_usd,
+            'buffer_to_floor_pct': buffer_to_floor_pct,
+            'loss_floor_balance': floor_balance,
             'trading_days': self.trading_days,
             'daily_loss_limit': -4.0,  # 4% daily loss limit
-            'drawdown_limit': -9.0,     # 9% overall drawdown limit
+            'drawdown_limit': 10.0,     # 10% overall drawdown limit (positive value)
             'min_trading_days': 1       # Changed from 4 to 1 for testing
         }
     
@@ -175,13 +183,13 @@ class FTMOManager:
         if metrics['daily_loss_percent'] < metrics['daily_loss_limit']:
             return False, f"Daily loss limit exceeded: {metrics['daily_loss_percent']:.2f}% < {metrics['daily_loss_limit']}%"
         
-        # Check overall drawdown limit (9%)
-        # Circuit breaker: block at 8.5% to prevent breach
-        circuit_breaker_threshold = 8.5
+        # Check overall drawdown limit (10%)
+        # Circuit breaker: block at 9.5% to prevent breach
+        circuit_breaker_threshold = 9.5
         if metrics['overall_drawdown_percent'] >= circuit_breaker_threshold:
-            return False, f"Circuit breaker triggered: Overall drawdown {metrics['overall_drawdown_percent']:.2f}% >= {circuit_breaker_threshold}% (limit: 9%)"
-        if metrics['overall_drawdown_percent'] > abs(metrics['drawdown_limit']):
-            return False, f"Overall drawdown limit exceeded: {metrics['overall_drawdown_percent']:.2f}% > {abs(metrics['drawdown_limit'])}%"
+            return False, f"Circuit breaker triggered: Overall drawdown {metrics['overall_drawdown_percent']:.2f}% >= {circuit_breaker_threshold}% (limit: {metrics['drawdown_limit']}%)"
+        if metrics['overall_drawdown_percent'] >= metrics['drawdown_limit']:
+            return False, f"Overall drawdown limit exceeded: {metrics['overall_drawdown_percent']:.2f}% >= {metrics['drawdown_limit']}%"
         
         # Check minimum trading days
         if metrics['trading_days'] < metrics['min_trading_days']:
@@ -229,14 +237,17 @@ Time (CET): {now_cet.strftime('%Y-%m-%d %H:%M:%S')}
 Trading Days: {metrics['trading_days']}/4
 
 BALANCES:
-  Initial: ${metrics['initial_balance']:.2f}
+  FTMO Starting: ${metrics['ftmo_starting_balance']:.2f}
+  Initial Balance: ${metrics['initial_balance']:.2f}
   Midnight: ${metrics['midnight_balance']:.2f}
   Current: ${metrics['current_balance']:.2f}
   Equity: ${metrics['equity']:.2f}
+  Profit vs Start: ${metrics['equity'] - metrics['ftmo_starting_balance']:.2f}
 
 METRICS:
   Daily Loss: {metrics['daily_loss_percent']:.2f}% (Limit: -4%)
-  Overall Drawdown: {metrics['overall_drawdown_percent']:.2f}% (Limit: -9%)
+  Overall Drawdown: {metrics['overall_drawdown_percent']:.2f}% (Limit: {metrics['drawdown_limit']}%)
+  Buffer to $9,000 floor: ${metrics['buffer_to_floor_usd']:.2f} ({metrics['buffer_to_floor_pct']:.2f}%)
   
 STATUS: {"TRADE ALLOWED" if self.is_trade_allowed()[0] else "TRADING BLOCKED"}
 """

@@ -1,5 +1,7 @@
 import logging
 from typing import Tuple, Optional
+import pandas as pd
+import numpy as np
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
@@ -12,7 +14,7 @@ class MarketRegimeDetector:
     
     def calculate_adx(self, symbol: str, period: int = 14) -> Optional[float]:
         """
-        Calculate ADX (Average Directional Index)
+        Calculate ADX (Average Directional Index) - IMPROVED VERSION
         
         Args:
             symbol: Trading symbol
@@ -22,39 +24,54 @@ class MarketRegimeDetector:
             ADX value or None if calculation fails
         """
         try:
-            # Get historical data
-            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_H1, 1, period + 10)  # type: ignore
-            if rates is None or len(rates) < period + 10:
+            # Get historical data (need more bars for accurate ADX)
+            bars_needed = period * 3  # Ensure enough data
+            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_H1, 1, bars_needed)  # type: ignore
+            if rates is None or len(rates) < bars_needed:
                 logging.warning(f"Insufficient data to calculate ADX for {symbol}")
                 return None
             
-            # Simplified ADX calculation (in a real implementation, you would calculate the full ADX)
-            # For now, we'll use a simplified approach based on price movement
-            closes = [rate['close'] for rate in rates]
-            highs = [rate['high'] for rate in rates]
-            lows = [rate['low'] for rate in rates]
+            # Convert to DataFrame for easier manipulation
+            df = pd.DataFrame(rates)
             
-            # Calculate directional movement
-            plus_dm = 0
-            minus_dm = 0
+            # Calculate True Range
+            df['high_low'] = df['high'] - df['low']
+            df['high_close'] = np.abs(df['high'] - df['close'].shift())
+            df['low_close'] = np.abs(df['low'] - df['close'].shift())
+            df['tr'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
             
-            for i in range(1, len(closes)):
-                up_move = highs[i] - highs[i-1]
-                down_move = lows[i-1] - lows[i]
-                
-                if up_move > down_move and up_move > 0:
-                    plus_dm += up_move
-                elif down_move > up_move and down_move > 0:
-                    minus_dm += down_move
+            # Calculate +DM and -DM
+            df['up_move'] = df['high'] - df['high'].shift()
+            df['down_move'] = df['low'].shift() - df['low']
             
-            # Calculate ADX approximation
-            tr_sum = sum(high - low for high, low in zip(highs[-period:], lows[-period:]))
-            plus_di = (plus_dm / tr_sum) * 100 if tr_sum > 0 else 0
-            minus_di = (minus_dm / tr_sum) * 100 if tr_sum > 0 else 0
+            df['plus_dm'] = np.where((df['up_move'] > df['down_move']) & (df['up_move'] > 0), df['up_move'], 0)
+            df['minus_dm'] = np.where((df['down_move'] > df['up_move']) & (df['down_move'] > 0), df['down_move'], 0)
             
-            adx = abs(plus_di - minus_di) / (plus_di + minus_di) * 100 if (plus_di + minus_di) > 0 else 0
+            # Smooth using Wilder's smoothing (exponential moving average)
+            alpha = 1 / period
+            df['atr'] = df['tr'].ewm(alpha=alpha, adjust=False).mean()
+            df['plus_dm_smooth'] = df['plus_dm'].ewm(alpha=alpha, adjust=False).mean()
+            df['minus_dm_smooth'] = df['minus_dm'].ewm(alpha=alpha, adjust=False).mean()
             
-            return adx
+            # Calculate +DI and -DI
+            df['plus_di'] = 100 * (df['plus_dm_smooth'] / df['atr'])
+            df['minus_di'] = 100 * (df['minus_dm_smooth'] / df['atr'])
+            
+            # Calculate DX
+            df['dx'] = 100 * np.abs(df['plus_di'] - df['minus_di']) / (df['plus_di'] + df['minus_di'])
+            
+            # Calculate ADX (smoothed DX)
+            df['adx'] = df['dx'].ewm(alpha=alpha, adjust=False).mean()
+            
+            # Return most recent ADX value
+            adx_value = df['adx'].iloc[-1]
+            
+            if pd.isna(adx_value):
+                logging.warning(f"ADX calculation resulted in NaN for {symbol}")
+                return None
+            
+            return float(adx_value)
+            
         except Exception as e:
             logging.error(f"Error calculating ADX for {symbol}: {e}")
             return None
@@ -100,14 +117,16 @@ class MarketRegimeDetector:
             logging.error(f"Error calculating slope for {symbol}: {e}")
             return None
     
-    def detect_regime(self, symbol: str, adx_period: int = 14, slope_period: int = 30) -> Tuple[str, float, float]:
+    def detect_regime(self, symbol: str, adx_period: int = 14, slope_period: int = 30, adx_threshold: int = 20, di_threshold: int = 26) -> Tuple[str, float, float]:
         """
-        Detect market regime (trending/ranging)
+        Detect market regime (trending/ranging) - IMPROVED VERSION with DI filter
         
         Args:
             symbol: Trading symbol
             adx_period: ADX calculation period
             slope_period: Slope calculation period
+            adx_threshold: ADX threshold for trending market (default 20)
+            di_threshold: Minimum DI value for strong directional movement (default 26)
             
         Returns:
             Tuple of (regime, adx_value, slope_value)
@@ -121,17 +140,82 @@ class MarketRegimeDetector:
         if adx is None or slope is None:
             return "UNKNOWN", adx or 0, slope or 0
         
-        # Market regime determination
-        # High ADX (>25) + significant slope indicates trending
-        # Low ADX (<20) indicates ranging
-        if adx > 25 and abs(slope) > 0.1:
-            regime = "TRENDING"
-        elif adx < 20:
-            regime = "RANGING"
-        else:
-            regime = "TRANSITION"
-        
-        logging.info(f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f})")
+        # Get +DI and -DI for additional validation
+        try:
+            # Get historical data for DI calculation
+            bars_needed = adx_period * 3
+            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_H1, 1, bars_needed)  # type: ignore
+            if rates is None or len(rates) < bars_needed:
+                # Fallback to basic ADX check if can't get DI
+                if adx > adx_threshold:
+                    regime = "TRENDING"
+                else:
+                    regime = "RANGING"
+                logging.info(f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})")
+                return regime, adx, slope
+            
+            # Convert to DataFrame for DI calculation
+            df = pd.DataFrame(rates)
+            
+            # Calculate True Range and DM (reusing logic from calculate_adx)
+            df['high_low'] = df['high'] - df['low']
+            df['high_close'] = np.abs(df['high'] - df['close'].shift())
+            df['low_close'] = np.abs(df['low'] - df['close'].shift())
+            df['tr'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
+            
+            # Calculate +DM and -DM
+            df['up_move'] = df['high'] - df['high'].shift()
+            df['down_move'] = df['low'].shift() - df['low']
+            
+            df['plus_dm'] = np.where((df['up_move'] > df['down_move']) & (df['up_move'] > 0), df['up_move'], 0)
+            df['minus_dm'] = np.where((df['down_move'] > df['up_move']) & (df['down_move'] > 0), df['down_move'], 0)
+            
+            # Smooth using Wilder's smoothing
+            alpha = 1 / adx_period
+            df['atr'] = df['tr'].ewm(alpha=alpha, adjust=False).mean()
+            df['plus_dm_smooth'] = df['plus_dm'].ewm(alpha=alpha, adjust=False).mean()
+            df['minus_dm_smooth'] = df['minus_dm'].ewm(alpha=alpha, adjust=False).mean()
+            
+            # Calculate +DI and -DI
+            df['plus_di'] = 100 * (df['plus_dm_smooth'] / df['atr'])
+            df['minus_di'] = 100 * (df['minus_dm_smooth'] / df['atr'])
+            
+            # Get most recent DI values
+            plus_di = df['plus_di'].iloc[-1]
+            minus_di = df['minus_di'].iloc[-1]
+            
+            if pd.isna(plus_di) or pd.isna(minus_di):
+                # Fallback to basic ADX check
+                if adx > adx_threshold:
+                    regime = "TRENDING"
+                else:
+                    regime = "RANGING"
+                logging.info(f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})")
+                return regime, adx, slope
+            
+            # === ENHANCED REGIME DETECTION with DI Filter ===
+            # Rule 1: Basic ADX check
+            if adx <= adx_threshold:
+                regime = "RANGING"
+                logging.info(f"Market regime for {symbol}: {regime} (ADX: {adx:.2f} <= {adx_threshold})")
+            # Rule 2: ADX high BUT no dominant DI -> disguised ranging market
+            elif max(plus_di, minus_di) < di_threshold:
+                regime = "RANGING"
+                logging.info(f"Market regime for {symbol}: {regime} (ADX: {adx:.2f} > {adx_threshold}, but max DI: {max(plus_di, minus_di):.2f} < {di_threshold}) - Choppy market")
+            # Rule 3: ADX high AND strong DI -> true trending market
+            else:
+                regime = "TRENDING"
+                dominant_di = "Bullish" if plus_di > minus_di else "Bearish"
+                logging.info(f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, +DI: {plus_di:.2f}, -DI: {minus_di:.2f}, {dominant_di})")
+            
+        except Exception as e:
+            logging.warning(f"Error calculating DI for {symbol}: {e}. Falling back to basic ADX check.")
+            # Fallback to basic ADX-only check
+            if adx > adx_threshold:
+                regime = "TRENDING"
+            else:
+                regime = "RANGING"
+            logging.info(f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})")
         
         return regime, adx, slope
 
