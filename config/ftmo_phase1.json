@@ -1,6 +1,6 @@
 {
   "risk_management": {
-    "risk_per_trade_pct": 0.5,
+    "risk_per_trade_pct": 1.0,
     "adaptive_risk_scaling": true
   },
   "strategy": {
