@@ -530,8 +530,8 @@ def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     logging.info(f"After min limit ({min_lot}): {lots:.6f}")
     
     # LÍMITE DE SEGURIDAD MÁXIMO - CRÍTICO PARA PROTEGER CAPITAL
-    # Para balance <= $15k, máximo 0.5 lotes por operación
-    max_allowed_lots = 0.5 if balance <= 15000 else 1.0
+    # Límite ultra conservador: máximo 0.30 lotes para protección extrema
+    max_allowed_lots = 0.30
     if lots > max_allowed_lots:
         logging.warning(f"⚠️ SEGURIDAD: Lotaje {lots:.2f} excede límite {max_allowed_lots:.2f}, FORZANDO a límite")
         lots = max_allowed_lots

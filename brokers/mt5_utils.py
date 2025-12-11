@@ -145,8 +145,8 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
     lots = risk_amount / (stop_distance_points * tick_value)
     
     # Limites de seguridad ESTRICTOS para proteger capital
-    # Para FTMO con $10k, máximo 0.5 lotes por trade (riesgo conservador)
-    max_allowed_lots = 0.5 if balance <= 15000 else 1.0
+    # Límite ultra conservador: máximo 0.30 lotes para protección extrema
+    max_allowed_lots = 0.30
     lots = max(volume_min, lots)
     lots = min(lots, max_allowed_lots)  # NUNCA exceder límite absoluto
     
