@@ -144,11 +144,18 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
     
     lots = risk_amount / (stop_distance_points * tick_value)
     
-    # Limites de seguridad
+    # Limites de seguridad ESTRICTOS para proteger capital
+    # Para FTMO con $10k, máximo 0.5 lotes por trade (riesgo conservador)
+    max_allowed_lots = 0.5 if balance <= 15000 else 1.0
     lots = max(volume_min, lots)
-    lots = min(lots, volume_min * 10)
+    lots = min(lots, max_allowed_lots)  # NUNCA exceder límite absoluto
     
     result = normalize_volume(symbol, lots, mt5_module)
+    
+    # Validación final: Si el resultado normalizado es > límite, forzar al límite
+    if result > max_allowed_lots:
+        logging.warning(f"SEGURIDAD: Lotaje calculado {result:.2f} excede límite {max_allowed_lots:.2f}, forzando a límite")
+        result = max_allowed_lots
     
     logging.info("Risk calc: balance=%.2f, risk_amount=%.2f, stop_distance=%.1f points, lots=%.2f", 
                  balance, risk_amount, stop_distance_points, result)

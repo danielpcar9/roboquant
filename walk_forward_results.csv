@@ -1,0 +1,6 @@
+Window,Period,IS_Return_%,OOS_Return_%,Return_Degradation_%,IS_Sharpe,OOS_Sharpe,Sharpe_Degradation_%,IS_Trades,OOS_Trades
+1,2020-11 → 2021-11,0.0,0.0,0,inf,inf,,0,0
+2,2021-11 → 2022-11,0.0,0.0,0,inf,inf,,0,0
+3,2022-11 → 2023-11,0.0,0.0,0,inf,inf,,0,0
+4,2023-11 → 2024-10,0.0,0.0,0,inf,inf,,0,0
+5,2024-10 → 2025-10,0.0,0.0,0,inf,inf,,0,0

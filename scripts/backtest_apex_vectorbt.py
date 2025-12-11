@@ -73,8 +73,8 @@ def load_data(symbol="XAUUSD", timeframe="H1", days_back=1825):
         return None
 
 
-def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1000, 
-                     sl_points=250, tp_points=500, breakout_threshold=0.0):
+def generate_signals(df, donchian_period=20, adx_period=14, adx_threshold=18, di_threshold=26,
+                     sl_points=150, tp_points=300, breakout_threshold=0.0):
     """
     Genera señales de entrada + SL/TP para backtest
     
@@ -99,37 +99,43 @@ def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1
     df = df.copy()
     
     logging.info(f"📊 Generando señales con parámetros:")
-    logging.info(f"   Donchian: {donchian_period} | Momentum: {momentum_period}/{sample_period}")
+    logging.info(f"   Donchian: {donchian_period} | ADX: {adx_period} (thr={adx_threshold}, DI≥{di_threshold})")
     logging.info(f"   SL: {sl_points} pts | TP: {tp_points} pts | Breakout Threshold: {breakout_threshold}")
     
     # 1. DONCHIAN CHANNELS - Using rolling operations
-    df['donchian_upper'] = df['high'].rolling(window=donchian_period).max()
-    df['donchian_lower'] = df['low'].rolling(window=donchian_period).min()
+    df['donchian_upper'] = df['high'].rolling(window=donchian_period).max().shift(1)
+    df['donchian_lower'] = df['low'].rolling(window=donchian_period).min().shift(1)
     
-    # 2. MOMENTUM (Average Body Size)
-    body = np.abs(df['close'] - df['open'])
-    df['momentum'] = body.rolling(window=momentum_period).mean()
-    df['historical_momentum'] = body.rolling(window=sample_period).mean()
+    # 2. ADX / DI (Wilder)
+    df['high_low'] = df['high'] - df['low']
+    df['high_close'] = np.abs(df['high'] - df['close'].shift())
+    df['low_close'] = np.abs(df['low'] - df['close'].shift())
+    df['tr'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
+
+    df['up_move'] = df['high'] - df['high'].shift()
+    df['down_move'] = df['low'].shift() - df['low']
+    df['plus_dm'] = np.where((df['up_move'] > df['down_move']) & (df['up_move'] > 0), df['up_move'], 0)
+    df['minus_dm'] = np.where((df['down_move'] > df['up_move']) & (df['down_move'] > 0), df['down_move'], 0)
+
+    alpha = 1 / adx_period
+    df['atr'] = df['tr'].ewm(alpha=alpha, adjust=False).mean()
+    df['plus_dm_smooth'] = df['plus_dm'].ewm(alpha=alpha, adjust=False).mean()
+    df['minus_dm_smooth'] = df['minus_dm'].ewm(alpha=alpha, adjust=False).mean()
+
+    df['plus_di'] = 100 * (df['plus_dm_smooth'] / df['atr'])
+    df['minus_di'] = 100 * (df['minus_dm_smooth'] / df['atr'])
+    df['dx'] = 100 * np.abs(df['plus_di'] - df['minus_di']) / (df['plus_di'] + df['minus_di'])
+    df['adx'] = df['dx'].ewm(alpha=alpha, adjust=False).mean()
     
-    # 3. ENTRY SIGNALS
-    # Long: Precio rompe canal superior + momentum fuerte
-    # Ensure we're working with pandas Series and handle potential NaN values
+    # 3. ENTRY SIGNALS (Donchian + Regime filter)
     close_series = df['close'].fillna(method='ffill')
     donchian_upper_series = df['donchian_upper'].fillna(method='ffill')
     donchian_lower_series = df['donchian_lower'].fillna(method='ffill')
-    momentum_series = df['momentum'].fillna(0)
-    historical_momentum_series = df['historical_momentum'].fillna(0)
-    
-    df['long_entry'] = (
-        (close_series > donchian_upper_series) & 
-        (momentum_series > historical_momentum_series)
-    )
-    
-    # Short: Precio rompe canal inferior + momentum fuerte
-    df['short_entry'] = (
-        (close_series < donchian_lower_series) & 
-        (momentum_series > historical_momentum_series)
-    )
+
+    trending_mask = (df['adx'] > adx_threshold) & (np.maximum(df['plus_di'], df['minus_di']) >= di_threshold)
+
+    df['long_entry'] = (close_series > donchian_upper_series) & trending_mask
+    df['short_entry'] = (close_series < donchian_lower_series) & trending_mask
     
     # 4. SL/TP como FRACCIONES (método correcto para vectorbt)
     point_value = 0.01  # Para XAUUSD: 1 punto = $0.01
@@ -148,8 +154,8 @@ def generate_signals(df, donchian_period=50, momentum_period=40, sample_period=1
 
 
 def run_backtest(df, initial_capital=10000, lot_size=0.01, 
-                 donchian_period=50, momentum_period=40, sample_period=1000,
-                 sl_points=250, tp_points=500, breakout_threshold=0.0):
+                 donchian_period=20,
+                 sl_points=150, tp_points=300, breakout_threshold=0.0):
     """
     Ejecuta backtest con VectorBT
     
@@ -170,11 +176,12 @@ def run_backtest(df, initial_capital=10000, lot_size=0.01,
     try:
         # Generar señales
         df = generate_signals(
-            df, 
+            df,
             donchian_period=donchian_period,
-            momentum_period=momentum_period,
-            sample_period=sample_period,
-            sl_points=sl_points, 
+            adx_period=14,
+            adx_threshold=18,
+            di_threshold=26,
+            sl_points=sl_points,
             tp_points=tp_points
         )
         
@@ -295,7 +302,31 @@ def save_results(portfolio):
         trades = portfolio.trades.records_readable
         trades.to_csv("backtest_trades.csv", index=False)
         logging.info("📁 Trades guardados: backtest_trades.csv")
-        
+
+        # 2b. Export MT5-like HTML for Quant Analyzer
+        try:
+            output_html = os.path.expanduser(r"C:\Users\edgar\MT5_backtest.html")
+            with open(output_html, "w", encoding="utf-8") as f:
+                f.write("""<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Account History Report</title></head><body>""")
+                f.write("<h2>Account History Report</h2>")
+                f.write("<table><tr><th>From</th><td>{}</td></tr><tr><th>To</th><td>{}</td></tr><tr><th>Symbol</th><td>XAUUSD</td></tr></table>".format(trades['Entry Time'].min(), trades['Exit Time'].max()))
+                f.write("<h3>Deals</h3>")
+                f.write("<table><thead><tr><th>Ticket</th><th>Open Time</th><th>Type</th><th>Size</th><th>Symbol</th><th>Price</th><th>S/L</th><th>T/P</th><th>Close Time</th><th>Close Price</th><th>Commission</th><th>Taxes</th><th>Swap</th><th>Profit</th></tr></thead><tbody>")
+                for i, row in trades.iterrows():
+                    open_time = row.get('Entry Time', '')
+                    close_time = row.get('Exit Time', '')
+                    entry_price = row.get('Entry Price', row.get('entry_price', 0.0))
+                    exit_price = row.get('Exit Price', row.get('exit_price', 0.0))
+                    pnl = float(row.get('Pnl', row.get('pnl', 0.0)))
+                    direction = str(row.get('Direction', row.get('direction', 'Long')))
+                    type_str = 'Buy' if direction.lower().startswith('l') else 'Sell'
+                    size = 0.01
+                    f.write(f"<tr><td>{i}</td><td>{open_time}</td><td>{type_str}</td><td class='right'>{size:.2f}</td><td>XAUUSD</td><td class='right'>{entry_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td>{close_time}</td><td class='right'>{exit_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{pnl:.2f}</td></tr>")
+                f.write("</tbody></table></body></html>")
+            logging.info(f"📁 HTML para QA guardado: {output_html}")
+        except Exception as e:
+            logging.warning(f"No se pudo exportar HTML QA: {e}")
+
         # 3. Estadísticas completas
         stats = portfolio.stats()
         stats_df = pd.DataFrame([stats])
@@ -409,11 +440,9 @@ def main():
         df, 
         initial_capital=10000, 
         lot_size=0.01,
-        donchian_period=30,    # ✅ Optimizado (era 20)
-        momentum_period=20,    # ✅ Optimizado (era 25)
-        sample_period=500,    # ✅ Optimizado (era 800)
-        sl_points=150,         # ✅ CRÍTICO: Optimizado (era 50)
-        tp_points=300          # ✅ Optimizado (era 100)
+        donchian_period=20,    # Donchian actualizado
+        sl_points=150,         # SL acorde a XAUUSD
+        tp_points=300          # TP 1:2
     )
     
     if portfolio:

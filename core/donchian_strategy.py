@@ -495,15 +495,25 @@ def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     symbol_info = mt5.symbol_info(symbol)  # type: ignore
     if symbol_info is None:
         logging.error(f"Failed to get symbol info for {symbol}")
-        return LOTS  # fallback to default
+        return 0.01  # Seguridad: mínimo absoluto
     
     # For XAU/USD, 1 lot = 100 oz troy, so point value is 100
     point_value = 100.0 if 'XAU' in symbol or 'GOLD' in symbol else 1.0
     point = symbol_info.point
     
     if point == 0 or sl_distance == 0:
-        logging.warning(f"Invalid point or SL distance for {symbol}, using default lot size")
-        return LOTS
+        logging.warning(f"Invalid point or SL distance for {symbol}, using minimum lot size")
+        return 0.01
+    
+    # LOG DETALLADO para debugging
+    logging.info(f"=== LOT CALCULATION DEBUG ===")
+    logging.info(f"Symbol: {symbol}")
+    logging.info(f"Balance: ${balance:.2f}")
+    logging.info(f"Risk %: {risk_pct}%")
+    logging.info(f"Risk Amount: ${risk_amount:.2f}")
+    logging.info(f"SL Distance (price points): {sl_distance:.5f}")
+    logging.info(f"Point value: {point:.5f}")
+    logging.info(f"Contract multiplier: {point_value:.2f}")
     
     # Calculate lots: risk_amount / (sl_distance * point_value)
     # For XAU/USD: sl_distance is already in price points, point_value is contract size (100 oz)
@@ -511,19 +521,41 @@ def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     # So lots = risk_amount / (sl_distance * point_value)
     lots = risk_amount / (sl_distance * point_value)
     
+    logging.info(f"Raw calculated lots: {lots:.6f}")
+    
     # Ensure minimum lot size
     min_lot = symbol_info.volume_min
     lots = max(lots, min_lot)
     
-    # Ensure we don't exceed maximum lot size
+    logging.info(f"After min limit ({min_lot}): {lots:.6f}")
+    
+    # LÍMITE DE SEGURIDAD MÁXIMO - CRÍTICO PARA PROTEGER CAPITAL
+    # Para balance <= $15k, máximo 0.5 lotes por operación
+    max_allowed_lots = 0.5 if balance <= 15000 else 1.0
+    if lots > max_allowed_lots:
+        logging.warning(f"⚠️ SEGURIDAD: Lotaje {lots:.2f} excede límite {max_allowed_lots:.2f}, FORZANDO a límite")
+        lots = max_allowed_lots
+    
+    # Ensure we don't exceed broker maximum lot size
     max_lot = symbol_info.volume_max or lots
     lots = min(lots, max_lot)
     
-    # Normalize to broker requirements
-    lots = normalize_volume(symbol, lots)
+    logging.info(f"After max safety limit ({max_allowed_lots}): {lots:.6f}")
     
-    logging.debug(f"Computed lots for {symbol}: {lots:.2f} (risk: {risk_amount:.2f}, SL: {sl_distance:.1f} points)")
-    return lots
+    # Normalize to broker requirements
+    normalized_lots = normalize_volume(symbol, lots)
+    
+    logging.info(f"After normalization: {normalized_lots:.6f}")
+    
+    # VALIDACIÓN FINAL CRÍTICA
+    if normalized_lots > max_allowed_lots:
+        logging.error(f"🚨 CRÍTICO: normalize_volume retornó {normalized_lots:.2f} que excede límite {max_allowed_lots:.2f}. FORZANDO a límite.")
+        normalized_lots = max_allowed_lots
+    
+    logging.info(f"FINAL LOT SIZE: {normalized_lots:.6f}")
+    logging.info(f"=== END LOT CALCULATION ===")
+    
+    return normalized_lots
 
 @handle_exception
 @retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
