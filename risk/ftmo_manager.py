@@ -102,6 +102,25 @@ class FTMOManager:
         buffer_to_floor_usd = max(0.0, equity - floor_balance)
         buffer_to_floor_pct = (buffer_to_floor_usd / self.ftmo_starting_balance * 100) if self.ftmo_starting_balance > 0 else 0
         
+        # Load performance limits from configuration
+        try:
+            from config.set_file_manager import get_set_manager
+            cfg = get_set_manager()
+            set_file = os.getenv('ROBOQUANT_SET_FILE')
+            if set_file:
+                cfg.load_set_file(set_file)
+                daily_loss_limit = cfg.get('performance.daily_loss_limit_pct', -4.0)
+                drawdown_limit = cfg.get('performance.overall_dd_limit_pct', 10.0)
+                logging.debug(f"Loaded performance limits from {set_file}: daily={daily_loss_limit}%, drawdown={drawdown_limit}%")
+            else:
+                # Fallback to defaults if no set file
+                daily_loss_limit = -4.0
+                drawdown_limit = 10.0
+        except Exception as e:
+            logging.warning(f"Failed to load performance limits from set file: {e}. Using defaults.")
+            daily_loss_limit = -4.0
+            drawdown_limit = 10.0
+        
         return {
             'current_balance': current_balance,
             'equity': equity,
@@ -114,8 +133,8 @@ class FTMOManager:
             'buffer_to_floor_pct': buffer_to_floor_pct,
             'loss_floor_balance': floor_balance,
             'trading_days': self.trading_days,
-            'daily_loss_limit': -4.0,  # 4% daily loss limit
-            'drawdown_limit': 10.0,     # 10% overall drawdown limit (positive value)
+            'daily_loss_limit': daily_loss_limit,
+            'drawdown_limit': drawdown_limit,
             'min_trading_days': 1       # Changed from 4 to 1 for testing
         }
     
@@ -183,11 +202,11 @@ class FTMOManager:
         if metrics['daily_loss_percent'] < metrics['daily_loss_limit']:
             return False, f"Daily loss limit exceeded: {metrics['daily_loss_percent']:.2f}% < {metrics['daily_loss_limit']}%"
         
-        # Check overall drawdown limit (10%)
-        # Circuit breaker: block at 9.5% to prevent breach
-        circuit_breaker_threshold = 9.5
+        # Check overall drawdown limit
+        # Circuit breaker: block at 5% below the configured limit to prevent breach
+        circuit_breaker_threshold = max(0, metrics['drawdown_limit'] - 0.5)
         if metrics['overall_drawdown_percent'] >= circuit_breaker_threshold:
-            return False, f"Circuit breaker triggered: Overall drawdown {metrics['overall_drawdown_percent']:.2f}% >= {circuit_breaker_threshold}% (limit: {metrics['drawdown_limit']}%)"
+            return False, f"Circuit breaker triggered: Overall drawdown {metrics['overall_drawdown_percent']:.2f}% >= {circuit_breaker_threshold:.2f}% (limit: {metrics['drawdown_limit']}%)"
         if metrics['overall_drawdown_percent'] >= metrics['drawdown_limit']:
             return False, f"Overall drawdown limit exceeded: {metrics['overall_drawdown_percent']:.2f}% >= {metrics['drawdown_limit']}%"
         
@@ -245,7 +264,7 @@ BALANCES:
   Profit vs Start: ${metrics['equity'] - metrics['ftmo_starting_balance']:.2f}
 
 METRICS:
-  Daily Loss: {metrics['daily_loss_percent']:.2f}% (Limit: -4%)
+  Daily Loss: {metrics['daily_loss_percent']:.2f}% (Limit: {metrics['daily_loss_limit']:.1f}%)
   Overall Drawdown: {metrics['overall_drawdown_percent']:.2f}% (Limit: {metrics['drawdown_limit']}%)
   Buffer to $9,000 floor: ${metrics['buffer_to_floor_usd']:.2f} ({metrics['buffer_to_floor_pct']:.2f}%)
   
