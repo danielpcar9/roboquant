@@ -26,7 +26,7 @@
   },
   "performance": {
     "daily_loss_limit_pct": -50.0,
-    "overall_dd_limit_pct": 10.0,
+    "overall_dd_limit_pct": 50.0,
     "circuit_breaker_pct": 8.0,
     "risk_reward_ratio": 2.0
   },
