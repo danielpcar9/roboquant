@@ -218,6 +218,65 @@ class MarketRegimeDetector:
             logging.info(f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})")
         
         return regime, adx, slope
+    
+    def get_di_values(self, symbol: str, adx_period: int = 14) -> Tuple[float, float]:
+        """
+        Get +DI and -DI values for quantitative analysis
+        
+        Args:
+            symbol: Trading symbol
+            adx_period: Period for DI calculation
+            
+        Returns:
+            Tuple of (plus_di, minus_di) or (0, 0) if calculation fails
+        """
+        try:
+            # Get historical data for DI calculation
+            bars_needed = adx_period * 3
+            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_H1, 1, bars_needed)  # type: ignore
+            if rates is None or len(rates) < bars_needed:
+                logging.warning(f"Insufficient data to calculate DI for {symbol}")
+                return 0.0, 0.0
+            
+            # Convert to DataFrame for DI calculation
+            df = pd.DataFrame(rates)
+            
+            # Calculate True Range and DM
+            df['high_low'] = df['high'] - df['low']
+            df['high_close'] = np.abs(df['high'] - df['close'].shift())
+            df['low_close'] = np.abs(df['low'] - df['close'].shift())
+            df['tr'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
+            
+            # Calculate +DM and -DM
+            df['up_move'] = df['high'] - df['high'].shift()
+            df['down_move'] = df['low'].shift() - df['low']
+            
+            df['plus_dm'] = np.where((df['up_move'] > df['down_move']) & (df['up_move'] > 0), df['up_move'], 0)
+            df['minus_dm'] = np.where((df['down_move'] > df['up_move']) & (df['down_move'] > 0), df['down_move'], 0)
+            
+            # Smooth using Wilder's smoothing
+            alpha = 1 / adx_period
+            df['atr'] = df['tr'].ewm(alpha=alpha, adjust=False).mean()
+            df['plus_dm_smooth'] = df['plus_dm'].ewm(alpha=alpha, adjust=False).mean()
+            df['minus_dm_smooth'] = df['minus_dm'].ewm(alpha=alpha, adjust=False).mean()
+            
+            # Calculate +DI and -DI
+            df['plus_di'] = 100 * (df['plus_dm_smooth'] / df['atr'])
+            df['minus_di'] = 100 * (df['minus_dm_smooth'] / df['atr'])
+            
+            # Get most recent DI values
+            plus_di = df['plus_di'].iloc[-1]
+            minus_di = df['minus_di'].iloc[-1]
+            
+            if pd.isna(plus_di) or pd.isna(minus_di):
+                logging.warning(f"DI calculation resulted in NaN for {symbol}")
+                return 0.0, 0.0
+            
+            return float(plus_di), float(minus_di)
+            
+        except Exception as e:
+            logging.error(f"Error calculating DI for {symbol}: {e}")
+            return 0.0, 0.0
 
 # Global instance for easy access
 market_regime_detector = MarketRegimeDetector()

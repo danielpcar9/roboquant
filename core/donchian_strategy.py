@@ -110,6 +110,9 @@ session_pending_orders = {}  # Track pending orders by session
 mt5_gateway = MT5Gateway()
 last_session = None  # Track the last session
 
+# Quantitative trading variables
+QUANT_OPTIMAL_LOTS = None  # Global variable for quantitative optimal lot size
+
 # Load news filter configuration
 try:
     cfg = get_set_manager()
@@ -490,6 +493,34 @@ def detect_engulfing(symbol):
 @performance_monitor
 def compute_lots_from_risk(balance, risk_pct, sl_distance, symbol):
     """Calculate lot size based on risk percentage and stop loss distance"""
+    
+    # Check if quantitative optimal lot size is available
+    global QUANT_OPTIMAL_LOTS
+    if 'QUANT_OPTIMAL_LOTS' in globals():
+        quant_lots = QUANT_OPTIMAL_LOTS
+        logging.info(f"Using quantitative optimal lot size: {quant_lots:.3f}")
+        
+        # Validate and return quantitative lot size
+        symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        if symbol_info is None:
+            logging.error(f"Failed to get symbol info for {symbol}")
+            return 0.01  # Seguridad: mínimo absoluto
+        
+        # Apply broker limits to quantitative lot size
+        min_lot = symbol_info.volume_min
+        max_lot = symbol_info.volume_max or quant_lots
+        
+        # Apply safety limits
+        max_allowed_lots = 0.30  # Safety limit
+        quant_lots = max(min_lot, min(quant_lots, max_lot, max_allowed_lots))
+        
+        normalized_lots = normalize_volume(symbol, quant_lots)
+        normalized_lots = min(normalized_lots, max_allowed_lots)
+        
+        logging.info(f"Quantitative lot size after validation: {normalized_lots:.3f}")
+        return normalized_lots
+    
+    # Traditional risk-based calculation
     risk_amount = balance * (risk_pct / 100.0)
     
     symbol_info = mt5.symbol_info(symbol)  # type: ignore
@@ -1173,6 +1204,61 @@ def run_strategy(symbol="XAUUSD"):
         else:
             # market_regime_detector already logs detailed trending info
             logging.info(f"Market is TRENDING (ADX: {adx_value:.2f} > {adx_threshold}), proceeding with strategy")
+    
+    # QUANTITATIVE ANALYSIS INTEGRATION
+    # Import and use quantitative engine for entry decisions
+    try:
+        from core.quant_engine import QuantitativeEngine
+        quant_engine = QuantitativeEngine()
+        
+        # Get historical price data for quantitative analysis
+        rates = mt5.copy_rates_from_pos(0, TIMEFRAME, 200)  # Get last 200 bars
+        if rates is not None and len(rates) > 50:
+            prices = rates['close']
+            
+            # Get DI values from market regime detector for quantitative analysis
+            di_plus, di_minus = market_regime_detector.get_di_values(symbol, adx_period)
+            
+            # Calculate comprehensive entry score using quantitative formulas
+            entry_result = quant_engine.calculate_entry_score(
+                prices=prices,
+                adx_value=adx_value,
+                di_plus=di_plus,
+                di_minus=di_minus
+            )
+            
+            logging.info(f"Quantitative Entry Score: {entry_result['entry_score']:.3f}")
+            logging.info(f"Recommendation: {entry_result['recommendation']}")
+            
+            # Use quantitative score instead of simple boolean conditions
+            if entry_result['recommendation'] == 'HOLD' or entry_result['entry_score'] < 0.5:
+                logging.info(f"Quantitative analysis recommends HOLD (score: {entry_result['entry_score']:.3f}), skipping trade")
+                return
+            
+            # Calculate optimal position size using quantitative formulas
+            account_info = mt5.account_info()  # type: ignore
+            if account_info:
+                # Get historical returns if available for more sophisticated sizing
+                historical_returns = None  # Could be loaded from risk management system
+                
+                optimal_lots = quant_engine.calculate_optimal_position_size(
+                    account_balance=account_info.balance,
+                    entry_score=entry_result['entry_score'],
+                    historical_returns=historical_returns
+                )
+                
+                logging.info(f"Quantitative position sizing: {optimal_lots:.3f} lots")
+                
+                # Override the risk management lot calculation with quantitative size
+                # This will be used later in the strategy
+                global QUANT_OPTIMAL_LOTS
+                QUANT_OPTIMAL_LOTS = optimal_lots
+        
+    except ImportError:
+        logging.warning("Quantitative engine not available, using traditional analysis")
+    except Exception as e:
+        logging.warning(f"Error in quantitative analysis: {e}, continuing with traditional analysis")
+        
     
     # Cancel expired pending orders
     cancel_expired_pending_orders(MAGIC_NUMBER)
