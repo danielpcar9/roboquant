@@ -18,29 +18,42 @@ class QuantitativeAnalyzer:
     Statistical analysis engine with mathematical formulas for trading decisions
     """
     
-    @staticmethod
-    def calculate_momentum_score(prices: np.ndarray, periods: List[int] = [5, 10, 20]) -> float:
+    def __init__(self):
+        self.weights = {
+            'momentum': [0.5, 0.3, 0.2],  # Short, medium, long term weights
+            'probability': {
+                'momentum': 0.2,
+                'volatility': 0.15,
+                'trend': 0.25,
+                'adx': 0.2,
+                'di_diff': 0.2
+            }
+        }
+    
+    def calculate_momentum_score(self, prices: np.ndarray, periods: List[int] = None) -> float:
         """
         Calculate momentum score using multiple timeframes with weighted average
         Formula: Weighted sum of momentum ratios across different periods
         """
+        if periods is None:
+            periods = [5, 10, 20]
+
         if len(prices) < max(periods):
             return 0.0
-        
+
         momentum_scores = []
-        weights = [0.5, 0.3, 0.2]  # Short, medium, long term weights
-        
+        weights = self.weights['momentum']
+
         for i, period in enumerate(periods):
             if len(prices) > period:
                 recent_price = prices[-1]
                 past_price = prices[-period-1]
                 momentum = (recent_price - past_price) / past_price
                 momentum_scores.append(momentum * weights[i])
-        
+
         return sum(momentum_scores)
     
-    @staticmethod
-    def calculate_volatility_score(prices: np.ndarray, period: int = 20) -> float:
+    def calculate_volatility_score(self, prices: np.ndarray, period: int = 20) -> float:
         """
         Calculate volatility score using rolling standard deviation
         Formula: (Current volatility - mean_volatility) / std_volatility
@@ -67,8 +80,7 @@ class QuantitativeAnalyzer:
         
         return (current_vol - mean_vol) / std_vol
     
-    @staticmethod
-    def calculate_trend_strength(prices: np.ndarray, period: int = 20) -> float:
+    def calculate_trend_strength(self, prices: np.ndarray, period: int = 20) -> float:
         """
         Calculate trend strength using linear regression slope
         Formula: Slope of regression line normalized by price level
@@ -89,8 +101,8 @@ class QuantitativeAnalyzer:
         # Multiply by R² to weight by statistical significance
         return trend_strength * (r_value ** 2)
     
-    @staticmethod
     def calculate_statistical_probability(
+        self,
         momentum_score: float,
         volatility_score: float, 
         trend_strength: float,
@@ -115,13 +127,7 @@ class QuantitativeAnalyzer:
         di_norm = di_diff / 100.0  # Normalize to -1 to 1
         
         # Weighted combination
-        weights = {
-            'momentum': 0.2,
-            'volatility': 0.15,
-            'trend': 0.25,
-            'adx': 0.2,
-            'di_diff': 0.2
-        }
+        weights = self.weights['probability']
         
         probability = (
             weights['momentum'] * max(0, momentum_norm) +
@@ -148,8 +154,12 @@ class PositionSizer:
     Mathematical position sizing using quantitative formulas
     """
     
-    @staticmethod
-    def kelly_criterion(win_rate: float, avg_win_ratio: float, avg_loss_ratio: float) -> float:
+    def __init__(self):
+        self.default_kelly_fraction = 0.5  # Conservative approach: use half Kelly
+        self.max_kelly_percentage = 0.1    # Max 10% of account
+        self.max_sharpe_percentage = 0.05  # Max 5% risk
+    
+    def kelly_criterion(self, win_rate: float, avg_win_ratio: float, avg_loss_ratio: float) -> float:
         """
         Kelly Criterion formula for optimal position sizing
         Formula: K = (bp - q) / b
@@ -165,10 +175,10 @@ class PositionSizer:
         kelly_fraction = (b * p - q) / b if b > 0 else 0.05  # Conservative 5%
         
         # Conservative approach: use half Kelly
-        return min(kelly_fraction * 0.5, 0.1)  # Max 10% of account
+        return min(kelly_fraction * self.default_kelly_fraction, self.max_kelly_percentage)  # Max 10% of account
     
-    @staticmethod
     def sharpe_ratio_position_size(
+        self,
         returns: np.ndarray, 
         risk_free_rate: float = 0.02,
         max_risk_pct: float = 1.0
@@ -190,42 +200,18 @@ class PositionSizer:
         
         # Adjust position size based on Sharpe ratio
         optimal_risk_pct = max_risk_pct * (1 + min(sharpe, 2.0))  # Cap at 3x risk
-        return min(optimal_risk_pct / 100.0, 0.05)  # Max 5% risk
+        return min(optimal_risk_pct / 100.0, self.max_sharpe_percentage)  # Max 5% risk
 
 class QuantitativeOptimizer:
     """
     Mathematical optimization for trading parameters
     """
     
-    @staticmethod
-    def optimize_donchian_period(
-        prices: np.ndarray,
-        periods_range: Tuple[int, int] = (10, 30),
-        lookback_days: int = 90
-    ) -> int:
-        """
-        Optimize Donchian period using statistical performance
-        Formula: Find period that maximizes Sharpe ratio of breakout signals
-        """
-        if len(prices) < max(periods_range) + lookback_days:
-            return 20  # Default if insufficient data
-        
-        best_period = 20
-        best_sharpe = -np.inf
-        
-        for period in range(periods_range[0], periods_range[1] + 1):
-            # Generate hypothetical signals for this period
-            signals = QuantitativeOptimizer._generate_breakout_signals(
-                prices[-lookback_days:], period
-            )
-            
-            if len(signals) > 5:  # Need sufficient signals
-                sharpe = QuantitativeOptimizer._calculate_signal_sharpe(signals)
-                if sharpe > best_sharpe:
-                    best_sharpe = sharpe
-                    best_period = period
-        
-        return best_period
+    def __init__(self):
+        self.default_period = 20
+        self.min_period = 10
+        self.max_period = 30
+        self.lookback_days = 90
     
     @staticmethod
     def _generate_breakout_signals(prices: np.ndarray, period: int) -> List[float]:
@@ -260,6 +246,41 @@ class QuantitativeOptimizer:
         std_return = np.std(returns)
         
         return mean_return / std_return if std_return != 0 else 0.0
+    
+    def optimize_donchian_period(
+        self,
+        prices: np.ndarray,
+        periods_range: Tuple[int, int] = None,
+        lookback_days: int = None
+    ) -> int:
+        """
+        Optimize Donchian period using statistical performance
+        Formula: Find period that maximizes Sharpe ratio of breakout signals
+        """
+        if periods_range is None:
+            periods_range = (self.min_period, self.max_period)
+        if lookback_days is None:
+            lookback_days = self.lookback_days
+
+        if len(prices) < max(periods_range) + lookback_days:
+            return self.default_period  # Default if insufficient data
+        
+        best_period = self.default_period
+        best_sharpe = -np.inf
+        
+        for period in range(periods_range[0], periods_range[1] + 1):
+            # Generate hypothetical signals for this period
+            signals = QuantitativeOptimizer._generate_breakout_signals(
+                prices[-lookback_days:], period
+            )
+            
+            if len(signals) > 5:  # Need sufficient signals
+                sharpe = QuantitativeOptimizer._calculate_signal_sharpe(signals)
+                if sharpe > best_sharpe:
+                    best_sharpe = sharpe
+                    best_period = period
+        
+        return best_period
 
 class QuantitativeEngine:
     """
