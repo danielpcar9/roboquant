@@ -12,6 +12,29 @@ class MarketRegimeDetector:
     def __init__(self, mt5_module=None):
         self.mt5 = mt5_module or mt5
     
+    def _get_timeframe_from_config(self):
+        """Convert timeframe name to MT5 constant"""
+        # Import config manager to get the timeframe from config
+        try:
+            from config.config_manager import config_manager
+            timeframe_name = config_manager.get('TIMEFRAME', 'H1')  # Default to H1
+        except ImportError:
+            # If config manager is not available, default to H1
+            timeframe_name = 'H1'
+        
+        timeframe_map = {
+            'M1': self.mt5.TIMEFRAME_M1,
+            'M5': self.mt5.TIMEFRAME_M5,
+            'M15': self.mt5.TIMEFRAME_M15,
+            'M30': self.mt5.TIMEFRAME_M30,
+            'H1': self.mt5.TIMEFRAME_H1,
+            'H4': self.mt5.TIMEFRAME_H4,
+            'D1': self.mt5.TIMEFRAME_D1,
+            'W1': self.mt5.TIMEFRAME_W1,
+            'MN1': self.mt5.TIMEFRAME_MN1
+        }
+        return timeframe_map.get(timeframe_name.upper(), self.mt5.TIMEFRAME_H1)
+    
     def calculate_adx(self, symbol: str, period: int = 14) -> Optional[float]:
         """
         Calculate ADX (Average Directional Index) - IMPROVED VERSION
@@ -26,7 +49,7 @@ class MarketRegimeDetector:
         try:
             # Get historical data (need more bars for accurate ADX)
             bars_needed = period * 3  # Ensure enough data
-            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_H1, 1, bars_needed)  # type: ignore
+            rates = self.mt5.copy_rates_from_pos(symbol, self._get_timeframe_from_config(), 1, bars_needed)  # type: ignore
             if rates is None or len(rates) < bars_needed:
                 logging.warning(f"Insufficient data to calculate ADX for {symbol}")
                 return None
@@ -89,7 +112,7 @@ class MarketRegimeDetector:
         """
         try:
             # Get historical data
-            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_H1, 1, period)  # type: ignore
+            rates = self.mt5.copy_rates_from_pos(symbol, self._get_timeframe_from_config(), 1, period)  # type: ignore
             if rates is None or len(rates) < period:
                 logging.warning(f"Insufficient data to calculate slope for {symbol}")
                 return None
@@ -144,7 +167,7 @@ class MarketRegimeDetector:
         try:
             # Get historical data for DI calculation
             bars_needed = adx_period * 3
-            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_H1, 1, bars_needed)  # type: ignore
+            rates = self.mt5.copy_rates_from_pos(symbol, self._get_timeframe_from_config(), 1, bars_needed)  # type: ignore
             if rates is None or len(rates) < bars_needed:
                 # Fallback to basic ADX check if can't get DI
                 if adx > adx_threshold:
@@ -233,7 +256,7 @@ class MarketRegimeDetector:
         try:
             # Get historical data for DI calculation
             bars_needed = adx_period * 3
-            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_H1, 1, bars_needed)  # type: ignore
+            rates = self.mt5.copy_rates_from_pos(symbol, self._get_timeframe_from_config(), 1, bars_needed)  # type: ignore
             if rates is None or len(rates) < bars_needed:
                 logging.warning(f"Insufficient data to calculate DI for {symbol}")
                 return 0.0, 0.0

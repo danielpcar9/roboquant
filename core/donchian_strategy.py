@@ -41,6 +41,9 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(mes
 # Load environment variables and initialize security manager
 credential_manager = SecureCredentialManager()
 
+# Global variable for quantitative optimal lot size
+QUANT_OPTIMAL_LOTS = None
+
 
 @dataclass
 class StrategyConfig:
@@ -323,9 +326,9 @@ class RiskCalculator:
         """Calculate lot size based on risk percentage and stop loss distance"""
         
         # Check if quantitative optimal lot size is available
-        global QUANT_OPTIMAL_LOTS
-        if QUANT_OPTIMAL_LOTS is not None:
-            quant_lots = QUANT_OPTIMAL_LOTS
+        import core.donchian_strategy as ds_module
+        if hasattr(ds_module, 'QUANT_OPTIMAL_LOTS') and ds_module.QUANT_OPTIMAL_LOTS is not None:
+            quant_lots = ds_module.QUANT_OPTIMAL_LOTS
             logging.info(f"Using quantitative optimal lot size: {quant_lots:.3f}")
             
             # Validate and return quantitative lot size
@@ -934,10 +937,6 @@ class DonchianStrategy:
         
         # Load configuration
         self.config = StrategyConfig()
-        
-        # Global variable for quantitative optimal lot size
-        global QUANT_OPTIMAL_LOTS
-        QUANT_OPTIMAL_LOTS = None
     
     def _in_trading_hours(self) -> bool:
         """Check if current time is within trading hours (GMT)"""
@@ -1167,8 +1166,8 @@ class DonchianStrategy:
                     
                     # Override the risk management lot calculation with quantitative size
                     # This will be used later in the strategy
-                    global QUANT_OPTIMAL_LOTS
-                    QUANT_OPTIMAL_LOTS = optimal_lots
+                    import core.donchian_strategy as ds_module
+                    ds_module.QUANT_OPTIMAL_LOTS = optimal_lots
         
         except ImportError:
             logging.warning("Quantitative engine not available, using traditional analysis")
