@@ -12,6 +12,9 @@ from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
+import json
+import os
+from pathlib import Path
 
 # Import for Hurst exponent calculation
 from numpy import diff, log, std, mean, sqrt, array, nan, isnan, sum as np_sum
@@ -464,6 +467,15 @@ class QuantitativeEngine:
         self.risk_metrics = RiskMetrics()
         self.historical_data = {}
         
+        # Initialize quant trades tracking
+        self.quant_trades_file = Path('data/quant_trades.json')
+        self.quant_trades_file.parent.mkdir(exist_ok=True)
+        
+        # Initialize the file if it doesn't exist
+        if not self.quant_trades_file.exists():
+            with open(self.quant_trades_file, 'w') as f:
+                json.dump([], f)
+        
     def calculate_entry_score(
         self,
         prices: np.ndarray,
@@ -517,6 +529,20 @@ class QuantitativeEngine:
             'recommendation': 'BUY' if final_score > 0.6 else 'SELL' if final_score < 0.4 else 'HOLD'
         }
     
+    def _load_quant_trades(self):
+        """Load only quant trades from persistence file"""
+        try:
+            if self.quant_trades_file.exists():
+                with open(self.quant_trades_file, 'r') as f:
+                    trades = json.load(f)
+                    # Return only the returns from the trades
+                    return [trade['return'] for trade in trades]
+            else:
+                return []
+        except Exception as e:
+            logging.error(f"Error loading quant trades: {e}")
+            return []
+    
     def calculate_optimal_position_size(
         self,
         account_balance: float,
@@ -527,42 +553,74 @@ class QuantitativeEngine:
         """
         Calculate optimal position size using quantitative formulas
         """
+        # Load ONLY quant trades
+        quant_trades = self._load_quant_trades()
+        
+        if len(quant_trades) >= 15:  # Mínimo 15 trades quant
+            kelly_size = self.sizer.kelly_criterion_from_trades(quant_trades)
+        else:
+            # BOOTSTRAP: usar Kelly conservador hasta tener data
+            kelly_size = 0.01 * entry_score  # Crecer con score
+            logging.info(f"⚠️ Bootstrap mode: {len(quant_trades)}/15 quant trades")
+        
         # Base size from entry score (higher score = larger position)
         base_size = min(entry_score * 0.1, 0.05)  # Max 5% of account
         
         if historical_trades is not None and len(historical_trades) > 10:
             # Use Kelly criterion from actual trade history
-            kelly_size = self.sizer.kelly_criterion_from_trades(historical_trades)
+            historical_kelly = self.sizer.kelly_criterion_from_trades(historical_trades)
             
             # Calculate Sharpe-based sizing if returns are also provided
             if historical_returns is not None and len(historical_returns) > 20:
                 sharpe_size = self.sizer.sharpe_ratio_position_size(historical_returns)
                 # Combine approaches
-                combined_size = (base_size + sharpe_size + kelly_size) / 3
+                combined_size = (base_size + sharpe_size + kelly_size + historical_kelly) / 4
             else:
                 # Combine base and kelly approaches
-                combined_size = (base_size + kelly_size) / 2
+                combined_size = (base_size + kelly_size + historical_kelly) / 3
         elif historical_returns is not None and len(historical_returns) > 20:
             # Adjust using Sharpe-based sizing
             sharpe_size = self.sizer.sharpe_ratio_position_size(historical_returns)
-            kelly_size = self.sizer.kelly_criterion(
-                win_rate=0.55,  # Default assumption
-                avg_win_ratio=2.0,
-                avg_loss_ratio=1.0
-            )
             
             # Combine approaches
             combined_size = (base_size + sharpe_size + kelly_size) / 3
         else:
-            combined_size = base_size
+            # Use the quant-based kelly size as primary
+            combined_size = (base_size + kelly_size) / 2
         
         # Apply account balance
         optimal_lots = (account_balance * combined_size) / 1000  # Normalize to lot size
         
         # Ensure minimum and maximum limits
         return min(max(optimal_lots, 0.01), 0.3)  # Min 0.01, Max 0.3 lots
-
-# Example usage and testing
+    
+    def record_trade_result(self, return_pct: float, entry_score: float):
+        """Guardar resultado en quant_trades.json"""
+        try:
+            # Load existing trades
+            if self.quant_trades_file.exists():
+                with open(self.quant_trades_file, 'r') as f:
+                    trades = json.load(f)
+            else:
+                trades = []
+            
+            # Create new trade record
+            trade_record = {
+                "timestamp": datetime.now().isoformat(),
+                "return": return_pct,
+                "entry_score": entry_score
+            }
+            
+            # Add new trade
+            trades.append(trade_record)
+            
+            # Save back to file
+            with open(self.quant_trades_file, 'w') as f:
+                json.dump(trades, f)
+            
+            logging.info(f"Recorded quant trade: {return_pct:.3f}, entry_score: {entry_score:.3f}")
+        except Exception as e:
+            logging.error(f"Error recording trade result: {e}")
 if __name__ == "__main__":
     # Test the quantitative engine
     engine = QuantitativeEngine()
@@ -600,3 +658,7 @@ if __name__ == "__main__":
     )
     print(f"Optimal Position Size with Historical Trades: {optimal_size_with_trades:.3f} lots")
     print(f"Hurst Exponent: {result['hurst_exponent']:.3f}")
+    
+    # Test recording a trade result
+    engine.record_trade_result(0.025, result['entry_score'])
+    print("Trade result recorded successfully")
