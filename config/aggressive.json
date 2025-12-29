@@ -5,7 +5,8 @@
   "strategy": {
     "donchian_period": 20,
     "sl_atr_multiplier": 2.0,
-    "tp_atr_multiplier": 1.5
+    "tp_atr_multiplier": 1.5,
+    "di_threshold": 26
   },
   "trading_hours": {
     "start": 0,

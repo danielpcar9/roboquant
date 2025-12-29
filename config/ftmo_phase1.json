@@ -11,7 +11,8 @@
     "min_momentum_ratio": 0.9,
     "require_adx_confirmation": true,
     "adx_threshold": 18,
-    "adx_period": 14
+    "adx_period": 14,
+    "di_threshold": 26
   },
   "trading_hours": {
     "start": 0,

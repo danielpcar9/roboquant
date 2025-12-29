@@ -559,8 +559,8 @@ class QuantitativeEngine:
         if len(quant_trades) >= 15:  # Mínimo 15 trades quant
             kelly_size = self.sizer.kelly_criterion_from_trades(quant_trades)
         else:
-            # BOOTSTRAP: usar Kelly conservador hasta tener data
-            kelly_size = 0.01 * entry_score  # Crecer con score
+            # BOOTSTRAP: reemplazar con nuevo modo de cálculo
+            kelly_size = max(0.005, min(0.02, entry_score * 0.015))
             logging.info(f"⚠️ Bootstrap mode: {len(quant_trades)}/15 quant trades")
         
         # Base size from entry score (higher score = larger position)

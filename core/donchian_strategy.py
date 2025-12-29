@@ -1181,7 +1181,7 @@ class DonchianStrategy:
                     logging.debug(f"Calculated entry score: {current_entry_score:.3f} for potential trade")
                     
                     # Store entry score globally for later association with ticket when trade executes
-                    CURRENT_ENTRY_SCORE = current_entry_score
+                    globals()['CURRENT_ENTRY_SCORE'] = current_entry_score
         
         except ImportError:
             logging.warning("Quantitative engine not available, using traditional analysis")
@@ -1396,6 +1396,9 @@ class DonchianStrategy:
                 magic=self.config.magic_number
             )
             
+            if result and hasattr(result, 'order'):
+                TRADE_ENTRY_SCORES[result.order] = globals().get('CURRENT_ENTRY_SCORE', 0.5)
+            
             if result:
                 logging.info(f"BUY_STOP order placed: Price={pending_price:.5f}, SL={sl_price:.5f}, TP={tp_price:.5f}")
                 # Store entry score for this ticket if we can get it from the result
@@ -1481,6 +1484,9 @@ class DonchianStrategy:
                 tp=tp_price,
                 magic=self.config.magic_number
             )
+            
+            if result and hasattr(result, 'order'):
+                TRADE_ENTRY_SCORES[result.order] = globals().get('CURRENT_ENTRY_SCORE', 0.5)
             
             if result:
                 logging.info(f"SELL_STOP order placed: Price={pending_price:.5f}, SL={sl_price:.5f}, TP={tp_price:.5f}")
