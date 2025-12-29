@@ -764,17 +764,17 @@ def record_closed_trade_result(ticket, mt5_module=None):
                 symbol_info = mt5_module.symbol_info(symbol)
                 if symbol_info:
                     # Calculate initial margin based on volume and symbol requirements
-                    # For most symbols, we'll use a simplified calculation
-                    # This is an approximation - in real trading, you'd track the initial margin when opening
-                    initial_margin = volume * 1000  # Simplified proxy for initial margin
-                    
-                    # For specific symbols like XAUUSD, adjust accordingly
-                    if 'XAU' in symbol or 'GOLD' in symbol:
-                        initial_margin = volume * 1000  # XAUUSD has specific margin requirements
-                    elif 'JPY' in symbol:
-                        initial_margin = volume * 1000  # Adjust as needed for JPY pairs
+                    # Use margin_initial if available, otherwise use fallback
+                    if hasattr(symbol_info, 'margin_initial') and symbol_info.margin_initial > 0:
+                        initial_margin = volume * symbol_info.margin_initial
                     else:
-                        initial_margin = volume * 1000  # Default for most symbols
+                        # For specific symbols like XAUUSD, adjust accordingly
+                        if 'XAU' in symbol or 'GOLD' in symbol:
+                            initial_margin = volume * 1000  # XAUUSD has specific margin requirements
+                        elif 'JPY' in symbol:
+                            initial_margin = volume * 1000  # Adjust as needed for JPY pairs
+                        else:
+                            initial_margin = volume * 1000  # Default fallback
                 else:
                     # Fallback if symbol info not available
                     initial_margin = volume * 1000
