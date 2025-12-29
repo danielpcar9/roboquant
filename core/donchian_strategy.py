@@ -44,6 +44,12 @@ credential_manager = SecureCredentialManager()
 # Global variable for quantitative optimal lot size
 QUANT_OPTIMAL_LOTS = None
 
+# Global dict to store entry scores for trades
+TRADE_ENTRY_SCORES = {}
+
+# Global variable to store current entry score for ticket association
+CURRENT_ENTRY_SCORE = None
+
 
 @dataclass
 class StrategyConfig:
@@ -1168,6 +1174,15 @@ class DonchianStrategy:
                     # This will be used later in the strategy
                     import core.donchian_strategy as ds_module
                     ds_module.QUANT_OPTIMAL_LOTS = optimal_lots
+                    
+                    # Store entry score for potential future trade association
+                    # The ticket will be associated when the trade is executed
+                    current_entry_score = entry_result['entry_score']
+                    logging.debug(f"Calculated entry score: {current_entry_score:.3f} for potential trade")
+                    
+                    # Store entry score globally for later association with ticket when trade executes
+                    global CURRENT_ENTRY_SCORE
+                    CURRENT_ENTRY_SCORE = current_entry_score
         
         except ImportError:
             logging.warning("Quantitative engine not available, using traditional analysis")
@@ -1384,6 +1399,16 @@ class DonchianStrategy:
             
             if result:
                 logging.info(f"BUY_STOP order placed: Price={pending_price:.5f}, SL={sl_price:.5f}, TP={tp_price:.5f}")
+                # Store entry score for this ticket if we can get it from the result
+                if hasattr(result, 'order'):
+                    ticket = result.order
+                    # Use the globally stored entry score
+                    global CURRENT_ENTRY_SCORE
+                    if 'CURRENT_ENTRY_SCORE' in globals() and CURRENT_ENTRY_SCORE is not None:
+                        TRADE_ENTRY_SCORES[ticket] = CURRENT_ENTRY_SCORE
+                        logging.debug(f"Associated entry score {CURRENT_ENTRY_SCORE:.3f} with ticket {ticket}")
+                    else:
+                        logging.warning(f"No current entry score available for ticket {ticket}")
             else:
                 logging.error("Failed to place BUY_STOP order")
                 
@@ -1461,6 +1486,16 @@ class DonchianStrategy:
             
             if result:
                 logging.info(f"SELL_STOP order placed: Price={pending_price:.5f}, SL={sl_price:.5f}, TP={tp_price:.5f}")
+                # Store entry score for this ticket if we can get it from the result
+                if hasattr(result, 'order'):
+                    ticket = result.order
+                    # Use the globally stored entry score
+                    global CURRENT_ENTRY_SCORE
+                    if 'CURRENT_ENTRY_SCORE' in globals() and CURRENT_ENTRY_SCORE is not None:
+                        TRADE_ENTRY_SCORES[ticket] = CURRENT_ENTRY_SCORE
+                        logging.debug(f"Associated entry score {CURRENT_ENTRY_SCORE:.3f} with ticket {ticket}")
+                    else:
+                        logging.warning(f"No current entry score available for ticket {ticket}")
             else:
                 logging.error("Failed to place SELL_STOP order")
 

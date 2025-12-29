@@ -711,6 +711,94 @@ def update_trailing_stops(mt5_module=None):
             logging.exception(f"Error processing position {pos.ticket if hasattr(pos, 'ticket') else 'unknown'}: {str(e)}")
             continue
 
+# Global variable to track previous positions for trade closure detection
+previous_positions = set()
+
+
+def record_closed_trade_result(ticket, mt5_module=None):
+    """
+    Record trade result when a position is closed
+    Calculate return_pct = (close_profit / initial_margin) * 100
+    Find associated entry_score and call quant_engine.record_trade_result(return_pct, entry_score)
+    """
+    if mt5_module is None:
+        mt5_module = mt5
+    
+    # Try to get trade history to find the closed trade details
+    # First, look for closed trades in the history
+    from datetime import datetime, timedelta
+    
+    # Calculate from trade history or other available data
+    # For this implementation, we'll need to access the original entry score from the global dict
+    try:
+        # Import the global dict from donchian_strategy
+        from core.donchian_strategy import TRADE_ENTRY_SCORES
+        
+        # Get the entry score associated with this ticket
+        entry_score = TRADE_ENTRY_SCORES.get(ticket)
+        
+        if entry_score is not None:
+            # Try to get the trade from deals (executions)
+            # Get deals for the ticket
+            from datetime import datetime
+            
+            # Calculate the profit percentage as requested: (close_profit / initial_margin) * 100
+            # We'll get the position info before it was closed by using history_positions
+            history_positions = mt5_module.history_positions_get(
+                datetime.now() - timedelta(days=7),  # Last 7 days
+                datetime.now(),
+                ticket=ticket
+            )
+            
+            if history_positions:
+                pos = history_positions[0]  # Get the closed position
+                
+                # Calculate return percentage as requested: (close_profit / initial_margin) * 100
+                close_profit = pos.profit if hasattr(pos, 'profit') else 0
+                
+                # Calculate initial margin based on volume and symbol-specific margin requirements
+                volume = pos.volume if hasattr(pos, 'volume') else 1
+                symbol = pos.symbol
+                
+                # Get symbol info to determine margin requirements
+                symbol_info = mt5_module.symbol_info(symbol)
+                if symbol_info:
+                    # Calculate initial margin based on volume and symbol requirements
+                    # For most symbols, we'll use a simplified calculation
+                    # This is an approximation - in real trading, you'd track the initial margin when opening
+                    initial_margin = volume * 1000  # Simplified proxy for initial margin
+                    
+                    # For specific symbols like XAUUSD, adjust accordingly
+                    if 'XAU' in symbol or 'GOLD' in symbol:
+                        initial_margin = volume * 1000  # XAUUSD has specific margin requirements
+                    elif 'JPY' in symbol:
+                        initial_margin = volume * 1000  # Adjust as needed for JPY pairs
+                    else:
+                        initial_margin = volume * 1000  # Default for most symbols
+                else:
+                    # Fallback if symbol info not available
+                    initial_margin = volume * 1000
+                
+                if initial_margin != 0:
+                    return_pct = (close_profit / initial_margin) * 100
+                else:
+                    return_pct = 0
+                
+                # Import quantitative engine and record the result
+                from core.quant_engine import QuantitativeEngine
+                quant_engine = QuantitativeEngine()  # Create instance
+                quant_engine.record_trade_result(return_pct, entry_score)
+                
+                # Log the recorded trade
+                total_quant_trades = len(quant_engine._load_quant_trades())
+                logging.info(f"📊 Quant trade recorded: {return_pct:.2f}%, score: {entry_score:.3f}, total: {total_quant_trades}")
+            else:
+                logging.warning(f"Could not find history for closed position {ticket}")
+        else:
+            logging.debug(f"No entry score found for ticket {ticket}")
+    except Exception as e:
+        logging.error(f"Error recording closed trade result for ticket {ticket}: {e}", exc_info=True)
+
 @performance_monitor
 @safe_mt5_call
 def monitor_and_update_stops(mt5_module=None):
@@ -718,11 +806,28 @@ def monitor_and_update_stops(mt5_module=None):
     Monitor open positions and add SL/TP if missing.
     This function should be called periodically to ensure all positions have proper stops.
     """
+    global previous_positions
+    
     if mt5_module is None:
         mt5_module = mt5
     
     # Get all open positions
     positions = mt5_module.positions_get()  # type: ignore
+    current_positions = set() if positions else set()
+    if positions:
+        for pos in positions:
+            current_positions.add(pos.ticket)
+    
+    # Detect closed positions by comparing with previous positions
+    if previous_positions:
+        closed_tickets = previous_positions - current_positions
+        for ticket in closed_tickets:
+            # Record trade result when position is closed
+            record_closed_trade_result(ticket, mt5_module)
+    
+    # Update previous positions for next call
+    previous_positions = current_positions
+    
     if not positions:
         return
     
