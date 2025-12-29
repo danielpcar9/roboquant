@@ -13,6 +13,9 @@ from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
+# Import for Hurst exponent calculation
+from numpy import diff, log, std, mean, sqrt, array, nan, isnan, sum as np_sum
+
 class QuantitativeAnalyzer:
     """
     Statistical analysis engine with mathematical formulas for trading decisions
@@ -177,6 +180,42 @@ class PositionSizer:
         # Conservative approach: use half Kelly
         return min(kelly_fraction * self.default_kelly_fraction, self.max_kelly_percentage)  # Max 10% of account
     
+    def kelly_criterion_from_trades(self, trade_returns: List[float]) -> float:
+        """
+        Calculate Kelly Criterion from historical trade returns
+        """
+        if len(trade_returns) < 10:  # Need sufficient data
+            # Default to conservative approach
+            return self.kelly_criterion(0.55, 2.0, 1.0)
+        
+        # Calculate win rate
+        wins = [r for r in trade_returns if r > 0]
+        win_rate = len(wins) / len(trade_returns)
+        
+        # Calculate average win and loss
+        win_returns = [r for r in wins if r > 0]
+        loss_returns = [r for r in trade_returns if r <= 0]
+        
+        if len(win_returns) == 0:
+            avg_win = 0.0
+        else:
+            avg_win = sum(win_returns) / len(win_returns)
+        
+        if len(loss_returns) == 0:
+            avg_loss = 0.0
+        else:
+            avg_loss = abs(sum(loss_returns) / len(loss_returns))  # Use absolute value
+        
+        # Calculate ratios
+        if avg_loss == 0:
+            avg_win_ratio = 2.0  # Default ratio
+            avg_loss_ratio = 1.0
+        else:
+            avg_win_ratio = avg_win
+            avg_loss_ratio = avg_loss
+        
+        return self.kelly_criterion(win_rate, avg_win_ratio, avg_loss_ratio)
+    
     def sharpe_ratio_position_size(
         self,
         returns: np.ndarray, 
@@ -201,6 +240,137 @@ class PositionSizer:
         # Adjust position size based on Sharpe ratio
         optimal_risk_pct = max_risk_pct * (1 + min(sharpe, 2.0))  # Cap at 3x risk
         return min(optimal_risk_pct / 100.0, self.max_sharpe_percentage)  # Max 5% risk
+
+class RiskMetrics:
+    """
+    Risk metrics for quantitative analysis
+    """
+    
+    def __init__(self):
+        pass
+    
+    def calculate_hurst_exponent(self, prices: np.ndarray, lags: range = range(2, 100)) -> float:
+        """
+        Calculate Hurst exponent to detect trend/reversion
+        H > 0.5 = trending, H < 0.5 = mean reverting, H = 0.5 = random walk
+        """
+        if len(prices) < 100:  # Need sufficient data
+            return 0.5  # Default to random walk
+        
+        # Convert to log prices
+        log_prices = log(prices)
+        
+        # Calculate lags
+        tau = []
+        lagvec = []
+        
+        for lag in lags:
+            # Call in chunks of the series
+            if lag > len(log_prices) // 2:
+                continue
+            
+            X = log_prices[lag:]
+            Y = log_prices[:-lag]
+            
+            # Simple linear regression
+            demean_x = X - mean(X)
+            demean_y = Y - mean(Y)
+            
+            # Calculate variance of difference
+            var = std(demean_x - demean_y) ** 2
+            
+            tau.append(sqrt(var))
+            lagvec.append(lag)
+        
+        # Return Hurst exponent using linear regression
+        if len(lagvec) < 2:
+            return 0.5
+        
+        # Log of tau values
+        log_tau = log(array(tau))
+        log_lag = log(array(lagvec))
+        
+        # Linear regression to find slope
+        slope, _, _, _, _ = stats.linregress(log_lag, log_tau)
+        
+        return slope
+    
+    def calculate_var(self, returns: np.ndarray, confidence: float = 0.95) -> float:
+        """
+        Calculate Value at Risk (VaR) at specified confidence level
+        """
+        if len(returns) < 30:  # Need sufficient data
+            return -0.05  # Default 5% VaR
+        
+        # Calculate the percentile corresponding to the confidence level
+        percentile = (1 - confidence) * 100
+        var = np.percentile(returns, percentile)
+        
+        return var
+    
+    def calculate_sortino(self, returns: np.ndarray) -> float:
+        """
+        Calculate Sortino ratio (downside risk adjusted return)
+        """
+        if len(returns) < 30:  # Need sufficient data
+            return 0.0
+        
+        # Calculate average return
+        avg_return = mean(returns)
+        
+        # Calculate downside deviation (only negative returns)
+        negative_returns = returns[returns < 0]
+        if len(negative_returns) == 0:
+            # If no negative returns, use standard deviation as fallback
+            downside_dev = std(returns)
+        else:
+            # Downside deviation is std of negative returns
+            downside_dev = std(negative_returns)
+        
+        # Avoid division by zero
+        if downside_dev == 0:
+            return float('inf') if avg_return > 0 else 0.0
+        
+        # Sortino ratio formula
+        sortino = avg_return / downside_dev if avg_return != 0 else 0.0
+        
+        return sortino
+    
+    def calculate_autocorrelation(self, prices: np.ndarray, lag: int = 5) -> float:
+        """
+        Calculate autocorrelation at specified lag for momentum validation
+        """
+        if len(prices) < lag + 1:  # Need sufficient data
+            return 0.0
+        
+        # Calculate returns
+        returns = diff(log(prices))
+        
+        if len(returns) < lag + 1:
+            return 0.0
+        
+        # Calculate correlation between returns and lagged returns
+        current_returns = returns[lag:]
+        lagged_returns = returns[:-lag]
+        
+        if len(current_returns) == 0 or len(lagged_returns) == 0:
+            return 0.0
+        
+        # Calculate correlation coefficient
+        mean_current = mean(current_returns)
+        mean_lagged = mean(lagged_returns)
+        
+        numerator = sum((current_returns - mean_current) * (lagged_returns - mean_lagged))
+        sum_sq_current = sum((current_returns - mean_current) ** 2)
+        sum_sq_lagged = sum((lagged_returns - mean_lagged) ** 2)
+        
+        if sum_sq_current == 0 or sum_sq_lagged == 0:
+            return 0.0
+        
+        correlation = numerator / sqrt(sum_sq_current * sum_sq_lagged)
+        
+        return correlation
+
 
 class QuantitativeOptimizer:
     """
@@ -291,6 +461,7 @@ class QuantitativeEngine:
         self.analyzer = QuantitativeAnalyzer()
         self.sizer = PositionSizer()
         self.optimizer = QuantitativeOptimizer()
+        self.risk_metrics = RiskMetrics()
         self.historical_data = {}
         
     def calculate_entry_score(
@@ -308,6 +479,9 @@ class QuantitativeEngine:
         volatility = self.analyzer.calculate_volatility_score(prices)
         trend = self.analyzer.calculate_trend_strength(prices)
         
+        # Calculate Hurst exponent to detect trend/reversion
+        hurst_exp = self.risk_metrics.calculate_hurst_exponent(prices)
+        
         # Combine into probability
         probability_result = self.analyzer.calculate_statistical_probability(
             momentum, volatility, trend, adx_value, di_plus, di_minus
@@ -323,9 +497,18 @@ class QuantitativeEngine:
         if not trend_filter:
             final_score *= 0.3  # Reduce score if no clear trend
         
+        # Adjust score based on Hurst exponent
+        # If Hurst > 0.5 (trending), boost score
+        # If Hurst < 0.5 (mean reverting), reduce score
+        if hurst_exp > 0.5:
+            final_score *= (1 + (hurst_exp - 0.5))  # Boost for trending markets
+        elif hurst_exp < 0.5:
+            final_score *= hurst_exp  # Reduce for mean-reverting markets
+        
         return {
             'entry_score': final_score,
             'probability': probability_result['probability'],
+            'hurst_exponent': hurst_exp,
             'components': probability_result['components'],
             'filters': {
                 'volatility_filter': volatility_filter,
@@ -338,7 +521,8 @@ class QuantitativeEngine:
         self,
         account_balance: float,
         entry_score: float,
-        historical_returns: Optional[np.ndarray] = None
+        historical_returns: Optional[np.ndarray] = None,
+        historical_trades: Optional[List[float]] = None
     ) -> float:
         """
         Calculate optimal position size using quantitative formulas
@@ -346,7 +530,19 @@ class QuantitativeEngine:
         # Base size from entry score (higher score = larger position)
         base_size = min(entry_score * 0.1, 0.05)  # Max 5% of account
         
-        if historical_returns is not None and len(historical_returns) > 20:
+        if historical_trades is not None and len(historical_trades) > 10:
+            # Use Kelly criterion from actual trade history
+            kelly_size = self.sizer.kelly_criterion_from_trades(historical_trades)
+            
+            # Calculate Sharpe-based sizing if returns are also provided
+            if historical_returns is not None and len(historical_returns) > 20:
+                sharpe_size = self.sizer.sharpe_ratio_position_size(historical_returns)
+                # Combine approaches
+                combined_size = (base_size + sharpe_size + kelly_size) / 3
+            else:
+                # Combine base and kelly approaches
+                combined_size = (base_size + kelly_size) / 2
+        elif historical_returns is not None and len(historical_returns) > 20:
             # Adjust using Sharpe-based sizing
             sharpe_size = self.sizer.sharpe_ratio_position_size(historical_returns)
             kelly_size = self.sizer.kelly_criterion(
@@ -394,3 +590,13 @@ if __name__ == "__main__":
         entry_score=result['entry_score']
     )
     print(f"Optimal Position Size: {optimal_size:.3f} lots")
+    
+    # Test with historical trades
+    historical_trades = [0.02, -0.01, 0.03, 0.015, -0.005, 0.025, 0.01, -0.02, 0.018, 0.022, 0.015, -0.01, 0.02, 0.017, -0.008]
+    optimal_size_with_trades = engine.calculate_optimal_position_size(
+        account_balance=10000,
+        entry_score=result['entry_score'],
+        historical_trades=historical_trades
+    )
+    print(f"Optimal Position Size with Historical Trades: {optimal_size_with_trades:.3f} lots")
+    print(f"Hurst Exponent: {result['hurst_exponent']:.3f}")
