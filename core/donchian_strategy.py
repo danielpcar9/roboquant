@@ -1396,13 +1396,11 @@ class DonchianStrategy:
                 magic=self.config.magic_number
             )
             
-            if result and hasattr(result, 'order'):
-                TRADE_ENTRY_SCORES[result.order] = globals().get('CURRENT_ENTRY_SCORE', 0.5)
-            
             if result:
                 logging.info(f"BUY_STOP order placed: Price={pending_price:.5f}, SL={sl_price:.5f}, TP={tp_price:.5f}")
                 # Store entry score for this ticket if we can get it from the result
                 if hasattr(result, 'order'):
+                    TRADE_ENTRY_SCORES[result.order] = globals().get('CURRENT_ENTRY_SCORE', 0.5)
                     ticket = result.order
                     # Use the globally stored entry score
                     if 'CURRENT_ENTRY_SCORE' in globals() and globals()['CURRENT_ENTRY_SCORE'] is not None:
@@ -1485,13 +1483,11 @@ class DonchianStrategy:
                 magic=self.config.magic_number
             )
             
-            if result and hasattr(result, 'order'):
-                TRADE_ENTRY_SCORES[result.order] = globals().get('CURRENT_ENTRY_SCORE', 0.5)
-            
             if result:
                 logging.info(f"SELL_STOP order placed: Price={pending_price:.5f}, SL={sl_price:.5f}, TP={tp_price:.5f}")
                 # Store entry score for this ticket if we can get it from the result
                 if hasattr(result, 'order'):
+                    TRADE_ENTRY_SCORES[result.order] = globals().get('CURRENT_ENTRY_SCORE', 0.5)
                     ticket = result.order
                     # Use the globally stored entry score
                     if 'CURRENT_ENTRY_SCORE' in globals() and globals()['CURRENT_ENTRY_SCORE'] is not None:
