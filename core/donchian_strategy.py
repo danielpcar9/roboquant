@@ -1181,7 +1181,6 @@ class DonchianStrategy:
                     logging.debug(f"Calculated entry score: {current_entry_score:.3f} for potential trade")
                     
                     # Store entry score globally for later association with ticket when trade executes
-                    global CURRENT_ENTRY_SCORE
                     CURRENT_ENTRY_SCORE = current_entry_score
         
         except ImportError:
@@ -1403,10 +1402,9 @@ class DonchianStrategy:
                 if hasattr(result, 'order'):
                     ticket = result.order
                     # Use the globally stored entry score
-                    global CURRENT_ENTRY_SCORE
-                    if 'CURRENT_ENTRY_SCORE' in globals() and CURRENT_ENTRY_SCORE is not None:
-                        TRADE_ENTRY_SCORES[ticket] = CURRENT_ENTRY_SCORE
-                        logging.debug(f"Associated entry score {CURRENT_ENTRY_SCORE:.3f} with ticket {ticket}")
+                    if 'CURRENT_ENTRY_SCORE' in globals() and globals()['CURRENT_ENTRY_SCORE'] is not None:
+                        TRADE_ENTRY_SCORES[ticket] = globals()['CURRENT_ENTRY_SCORE']
+                        logging.debug(f"Associated entry score {globals()['CURRENT_ENTRY_SCORE']:.3f} with ticket {ticket}")
                     else:
                         logging.warning(f"No current entry score available for ticket {ticket}")
             else:
@@ -1490,10 +1488,9 @@ class DonchianStrategy:
                 if hasattr(result, 'order'):
                     ticket = result.order
                     # Use the globally stored entry score
-                    global CURRENT_ENTRY_SCORE
-                    if 'CURRENT_ENTRY_SCORE' in globals() and CURRENT_ENTRY_SCORE is not None:
-                        TRADE_ENTRY_SCORES[ticket] = CURRENT_ENTRY_SCORE
-                        logging.debug(f"Associated entry score {CURRENT_ENTRY_SCORE:.3f} with ticket {ticket}")
+                    if 'CURRENT_ENTRY_SCORE' in globals() and globals()['CURRENT_ENTRY_SCORE'] is not None:
+                        TRADE_ENTRY_SCORES[ticket] = globals()['CURRENT_ENTRY_SCORE']
+                        logging.debug(f"Associated entry score {globals()['CURRENT_ENTRY_SCORE']:.3f} with ticket {ticket}")
                     else:
                         logging.warning(f"No current entry score available for ticket {ticket}")
             else:
