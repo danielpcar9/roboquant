@@ -1,8 +1,8 @@
 {
-  "midnight_balance": 6666.29,
+  "midnight_balance": 6676.04,
   "initial_balance": 11391.86,
   "ftmo_starting_balance": 10000.0,
-  "trading_days": 87,
+  "trading_days": 90,
   "last_reset_date": "2026-01-19",
   "daily_losses": {},
   "trading_blocked_until": null

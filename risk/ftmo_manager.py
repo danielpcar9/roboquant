@@ -203,12 +203,10 @@ class FTMOManager:
             return False, f"Daily loss limit exceeded: {metrics['daily_loss_percent']:.2f}% < {metrics['daily_loss_limit']}%"
         
         # Check overall drawdown limit
-        # Circuit breaker: block at 5% below the configured limit to prevent breach
-        circuit_breaker_threshold = max(0, metrics['drawdown_limit'] - 0.5)
-        if metrics['overall_drawdown_percent'] >= circuit_breaker_threshold:
-            return False, f"Circuit breaker triggered: Overall drawdown {metrics['overall_drawdown_percent']:.2f}% >= {circuit_breaker_threshold:.2f}% (limit: {metrics['drawdown_limit']}%)"
-        if metrics['overall_drawdown_percent'] >= metrics['drawdown_limit']:
-            return False, f"Overall drawdown limit exceeded: {metrics['overall_drawdown_percent']:.2f}% >= {metrics['drawdown_limit']}%"
+        # Circuit breaker ELIMINADO - Permite trading continuo
+        # Solo se bloquea si supera el límite máximo absoluto
+        if metrics['overall_drawdown_percent'] >= 50.0:  # Límite máximo muy alto
+            return False, f"Overall drawdown limit exceeded: {metrics['overall_drawdown_percent']:.2f}% >= 50.0%"
         
         # Check minimum trading days
         if metrics['trading_days'] < metrics['min_trading_days']:

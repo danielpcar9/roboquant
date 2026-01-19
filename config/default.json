@@ -1,6 +1,6 @@
 {
   "risk_management": {
-    "risk_per_trade_pct": 1.0
+    "risk_per_trade_pct": 2.0
   },
   "strategy": {
     "donchian_period": 20,

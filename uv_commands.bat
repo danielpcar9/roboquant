@@ -41,6 +41,14 @@ echo   uv tool uninstall      - Desinstalar herramienta
 echo   uv tool list           - Listar herramientas instaladas
 echo   uv tool update-shell   - Actualizar shell con ejecutables
 echo.
+echo 🐍 PYTHON VERSIONS - Instalación y gestión de versiones Python
+echo ==============================================================
+echo   uv python install      - Instalar versiones de Python
+echo   uv python list         - Ver versiones de Python disponibles
+echo   uv python find         - Encontrar versión de Python instalada
+echo   uv python pin          - Fijar proyecto a versión específica de Python
+echo   uv python uninstall    - Desinstalar una versión de Python
+echo.
 echo ⚙️  UTILITY - Gestión e inspección del estado de uv
 echo ===================================================
 echo   uv cache clean         - Eliminar entradas de caché
@@ -80,6 +88,30 @@ echo ⚠️  Diferencias importantes:
 echo • No lee pip.conf ni variables PIP_*
 echo • Usa UV_INDEX_URL en lugar de PIP_INDEX_URL
 echo • No es copia exacta de pip, pero compatible en la mayoría de casos
+echo.
+echo 📦 GESTIÓN AVANZADA DE DEPENDENCIAS:
+echo ===================================
+echo Agregar dependencias:
+echo   uv add requests                    - Añadir paquete
+echo   uv add "requests==2.31.0"          - Con versión específica
+echo   uv add git+https://github.com/psf/requests  - Desde git
+echo   uv add -r requirements.txt         - Desde requirements.txt
+echo.
+echo Eliminar/Actualizar:
+echo   uv remove requests                 - Eliminar paquete
+echo   uv lock --upgrade-package requests - Actualizar paquete
+echo.
+echo 🏷️  VERSIONADO:
+echo =============
+echo   uv version                         - Ver versión del paquete
+echo   uv version --short                 - Solo versión
+echo   uv version --output-format json    - Formato JSON
+echo.
+echo ▶️  EJECUCIÓN DE COMANDOS:
+echo =======================
+echo   uv run flask run -p 3000           - Ejecutar comando
+echo   uv run example.py                  - Ejecutar script
+echo   uv sync                            - Sincronizar manualmente
 echo.
 echo 💡 Consejos:
 echo ===========
