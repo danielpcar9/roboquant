@@ -83,7 +83,7 @@ echo • No es copia exacta de pip, pero compatible en la mayoría de casos
 echo.
 echo 💡 Consejos:
 echo ===========
-echo • Usa "uv run python script.py" para ejecutar scripts en entorno aislado
+echo • Usa "uv run script.py" para ejecutar scripts en entorno aislado
 echo • Usa "uv sync" después de cambiar pyproject.toml
 echo • Usa "uv lock" para crear versiones fijas de dependencias
 echo • Usa "uv cache clean" si tienes problemas de instalación
