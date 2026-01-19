@@ -5,6 +5,12 @@ echo ======================
 echo.
 echo ✅ pyproject.toml actualizado: Se usa [dependency-groups] en lugar de [tool.uv]
 echo.
+echo 📜 SCRIPTS - Ejecutar scripts Python independientes
+echo ================================================
+echo   uv run [script.py]       - Ejecutar un script
+echo   uv add --script [dep]    - Añadir dependencia a un script
+echo   uv remove --script [dep] - Eliminar dependencia de un script
+echo.
 
 :: Verificar que uv esté disponible
 uv --version >nul 2>&1
@@ -61,6 +67,19 @@ echo 🔄 Actualización:
 echo ===============
 echo   uv pip install --upgrade [paquete]  - Actualizar paquete
 echo   uv pip install --upgrade uv         - Actualizar uv mismo
+echo.
+echo 🔄 COMPATIBILIDAD CON PIP:
+echo =========================
+echo uv es un reemplazo directo para pip y pip-tools
+echo • Usa "uv pip install" en lugar de "pip install"
+echo • Funciona con requirements.txt existentes
+echo • Lee variables de entorno UV_* (no PIP_*)
+echo • Configuración en uv.toml o [tool.uv.pip] en pyproject.toml
+echo.
+echo ⚠️  Diferencias importantes:
+echo • No lee pip.conf ni variables PIP_*
+echo • Usa UV_INDEX_URL en lugar de PIP_INDEX_URL
+echo • No es copia exacta de pip, pero compatible en la mayoría de casos
 echo.
 echo 💡 Consejos:
 echo ===========
