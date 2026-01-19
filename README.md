@@ -174,7 +174,7 @@ Testing: Run test_complete_setup.py before live trading
 
 - MetaTrader 5
 - Python 3.7+
-- See [requirements.txt](file:///C:/Users/edgar/roboquant/requirements.txt) for complete list of dependencies
+- uv package manager (recommended)
 
 ### Key Dependencies:
 - metatrader5==5.0.45
@@ -192,23 +192,67 @@ Testing: Run test_complete_setup.py before live trading
 - xgboost==1.7.3
 - keyring==24.2.0
 
+### Migración a uv
+
+Este proyecto ahora utiliza `uv` como gestor de paquetes y entornos virtuales, que ofrece:
+
+- ✅ Velocidad 10-100x más rápida que pip
+- ✅ Resolución de dependencias determinística
+- ✅ Gestión integrada de entornos virtuales
+- ✅ Compatibilidad con pyproject.toml
+- ✅ Herramientas de desarrollo integradas
+
 ## Installation
 
-1. Clone this repository
-2. Create a virtual environment:
+### Método 1: Usando uv (Recomendado)
+
+1. **Instalar uv** (si no está instalado):
+   ```powershell
+   # En PowerShell
+   irm https://astral.sh/uv/install.ps1 | iex
+   ```
+
+2. **Clonar el repositorio y configurar con uv**:
+   ```cmd
+   # Ejecutar el script de configuración
+   setup_uv_env.bat
+   ```
+
+3. **Activar el entorno virtual**:
+   ```cmd
+   call .venv\Scripts\activate.bat
+   ```
+
+### Método 2: Instalación manual con uv
+
+1. Clonar este repositorio
+2. Crear entorno virtual con uv:
+   ```
+   uv venv
+   call .venv\Scripts\activate.bat
+   ```
+3. Instalar dependencias:
+   ```
+   uv pip install -e .
+   ```
+
+### Método 3: Método tradicional (no recomendado)
+
+1. Clonar este repositorio
+2. Crear un entorno virtual tradicional:
    ```
    python -m venv venv
    venv\Scripts\activate
    ```
-3. Install required packages:
+3. Instalar paquetes requeridos:
    ```
    pip install -r requirements.txt
    ```
-4. Install machine learning dependencies (optional):
+4. Instalar dependencias de machine learning (opcional):
    ```
    pip install xgboost==1.7.3
    ```
-6. Install security dependencies:
+5. Instalar dependencias de seguridad:
    ```
    pip install keyring==24.2.0
    ```
@@ -224,13 +268,58 @@ Testing: Run test_complete_setup.py before live trading
 
 ## Usage
 
-### Running the Strategy
-Run the strategy using the batch file:
-```
-run_donchian.bat
+### Scripts disponibles con uv
+
+📁 **Scripts principales:**
+
+- `setup_uv_env.bat` - Configura el entorno con uv (ejecutar primero)
+- `run_donchian_uv.bat` - Ejecuta la estrategia Donchian con uv
+- `run_backtest_uv.bat` - Ejecuta backtesting con uv
+- `uv_commands.bat` - Muestra comandos útiles de uv
+
+🔧 **Comandos uv útiles:**
+
+```cmd
+# Activar entorno virtual
+.venv\Scripts\activate.bat
+
+# Instalar/actualizar paquetes
+uv pip install [paquete]
+uv pip install --upgrade [paquete]
+
+# Listar paquetes instalados
+uv pip list
+
+# Exportar requirements.txt
+uv pip freeze > requirements.txt
 ```
 
-Or run directly with Python:
+### Running the Strategy
+
+#### Con scripts uv (recomendado):
 ```
-python donchian_strategy.py
+run_donchian_uv.bat
+```
+
+#### Manualmente:
+1. Activar entorno:
+   ```
+   call .venv\Scripts\activate.bat
+   ```
+2. Ejecutar estrategia:
+   ```
+   python -m core.donchian_strategy
+   ```
+
+### Backtesting
+
+#### Con scripts uv:
+```
+run_backtest_uv.bat
+```
+
+#### Manualmente:
+```cmd
+call .venv\Scripts\activate.bat
+python scripts\backtest_apex_vectorbt.py
 ```
