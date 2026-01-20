@@ -17,7 +17,7 @@ from core.donchian_components.calculators.technical_indicators import (
 )
 
 # from core.brokers.mt5_gateway import MT5Gateway  # Comentado temporalmente
-# from core.utils.helpers import normalize_volume, get_set_manager  # Comentado temporalmente
+from config.set_file_manager import get_set_manager
 import os
 
 
@@ -84,10 +84,8 @@ class RiskValidator:
 
         # Get ATR multipliers from configuration
         # cfg = get_set_manager()  # Comentado temporalmente
-        set_file = os.getenv("ROBOQUANT_SET_FILE", "default.json")
 
         try:
-            # cfg.load_set_file(set_file)  # Comentado temporalmente
 
             if risk_profile == "LOW":  # Default profile
                 sl_multiplier = config_manager.get("SL_ATR_MULTIPLIER", 3.0)
@@ -141,38 +139,39 @@ class RiskValidator:
     ) -> float:
         """Calculate lot size based on risk percentage and stop loss distance"""
 
-        # Check if quantitative optimal lot size is available
-        # Module import updated - use specific component imports instead
-        if (
-            hasattr(ds_module, "QUANT_OPTIMAL_LOTS")
-            and ds_module.QUANT_OPTIMAL_LOTS is not None
-        ):
-            quant_lots = ds_module.QUANT_OPTIMAL_LOTS
-            logging.info(f"Using quantitative optimal lot size: {quant_lots:.3f}")
+        # Check if quantitative optimal lot size is available from global variables
+        try:
+            from core.donchian_strategy import QUANT_OPTIMAL_LOTS
+            if QUANT_OPTIMAL_LOTS is not None:
+                quant_lots = QUANT_OPTIMAL_LOTS
+                logging.info(f"Using quantitative optimal lot size: {quant_lots:.3f}")
 
-            # Validate and return quantitative lot size
-            symbol_info = mt5.symbol_info(symbol)
-            if symbol_info is None:
-                logging.error(f"Failed to get symbol info for {symbol}")
-                return 0.01  # Seguridad: mínimo absoluto
+                # Validate and return quantitative lot size
+                symbol_info = mt5.symbol_info(symbol)
+                if symbol_info is None:
+                    logging.error(f"Failed to get symbol info for {symbol}")
+                    return 0.01  # Seguridad: mínimo absoluto
 
-            # Apply broker limits to quantitative lot size
-            min_lot = symbol_info.volume_min
-            max_lot = symbol_info.volume_max or quant_lots
+                # Apply broker limits to quantitative lot size
+                min_lot = symbol_info.volume_min
+                max_lot = symbol_info.volume_max or quant_lots
 
-            # Apply safety limits
-            max_allowed_lots = 0.30  # Safety limit
-            quant_lots = max(min_lot, min(quant_lots, max_lot, max_allowed_lots))
+                # Apply safety limits
+                max_allowed_lots = 0.30  # Safety limit
+                quant_lots = max(min_lot, min(quant_lots, max_lot, max_allowed_lots))
 
-            # Apply simple volume step normalization
-            step = symbol_info.volume_step or 0.01
-            normalized_lots = round(quant_lots / step) * step
-            normalized_lots = min(normalized_lots, max_allowed_lots)
+                # Apply simple volume step normalization
+                step = symbol_info.volume_step or 0.01
+                normalized_lots = round(quant_lots / step) * step
+                normalized_lots = min(normalized_lots, max_allowed_lots)
 
-            logging.info(
-                f"Quantitative lot size after validation: {normalized_lots:.3f}"
-            )
-            return normalized_lots
+                logging.info(
+                    f"Quantitative lot size after validation: {normalized_lots:.3f}"
+                )
+                return normalized_lots
+        except ImportError:
+            # Fall back to traditional calculation if QUANT_OPTIMAL_LOTS not available
+            pass
 
         # Traditional risk-based calculation
         risk_amount = balance * (risk_pct / 100.0)

@@ -33,10 +33,11 @@ class InputValidator:
         return isinstance(volume, (int, float)) and volume > 0
 
 
-# from core.utils.helpers import normalize_volume, get_set_manager  # Comentado temporalmente
-# from core.brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk  # Comentado temporalmente
-# from core.news.news_filter import news_filter  # Comentado temporalmente
-# from core.analysis.market_regime import market_regime_detector  # Comentado temporalmente
+from brokers.mt5_core import normalize_volume
+from config.set_file_manager import get_set_manager
+from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
+from services.news_filter import news_filter
+from core.market_regime import market_regime_detector
 
 
 # Mock simple functions

@@ -23,6 +23,16 @@ class MT5Gateway:
     """Object-oriented wrapper around MT5 utility functions.
     Preserves existing behavior by delegating to module-level functions.
     """
+    
+    def initialize(self):
+        """Initialize MT5 connection"""
+        from brokers.mt5_core import initialize_mt5
+        return initialize_mt5()
+    
+    def shutdown(self):
+        """Shutdown MT5 connection"""
+        import MetaTrader5 as mt5
+        mt5.shutdown()  # type: ignore
 
     def build_and_send_order(
         self,

@@ -6,6 +6,7 @@ from core.donchian_components.managers.position_managers import *
 
 if __name__ == "__main__":
     # Import and run main from core
-    from core.donchian_strategy import main
+    from core.donchian_strategy import DonchianStrategy
 
-    main()
+    strategy = DonchianStrategy()
+    strategy.main()

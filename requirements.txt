@@ -7,5 +7,5 @@ flask==3.0.0
 vectorbt==0.26.0
 ta-lib==0.4.28
 plotly==5.17.0
-xgboost==1.7.3
+xgboost>=2.0.0
 keyring==24.2.0

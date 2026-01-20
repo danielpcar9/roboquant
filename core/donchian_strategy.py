@@ -14,12 +14,13 @@ Fecha: 2026-01-20
 """
 
 import logging
+import time
 from typing import Optional, Dict, Any
 
 import MetaTrader5 as mt5
 
 from config.config_manager import config_manager
-from core.brokers.mt5_gateway import MT5Gateway
+from brokers.mt5_utils import MT5Gateway
 from core.donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator,
 )
@@ -247,11 +248,15 @@ class DonchianStrategy:
             while True:
                 try:
                     self.run_strategy(self.config.symbol)
+                    # Add delay to prevent excessive execution
+                    time.sleep(180)  # Wait 3 minutes between iterations
                 except KeyboardInterrupt:
                     logging.info("Strategy stopped by user")
                     break
                 except Exception as e:
                     logging.error(f"Strategy iteration error: {e}")
+                    # Add delay even on error to prevent spamming
+                    time.sleep(180)
 
         finally:
             self.mt5_gateway.shutdown()

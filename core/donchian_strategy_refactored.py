@@ -19,7 +19,7 @@ from typing import Optional, Dict, Any
 import MetaTrader5 as mt5
 
 from config.config_manager import config_manager
-from core.brokers.mt5_gateway import MT5Gateway
+from brokers.mt5_utils import MT5Gateway
 from core.donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator,
 )
