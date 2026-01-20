@@ -7,7 +7,7 @@ import MetaTrader5 as mt5  # type: ignore
 
 class SessionFilter:
     """Filter trades based on historical performance by session"""
-    
+
     def __init__(self, mt5_module=None):
         self.mt5 = mt5_module or mt5
         # Define trading sessions
@@ -18,7 +18,7 @@ class SessionFilter:
             "OVERLAP": (7, 10),   # 07:00-10:00 UTC (London/NY overlap)
             "LATE_NY": (20, 23)   # 20:00-23:00 UTC
         }
-    
+
     def get_current_session(self) -> str:
         """
         Get the current trading session based on UTC time
@@ -27,13 +27,13 @@ class SessionFilter:
             Current session name
         """
         current_hour = datetime.now(timezone.utc).hour
-        
+
         for session_name, (start, end) in self.sessions.items():
             if start <= current_hour < end:
                 return session_name
-        
+
         return "OTHER"
-    
+
     def get_session_performance(self, symbol: str, hours_back: int = 240) -> Dict[str, Dict[str, float]]:
         """
         Analyze historical performance by session
@@ -51,7 +51,7 @@ class SessionFilter:
             if rates is None or len(rates) == 0:
                 logging.warning(f"Insufficient data to analyze session performance for {symbol}")
                 return {}
-            
+
             # Initialize session statistics
             session_stats: Dict[str, Dict[str, float]] = {
                 session: {
@@ -63,29 +63,29 @@ class SessionFilter:
                 }
                 for session in self.sessions
             }
-            
+
             # Analyze each bar and categorize by session
             for rate in rates:
                 # Convert timestamp to hour
                 bar_time = datetime.fromtimestamp(rate['time'])
                 bar_hour = bar_time.hour
-                
+
                 # Determine which session this bar belongs to
                 for session_name, (start, end) in self.sessions.items():
                     if start <= bar_hour < end:
                         # Update statistics for this session
                         session_stats[session_name]['total_bars'] += 1.0
-                        
+
                         # Calculate price movement
                         movement = abs(rate['high'] - rate['low'])
                         session_stats[session_name]['total_movement'] += movement
-                        
+
                         # Count up/down bars
                         if rate['close'] > rate['open']:
                             session_stats[session_name]['up_bars'] += 1.0
                         else:
                             session_stats[session_name]['down_bars'] += 1.0
-            
+
             # Calculate average movement per session
             for session_name in session_stats:
                 stats = session_stats[session_name]
@@ -93,12 +93,12 @@ class SessionFilter:
                     stats['avg_movement'] = stats['total_movement'] / stats['total_bars']
                     stats['up_ratio'] = stats['up_bars'] / stats['total_bars']
                     stats['down_ratio'] = stats['down_bars'] / stats['total_bars']
-            
+
             return session_stats
         except Exception as e:
             logging.error(f"Error analyzing session performance for {symbol}: {e}")
             return {}
-    
+
     def is_favorable_session(self, symbol: str, session_name: Optional[str] = None) -> Tuple[bool, float]:
         """
         Determine if the current or specified session is favorable for trading
@@ -112,25 +112,25 @@ class SessionFilter:
         """
         if session_name is None:
             session_name = self.get_current_session()
-        
+
         # Get session performance data
         performance = self.get_session_performance(symbol)
         if not performance or session_name not in performance:
             logging.warning(f"No performance data for session {session_name}")
             return True, 0.5  # Neutral if no data
-        
+
         session_data = performance[session_name]
-        
+
         # Calculate confidence score based on multiple factors
         total_bars = session_data['total_bars']
         if total_bars == 0:
             return True, 0.5  # Neutral if no bars
-        
+
         # Factors for confidence calculation:
         # 1. Strength of trend (up/down ratio)
         up_ratio = session_data.get('up_ratio', 0.5)
         trend_strength = abs(up_ratio - 0.5) * 2  # 0-1 scale
-        
+
         # 2. Volatility (average movement compared to overall average)
         all_avg_movements = [data['avg_movement'] for data in performance.values() if data['total_bars'] > 0]
         if all_avg_movements:
@@ -143,20 +143,20 @@ class SessionFilter:
                 volatility_score = 0.5
         else:
             volatility_score = 0.5
-        
+
         # 3. Sample size weighting (more data = higher confidence)
         sample_weight = min(1.0, total_bars / 100.0)  # Cap at 100 bars
-        
+
         # Combined confidence score (0-1)
         confidence = (trend_strength * 0.4 + volatility_score * 0.4 + sample_weight * 0.2)
-        
+
         # Session is favorable if confidence > 0.6
         is_favorable = confidence > 0.6
-        
+
         logging.info(f"Session {session_name} favorable: {is_favorable} (confidence: {confidence:.2f})")
-        
+
         return is_favorable, confidence
-    
+
     def get_best_sessions(self, symbol: str, top_n: int = 3) -> List[Tuple[str, float]]:
         """
         Get the top N best performing sessions for a symbol
@@ -171,16 +171,16 @@ class SessionFilter:
         performance = self.get_session_performance(symbol)
         if not performance:
             return []
-        
+
         # Calculate confidence scores for all sessions
         session_scores = []
         for session_name in performance:
             is_favorable, confidence = self.is_favorable_session(symbol, session_name)
             session_scores.append((session_name, confidence))
-        
+
         # Sort by confidence score (descending)
         session_scores.sort(key=lambda x: x[1], reverse=True)
-        
+
         return session_scores[:top_n]
 
 # Global instance for easy access
@@ -189,11 +189,11 @@ session_filter = SessionFilter()
 if __name__ == "__main__":
     # Example usage
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
-    
+
     # Test session detection
     current_session = session_filter.get_current_session()
     print(f"Current session: {current_session}")
-    
+
     # Test session performance (would require MT5 to be running)
     # performance = session_filter.get_session_performance("XAUUSD")
     # print(f"Session performance: {performance}")

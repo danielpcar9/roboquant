@@ -8,14 +8,14 @@ logger = logging.getLogger(__name__)
 
 class NewsFilter:
     """News filter to avoid trading during major economic events"""
-    
+
     def __init__(self):
         """Initialize news filter with default configuration"""
         self.enabled = True
         self.major_events_only = True
         self.avoid_events = ["NFP", "CPI", "PPI", "FOMC"]
         self.buffer_minutes = 30
-    
+
     def load_config(self, config):
         """Load configuration from set file"""
         try:
@@ -28,7 +28,7 @@ class NewsFilter:
                 logger.info("News filter configuration loaded successfully")
         except Exception as e:
             logger.warning(f"Failed to load news filter configuration: {e}")
-    
+
     def is_first_friday(self, date):
         """Check if date is the first Friday of the month"""
         # First day of month
@@ -36,7 +36,7 @@ class NewsFilter:
         # Find first Friday
         first_friday = first_day + timedelta(days=(4-first_day.weekday()) % 7)
         return date.date() == first_friday.date()
-    
+
     def is_news_time(self):
         """
         Check if current time is near a major economic event
@@ -44,10 +44,10 @@ class NewsFilter:
         """
         if not self.enabled:
             return False
-            
+
         now = datetime.utcnow()
         current_time = now.time()
-        
+
         # Check for NFP (First Friday of month at 13:30 UTC)
         if "NFP" in self.avoid_events and self.is_first_friday(now):
             nfp_time = datetime.strptime("13:30", "%H:%M").time()
@@ -56,7 +56,7 @@ class NewsFilter:
             if time_diff <= self.buffer_minutes:
                 logger.info("NFP event detected")
                 return True
-        
+
         # Check for CPI (Monthly around 15th at 13:30 UTC)
         if "CPI" in self.avoid_events and 13 <= now.day <= 17:
             cpi_time = datetime.strptime("13:30", "%H:%M").time()
@@ -65,7 +65,7 @@ class NewsFilter:
             if time_diff <= self.buffer_minutes:
                 logger.info("CPI event detected")
                 return True
-        
+
         # Check for PPI (Monthly around 15th at 13:30 UTC)
         if "PPI" in self.avoid_events and 13 <= now.day <= 17:
             ppi_time = datetime.strptime("13:30", "%H:%M").time()
@@ -74,7 +74,7 @@ class NewsFilter:
             if time_diff <= self.buffer_minutes:
                 logger.info("PPI event detected")
                 return True
-        
+
         # Check for FOMC (typically 2x per month, Wednesdays)
         # Simplified check for FOMC days
         if "FOMC" in self.avoid_events:
@@ -88,7 +88,7 @@ class NewsFilter:
                     if time_diff <= self.buffer_minutes:
                         logger.info("FOMC event detected")
                         return True
-        
+
         return False
 
 # Global instance

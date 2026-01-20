@@ -14,7 +14,7 @@ print('='*50)
 print(f'ADX Value: {adx:.2f}')
 print(f'Slope: {slope:.4f}')
 print(f'Regime: {regime}')
-print(f'ADX Threshold: 18')
+print('ADX Threshold: 18')
 print('='*50)
 
 if regime == 'TRENDING':
@@ -29,7 +29,7 @@ else:
 # Get current price
 tick = mt5.symbol_info_tick('XAUUSD')
 if tick:
-    print(f'\nCurrent Price:')
+    print('\nCurrent Price:')
     print(f'   BID: {tick.bid:.2f}')
     print(f'   ASK: {tick.ask:.2f}')
 

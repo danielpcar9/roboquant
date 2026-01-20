@@ -6,37 +6,36 @@ Test script for security components in RoboQuant trading system.
 import os
 import tempfile
 import time
-from dotenv import load_dotenv
 from services.security_manager import SecureCredentialManager, InputValidator, RateLimiter, sanitize_error_message, constant_time_compare, ip_whitelist
 
 def test_secure_credential_manager():
     """Test SecureCredentialManager functionality."""
     print("Testing SecureCredentialManager...")
-    
+
     # Create a temporary .env file for testing
     with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
         f.write("TEST_LOGIN=123456\n")
         f.write("TEST_PASSWORD=secret123\n")
         f.write("TEST_SERVER=TestServer\n")
         temp_env_path = f.name
-    
+
     try:
         # Test loading credentials
         credential_manager = SecureCredentialManager(temp_env_path)
-        
+
         # Test getting credentials
         login = credential_manager.get_credential('TEST_LOGIN')
         assert login == '123456', f"Expected '123456', got {login}"
-        
+
         password = credential_manager.get_credential('TEST_PASSWORD')
         assert password == 'secret123', f"Expected 'secret123', got {password}"
-        
+
         # Note: credential_exists checks internal tracking, not actual existence
         # Just test that we can get credentials without error
-        
+
         print("✓ SecureCredentialManager tests passed")
         return True
-        
+
     except Exception as e:
         print(f"✗ SecureCredentialManager tests failed: {e}")
         import traceback
@@ -52,43 +51,43 @@ def test_secure_credential_manager():
 def test_input_validator():
     """Test InputValidator functionality."""
     print("Testing InputValidator...")
-    
+
     try:
         # Test symbol validation
-        assert InputValidator.validate_symbol('XAUUSD') == True
-        assert InputValidator.validate_symbol('EURUSD') == True
-        assert InputValidator.validate_symbol('') == False
-        assert InputValidator.validate_symbol('INVALID SYMBOL') == False
-        
+        assert InputValidator.validate_symbol('XAUUSD')
+        assert InputValidator.validate_symbol('EURUSD')
+        assert not InputValidator.validate_symbol('')
+        assert not InputValidator.validate_symbol('INVALID SYMBOL')
+
         # Test volume validation
-        assert InputValidator.validate_volume(0.01) == True
-        assert InputValidator.validate_volume(1.0) == True
-        assert InputValidator.validate_volume(0) == False
-        assert InputValidator.validate_volume(-0.1) == False
-        assert InputValidator.validate_volume(1001) == False  # Too large
-        
+        assert InputValidator.validate_volume(0.01)
+        assert InputValidator.validate_volume(1.0)
+        assert not InputValidator.validate_volume(0)
+        assert not InputValidator.validate_volume(-0.1)
+        assert not InputValidator.validate_volume(1001)  # Too large
+
         # Test price validation
-        assert InputValidator.validate_price(1234.56) == True
-        assert InputValidator.validate_price(0.1) == True
-        assert InputValidator.validate_price(0) == False
-        assert InputValidator.validate_price(-100) == False
-        assert InputValidator.validate_price(1000001) == False  # Too large
-        
+        assert InputValidator.validate_price(1234.56)
+        assert InputValidator.validate_price(0.1)
+        assert not InputValidator.validate_price(0)
+        assert not InputValidator.validate_price(-100)
+        assert not InputValidator.validate_price(1000001)  # Too large
+
         # Test order type validation
-        assert InputValidator.validate_order_type('BUY') == True
-        assert InputValidator.validate_order_type('SELL') == True
-        assert InputValidator.validate_order_type('buy') == True  # Case insensitive
-        assert InputValidator.validate_order_type('sell') == True  # Case insensitive
-        assert InputValidator.validate_order_type('INVALID') == False
-        
+        assert InputValidator.validate_order_type('BUY')
+        assert InputValidator.validate_order_type('SELL')
+        assert InputValidator.validate_order_type('buy')  # Case insensitive
+        assert InputValidator.validate_order_type('sell')  # Case insensitive
+        assert not InputValidator.validate_order_type('INVALID')
+
         # Test input sanitization
         sanitized = InputValidator.sanitize_input("test<script>alert('xss')</script>")
         assert '<' not in sanitized and '>' not in sanitized
         assert 'test' in sanitized
-        
+
         print("✓ InputValidator tests passed")
         return True
-        
+
     except Exception as e:
         print(f"✗ InputValidator tests failed: {e}")
         return False
@@ -96,32 +95,32 @@ def test_input_validator():
 def test_rate_limiter():
     """Test RateLimiter functionality."""
     print("Testing RateLimiter...")
-    
+
     try:
         # Create a rate limiter with 3 requests per 2 seconds
         rate_limiter = RateLimiter(max_requests=3, time_window=2)
-        
+
         # Test that first 3 requests are allowed
-        assert rate_limiter.is_allowed() == True
-        assert rate_limiter.is_allowed() == True
-        assert rate_limiter.is_allowed() == True
-        
+        assert rate_limiter.is_allowed()
+        assert rate_limiter.is_allowed()
+        assert rate_limiter.is_allowed()
+
         # Test that 4th request is denied
-        assert rate_limiter.is_allowed() == False
-        
+        assert not rate_limiter.is_allowed()
+
         # Wait for time window to expire and test again
         time.sleep(2.1)
-        assert rate_limiter.is_allowed() == True
-        
+        assert rate_limiter.is_allowed()
+
         # Test retry after calculation
         rate_limiter = RateLimiter(max_requests=1, time_window=1)
         rate_limiter.is_allowed()  # First request
         retry_after = rate_limiter.get_retry_after()
         assert retry_after >= 0
-        
+
         print("✓ RateLimiter tests passed")
         return True
-        
+
     except Exception as e:
         print(f"✗ RateLimiter tests failed: {e}")
         return False
@@ -129,7 +128,7 @@ def test_rate_limiter():
 def test_error_sanitization():
     """Test error message sanitization."""
     print("Testing error sanitization...")
-    
+
     try:
         # Test sensitive information removal
         error_msg = "Connection failed with password=secret123 and token=verylongtoken123456789"
@@ -140,7 +139,7 @@ def test_error_sanitization():
         assert 'verylongtoken123456789' not in sanitized
         # Check that sanitization occurred
         assert '***' in sanitized
-        
+
         # Test long number sequence removal
         error_msg = "Error code 1234567890 occurred"
         sanitized = sanitize_error_message(error_msg)
@@ -148,10 +147,10 @@ def test_error_sanitization():
         print(f"Sanitized: {sanitized}")
         # The sanitize function replaces long number sequences with '*****'
         # but we need to check what the actual behavior is
-        
+
         print("✓ Error sanitization tests passed")
         return True
-        
+
     except Exception as e:
         print(f"✗ Error sanitization tests failed: {e}")
         import traceback
@@ -161,20 +160,20 @@ def test_error_sanitization():
 def test_constant_time_compare():
     """Test constant time string comparison."""
     print("Testing constant time comparison...")
-    
+
     try:
         # Test equal strings
-        assert constant_time_compare("test", "test") == True
-        
+        assert constant_time_compare("test", "test")
+
         # Test different strings
-        assert constant_time_compare("test", "Test") == False
-        assert constant_time_compare("test", "testing") == False
-        assert constant_time_compare("", "") == True
-        assert constant_time_compare("a", "b") == False
-        
+        assert not constant_time_compare("test", "Test")
+        assert not constant_time_compare("test", "testing")
+        assert constant_time_compare("", "")
+        assert not constant_time_compare("a", "b")
+
         print("✓ Constant time comparison tests passed")
         return True
-        
+
     except Exception as e:
         print(f"✗ Constant time comparison tests failed: {e}")
         return False
@@ -182,19 +181,19 @@ def test_constant_time_compare():
 def test_ip_whitelist():
     """Test IP whitelist functionality."""
     print("Testing IP whitelist...")
-    
+
     try:
         # Test with localhost IPs
         allowed_ips = ['127.0.0.1', '::1']
-        
+
         # This test is limited since we can't easily simulate Flask requests
         # but we can at least verify the decorator can be created
         decorator = ip_whitelist(allowed_ips)
         assert callable(decorator)
-        
+
         print("✓ IP whitelist tests passed")
         return True
-        
+
     except Exception as e:
         print(f"✗ IP whitelist tests failed: {e}")
         return False
@@ -202,7 +201,7 @@ def test_ip_whitelist():
 def main():
     """Run all security tests."""
     print("Running security component tests...\n")
-    
+
     tests = [
         test_secure_credential_manager,
         test_input_validator,
@@ -211,10 +210,10 @@ def main():
         test_constant_time_compare,
         test_ip_whitelist
     ]
-    
+
     passed = 0
     failed = 0
-    
+
     for test in tests:
         try:
             if test():
@@ -225,9 +224,9 @@ def main():
             print(f"✗ Test {test.__name__} crashed: {e}")
             failed += 1
         print()  # Add spacing between tests
-    
+
     print(f"Security tests completed: {passed} passed, {failed} failed")
-    
+
     if failed == 0:
         print("🎉 All security tests passed!")
         return True

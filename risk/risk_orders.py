@@ -1,5 +1,4 @@
 # risk_orders.py
-import os
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
@@ -10,12 +9,15 @@ from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
 from analysis.post_mortem import log_trade
 from services.alerts import alert_trade_opened, alert_safety_violation
 # Import error handler
-from services.error_handler import handle_exception, retry_with_exponential_backoff, MT5ConnectionError, OrderExecutionError
+from services.error_handler import handle_exception, retry_with_exponential_backoff
 
 # Import consolidated MT5 functions
 from brokers.mt5_core import initialize_mt5
 # Import ATR calculation function
-from core.donchian_strategy import calculate_atr
+from core.donchian_strategy import MarketDataService
+
+# Initialize market data service for ATR calculation
+market_data_service = MarketDataService()
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -59,14 +61,14 @@ def execute_risk_order():
     # Use ATR-based SL/TP values for XAUUSD
     # XAUUSD typically needs wider stops due to higher volatility
     # Calculate ATR for dynamic stop placement
-    atr = calculate_atr(symbol, 14)  # 14-period ATR
+    atr = market_data_service.calculate_atr(symbol, 14)  # 14-period ATR
     if atr is None:
         atr = 5.0  # Default ATR estimate
-    
+
     # Use ATR multipliers (LOW RISK profile)
     sl_multiplier = 3.0
     tp_multiplier = 6.0
-    
+
     sl_points = sl_multiplier * atr
     tp_points = tp_multiplier * atr
 
@@ -118,7 +120,7 @@ def execute_risk_order():
             tp=tp_price,
             mt5_module=mt5
         )
-        
+
         # Logging para post-mortem
         log_trade({
             'timestamp_open': datetime.utcnow().isoformat(),
@@ -133,10 +135,10 @@ def execute_risk_order():
             'hour_of_day': datetime.utcnow().hour,
             'day_of_week': datetime.utcnow().weekday()
         })
-        
+
         # Enviar alerta
         alert_trade_opened(result.order, symbol, side, volume, result.price, sl_price, tp_price)
-        
+
         logging.info("Orden ejecutada exitosamente. Ticket: %s", result.order)
         return True
 

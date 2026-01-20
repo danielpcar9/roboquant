@@ -4,28 +4,26 @@ Quantitative Trading Engine
 Mathematical framework for statistical analysis and quantitative trading decisions
 """
 import numpy as np
-import pandas as pd
 from scipy import stats
-from scipy.optimize import minimize
 import logging
-from typing import Dict, List, Tuple, Optional
-from datetime import datetime, timedelta
-import warnings
-warnings.filterwarnings('ignore')
+from typing import Dict, List, Tuple, Optional, Any
+from datetime import datetime
 import json
-import os
+import warnings
 from pathlib import Path
 
 # Import for Hurst exponent calculation
-from numpy import diff, log, std, mean, sqrt, array, nan, isnan, sum as np_sum
+from numpy import diff, log, std, mean, sqrt, array
+
+warnings.filterwarnings('ignore')
 
 class QuantitativeAnalyzer:
     """
     Statistical analysis engine with mathematical formulas for trading decisions
     """
-    
+
     def __init__(self):
-        self.weights = {
+        self.weights: Dict[str, Any] = {
             'momentum': [0.5, 0.3, 0.2],  # Short, medium, long term weights
             'probability': {
                 'momentum': 0.2,
@@ -35,8 +33,8 @@ class QuantitativeAnalyzer:
                 'di_diff': 0.2
             }
         }
-    
-    def calculate_momentum_score(self, prices: np.ndarray, periods: List[int] = None) -> float:
+
+    def calculate_momentum_score(self, prices: np.ndarray, periods: Optional[List[int]] = None) -> float:
         """
         Calculate momentum score using multiple timeframes with weighted average
         Formula: Weighted sum of momentum ratios across different periods
@@ -58,7 +56,7 @@ class QuantitativeAnalyzer:
                 momentum_scores.append(momentum * weights[i])
 
         return sum(momentum_scores)
-    
+
     def calculate_volatility_score(self, prices: np.ndarray, period: int = 20) -> float:
         """
         Calculate volatility score using rolling standard deviation
@@ -66,26 +64,26 @@ class QuantitativeAnalyzer:
         """
         if len(prices) < period + 5:  # Need extra data for stability
             return 0.0
-        
+
         returns = np.diff(np.log(prices))
         if len(returns) < period:
             return 0.0
-        
+
         # Vectorized calculation of rolling volatility
         rolling_std = np.array([np.std(returns[i-period:i]) for i in range(period, len(returns))])
-        
+
         if len(rolling_std) == 0:
             return 0.0
-        
+
         current_vol = rolling_std[-1]
         mean_vol = np.mean(rolling_std)
         std_vol = np.std(rolling_std)
-        
+
         if std_vol == 0:
             return 0.0
-        
+
         return (current_vol - mean_vol) / std_vol
-    
+
     def calculate_trend_strength(self, prices: np.ndarray, period: int = 20) -> float:
         """
         Calculate trend strength using linear regression slope
@@ -93,24 +91,24 @@ class QuantitativeAnalyzer:
         """
         if len(prices) < period:
             return 0.0
-        
+
         y = prices[-period:]
         x = np.arange(len(y), dtype=np.float64)
-        
+
         # Linear regression: y = ax + b
         slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
-        
+
         # Normalize by average price to get relative strength
         avg_price = np.mean(y)
         trend_strength = slope / avg_price if avg_price != 0 else 0.0
-        
+
         # Multiply by R² to weight by statistical significance
         return trend_strength * (r_value ** 2)
-    
+
     def calculate_statistical_probability(
         self,
         momentum_score: float,
-        volatility_score: float, 
+        volatility_score: float,
         trend_strength: float,
         adx_value: float,
         di_plus: float,
@@ -124,17 +122,17 @@ class QuantitativeAnalyzer:
         momentum_norm = (momentum_score + 1) / 2 if abs(momentum_score) <= 1 else 0.5
         volatility_norm = (volatility_score + 1) / 2 if abs(volatility_score) <= 1 else 0.5
         trend_norm = (trend_strength + 1) / 2 if abs(trend_strength) <= 1 else 0.5
-        
+
         # ADX normalized (0-100 range to 0-1)
         adx_norm = min(adx_value / 100.0, 1.0)
-        
+
         # DI difference (positive for bullish, negative for bearish)
         di_diff = di_plus - di_minus
         di_norm = di_diff / 100.0  # Normalize to -1 to 1
-        
+
         # Weighted combination
         weights = self.weights['probability']
-        
+
         probability = (
             weights['momentum'] * max(0, momentum_norm) +
             weights['volatility'] * max(0, volatility_norm) +
@@ -142,7 +140,7 @@ class QuantitativeAnalyzer:
             weights['adx'] * adx_norm +
             weights['di_diff'] * max(0, di_norm)  # Only positive DI difference
         )
-        
+
         return {
             'probability': min(probability, 1.0),
             'components': {
@@ -159,12 +157,12 @@ class PositionSizer:
     """
     Mathematical position sizing using quantitative formulas
     """
-    
+
     def __init__(self):
         self.default_kelly_fraction = 0.5  # Conservative approach: use half Kelly
         self.max_kelly_percentage = 0.1    # Max 10% of account
         self.max_sharpe_percentage = 0.05  # Max 5% risk
-    
+
     def kelly_criterion(self, win_rate: float, avg_win_ratio: float, avg_loss_ratio: float) -> float:
         """
         Kelly Criterion formula for optimal position sizing
@@ -173,16 +171,16 @@ class PositionSizer:
         """
         if avg_loss_ratio == 0:
             return 0.1  # Conservative default
-        
+
         b = avg_win_ratio / avg_loss_ratio
         p = win_rate
         q = 1 - p
-        
+
         kelly_fraction = (b * p - q) / b if b > 0 else 0.05  # Conservative 5%
-        
+
         # Conservative approach: use half Kelly
         return min(kelly_fraction * self.default_kelly_fraction, self.max_kelly_percentage)  # Max 10% of account
-    
+
     def kelly_criterion_from_trades(self, trade_returns: List[float]) -> float:
         """
         Calculate Kelly Criterion from historical trade returns
@@ -190,25 +188,25 @@ class PositionSizer:
         if len(trade_returns) < 10:  # Need sufficient data
             # Default to conservative approach
             return self.kelly_criterion(0.55, 2.0, 1.0)
-        
+
         # Calculate win rate
         wins = [r for r in trade_returns if r > 0]
         win_rate = len(wins) / len(trade_returns)
-        
+
         # Calculate average win and loss
         win_returns = [r for r in wins if r > 0]
         loss_returns = [r for r in trade_returns if r <= 0]
-        
+
         if len(win_returns) == 0:
             avg_win = 0.0
         else:
             avg_win = sum(win_returns) / len(win_returns)
-        
+
         if len(loss_returns) == 0:
             avg_loss = 0.0
         else:
             avg_loss = abs(sum(loss_returns) / len(loss_returns))  # Use absolute value
-        
+
         # Calculate ratios
         if avg_loss == 0:
             avg_win_ratio = 2.0  # Default ratio
@@ -216,12 +214,12 @@ class PositionSizer:
         else:
             avg_win_ratio = avg_win
             avg_loss_ratio = avg_loss
-        
+
         return self.kelly_criterion(win_rate, avg_win_ratio, avg_loss_ratio)
-    
+
     def sharpe_ratio_position_size(
         self,
-        returns: np.ndarray, 
+        returns: np.ndarray,
         risk_free_rate: float = 0.02,
         max_risk_pct: float = 1.0
     ) -> float:
@@ -231,15 +229,15 @@ class PositionSizer:
         """
         if len(returns) < 30:  # Need sufficient data
             return max_risk_pct / 100.0  # Default 1% risk
-        
+
         mean_return = np.mean(returns)
         volatility = np.std(returns) if len(returns) > 1 else 0.01
-        
+
         if volatility == 0:
             return max_risk_pct / 100.0
-        
+
         sharpe = (mean_return - risk_free_rate / 252) / (volatility / np.sqrt(252))  # Annualized
-        
+
         # Adjust position size based on Sharpe ratio
         optimal_risk_pct = max_risk_pct * (1 + min(sharpe, 2.0))  # Cap at 3x risk
         return min(optimal_risk_pct / 100.0, self.max_sharpe_percentage)  # Max 5% risk
@@ -248,10 +246,10 @@ class RiskMetrics:
     """
     Risk metrics for quantitative analysis
     """
-    
+
     def __init__(self):
         pass
-    
+
     def calculate_hurst_exponent(self, prices: np.ndarray, lags: range = range(2, 100)) -> float:
         """
         Calculate Hurst exponent to detect trend/reversion
@@ -259,68 +257,68 @@ class RiskMetrics:
         """
         if len(prices) < 100:  # Need sufficient data
             return 0.5  # Default to random walk
-        
+
         # Convert to log prices
         log_prices = log(prices)
-        
+
         # Calculate lags
         tau = []
         lagvec = []
-        
+
         for lag in lags:
             # Call in chunks of the series
             if lag > len(log_prices) // 2:
                 continue
-            
+
             X = log_prices[lag:]
             Y = log_prices[:-lag]
-            
+
             # Simple linear regression
             demean_x = X - mean(X)
             demean_y = Y - mean(Y)
-            
+
             # Calculate variance of difference
             var = std(demean_x - demean_y) ** 2
-            
+
             tau.append(sqrt(var))
             lagvec.append(lag)
-        
+
         # Return Hurst exponent using linear regression
         if len(lagvec) < 2:
             return 0.5
-        
+
         # Log of tau values
         log_tau = log(array(tau))
         log_lag = log(array(lagvec))
-        
+
         # Linear regression to find slope
         slope, _, _, _, _ = stats.linregress(log_lag, log_tau)
-        
+
         return slope
-    
+
     def calculate_var(self, returns: np.ndarray, confidence: float = 0.95) -> float:
         """
         Calculate Value at Risk (VaR) at specified confidence level
         """
         if len(returns) < 30:  # Need sufficient data
             return -0.05  # Default 5% VaR
-        
+
         # Calculate the percentile corresponding to the confidence level
         percentile = (1 - confidence) * 100
         var = np.percentile(returns, percentile)
-        
+
         return var
-    
+
     def calculate_sortino(self, returns: np.ndarray) -> float:
         """
         Calculate Sortino ratio (downside risk adjusted return)
         """
         if len(returns) < 30:  # Need sufficient data
             return 0.0
-        
+
         # Calculate average return
         avg_return = mean(returns)
-        
+
         # Calculate downside deviation (only negative returns)
         negative_returns = returns[returns < 0]
         if len(negative_returns) == 0:
@@ -329,49 +327,49 @@ class RiskMetrics:
         else:
             # Downside deviation is std of negative returns
             downside_dev = std(negative_returns)
-        
+
         # Avoid division by zero
         if downside_dev == 0:
             return float('inf') if avg_return > 0 else 0.0
-        
+
         # Sortino ratio formula
         sortino = avg_return / downside_dev if avg_return != 0 else 0.0
-        
+
         return sortino
-    
+
     def calculate_autocorrelation(self, prices: np.ndarray, lag: int = 5) -> float:
         """
         Calculate autocorrelation at specified lag for momentum validation
         """
         if len(prices) < lag + 1:  # Need sufficient data
             return 0.0
-        
+
         # Calculate returns
         returns = diff(log(prices))
-        
+
         if len(returns) < lag + 1:
             return 0.0
-        
+
         # Calculate correlation between returns and lagged returns
         current_returns = returns[lag:]
         lagged_returns = returns[:-lag]
-        
+
         if len(current_returns) == 0 or len(lagged_returns) == 0:
             return 0.0
-        
+
         # Calculate correlation coefficient
         mean_current = mean(current_returns)
         mean_lagged = mean(lagged_returns)
-        
+
         numerator = sum((current_returns - mean_current) * (lagged_returns - mean_lagged))
         sum_sq_current = sum((current_returns - mean_current) ** 2)
         sum_sq_lagged = sum((lagged_returns - mean_lagged) ** 2)
-        
+
         if sum_sq_current == 0 or sum_sq_lagged == 0:
             return 0.0
-        
+
         correlation = numerator / sqrt(sum_sq_current * sum_sq_lagged)
-        
+
         return correlation
 
 
@@ -379,13 +377,13 @@ class QuantitativeOptimizer:
     """
     Mathematical optimization for trading parameters
     """
-    
+
     def __init__(self):
         self.default_period = 20
         self.min_period = 10
         self.max_period = 30
         self.lookback_days = 90
-    
+
     @staticmethod
     def _generate_breakout_signals(prices: np.ndarray, period: int) -> List[float]:
         """Generate hypothetical breakout signals for optimization"""
@@ -393,9 +391,9 @@ class QuantitativeOptimizer:
         for i in range(period, len(prices)):
             high_period = max(prices[i-period:i])
             low_period = min(prices[i-period:i])
-            
+
             current_price = prices[i]
-            
+
             # Simulate long signal
             if current_price > high_period:
                 # Simulate return over next few periods
@@ -405,26 +403,26 @@ class QuantitativeOptimizer:
                 # Simulate short return (negative for short positions)
                 future_return = (current_price - prices[min(i+5, len(prices)-1)]) / current_price
                 signals.append(future_return)
-        
+
         return signals
-    
+
     @staticmethod
     def _calculate_signal_sharpe(signals: List[float]) -> float:
         """Calculate Sharpe ratio of signals"""
         if len(signals) < 2:
             return 0.0
-        
+
         returns = np.array(signals)
         mean_return = np.mean(returns)
         std_return = np.std(returns)
-        
+
         return mean_return / std_return if std_return != 0 else 0.0
-    
+
     def optimize_donchian_period(
         self,
         prices: np.ndarray,
-        periods_range: Tuple[int, int] = None,
-        lookback_days: int = None
+        periods_range: Optional[Tuple[int, int]] = None,
+        lookback_days: Optional[int] = None
     ) -> int:
         """
         Optimize Donchian period using statistical performance
@@ -437,52 +435,52 @@ class QuantitativeOptimizer:
 
         if len(prices) < max(periods_range) + lookback_days:
             return self.default_period  # Default if insufficient data
-        
+
         best_period = self.default_period
         best_sharpe = -np.inf
-        
+
         for period in range(periods_range[0], periods_range[1] + 1):
             # Generate hypothetical signals for this period
             signals = QuantitativeOptimizer._generate_breakout_signals(
                 prices[-lookback_days:], period
             )
-            
+
             if len(signals) > 5:  # Need sufficient signals
                 sharpe = QuantitativeOptimizer._calculate_signal_sharpe(signals)
                 if sharpe > best_sharpe:
                     best_sharpe = sharpe
                     best_period = period
-        
+
         return best_period
 
 class QuantitativeEngine:
     """
     Main quantitative trading engine combining all mathematical components
     """
-    
+
     def __init__(self):
         self.analyzer = QuantitativeAnalyzer()
         self.sizer = PositionSizer()
         self.optimizer = QuantitativeOptimizer()
         self.risk_metrics = RiskMetrics()
         self.historical_data = {}
-        
+
         # Initialize quant trades tracking
         self.quant_trades_file = Path('data/quant_trades.json')
         self.quant_trades_file.parent.mkdir(exist_ok=True)
-        
+
         # Initialize the file if it doesn't exist
         if not self.quant_trades_file.exists():
             with open(self.quant_trades_file, 'w') as f:
                 json.dump([], f)
-        
+
     def calculate_entry_score(
         self,
         prices: np.ndarray,
         adx_value: float,
         di_plus: float,
         di_minus: float
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Calculate comprehensive entry score using quantitative formulas
         """
@@ -490,25 +488,25 @@ class QuantitativeEngine:
         momentum = self.analyzer.calculate_momentum_score(prices)
         volatility = self.analyzer.calculate_volatility_score(prices)
         trend = self.analyzer.calculate_trend_strength(prices)
-        
+
         # Calculate Hurst exponent to detect trend/reversion
         hurst_exp = self.risk_metrics.calculate_hurst_exponent(prices)
-        
+
         # Combine into probability
         probability_result = self.analyzer.calculate_statistical_probability(
             momentum, volatility, trend, adx_value, di_plus, di_minus
         )
-        
+
         # Additional filters using statistical thresholds
         volatility_filter = abs(volatility) < 2.0  # Not too volatile
         trend_filter = abs(trend) > 0.001  # Meaningful trend
-        
+
         final_score = probability_result['probability']
         if not volatility_filter:
             final_score *= 0.5  # Reduce score if too volatile
         if not trend_filter:
             final_score *= 0.3  # Reduce score if no clear trend
-        
+
         # Adjust score based on Hurst exponent
         # If Hurst > 0.5 (trending), boost score
         # If Hurst < 0.5 (mean reverting), reduce score
@@ -516,7 +514,7 @@ class QuantitativeEngine:
             final_score *= (1 + (hurst_exp - 0.5))  # Boost for trending markets
         elif hurst_exp < 0.5:
             final_score *= hurst_exp  # Reduce for mean-reverting markets
-        
+
         return {
             'entry_score': final_score,
             'probability': probability_result['probability'],
@@ -528,7 +526,7 @@ class QuantitativeEngine:
             },
             'recommendation': 'BUY' if final_score > 0.6 else 'SELL' if final_score < 0.4 else 'HOLD'
         }
-    
+
     def _load_quant_trades(self):
         """Load only quant trades from persistence file"""
         try:
@@ -542,7 +540,7 @@ class QuantitativeEngine:
         except Exception as e:
             logging.error(f"Error loading quant trades: {e}")
             return []
-    
+
     def calculate_optimal_position_size(
         self,
         account_balance: float,
@@ -555,21 +553,21 @@ class QuantitativeEngine:
         """
         # Load ONLY quant trades
         quant_trades = self._load_quant_trades()
-        
+
         if len(quant_trades) >= 15:  # Mínimo 15 trades quant
             kelly_size = self.sizer.kelly_criterion_from_trades(quant_trades)
         else:
-            # BOOTSTRAP: reemplazar con nuevo modo de cálculo
-            kelly_size = max(0.005, min(0.02, entry_score * 0.015))
-            logging.info(f"⚠️ Bootstrap mode: {len(quant_trades)}/15 quant trades")
-        
+            # BOOTSTRAP: modo más agresivo para mayor riesgo
+            kelly_size = max(0.01, min(0.04, entry_score * 0.025))
+            logging.info(f"⚠️ Bootstrap mode AGGRESIVO: {len(quant_trades)}/15 quant trades")
+
         # Base size from entry score (higher score = larger position)
         base_size = min(entry_score * 0.1, 0.05)  # Max 5% of account
-        
+
         if historical_trades is not None and len(historical_trades) > 10:
             # Use Kelly criterion from actual trade history
             historical_kelly = self.sizer.kelly_criterion_from_trades(historical_trades)
-            
+
             # Calculate Sharpe-based sizing if returns are also provided
             if historical_returns is not None and len(historical_returns) > 20:
                 sharpe_size = self.sizer.sharpe_ratio_position_size(historical_returns)
@@ -581,19 +579,19 @@ class QuantitativeEngine:
         elif historical_returns is not None and len(historical_returns) > 20:
             # Adjust using Sharpe-based sizing
             sharpe_size = self.sizer.sharpe_ratio_position_size(historical_returns)
-            
+
             # Combine approaches
             combined_size = (base_size + sharpe_size + kelly_size) / 3
         else:
             # Use the quant-based kelly size as primary
             combined_size = (base_size + kelly_size) / 2
-        
+
         # Apply account balance
         optimal_lots = (account_balance * combined_size) / 1000  # Normalize to lot size
-        
+
         # Ensure minimum and maximum limits
-        return min(max(optimal_lots, 0.01), 0.3)  # Min 0.01, Max 0.3 lots
-    
+        return min(max(optimal_lots, 0.01), 0.6)  # Min 0.01, Max 0.6 lots (duplicado)
+
     def record_trade_result(self, return_pct: float, entry_score: float):
         """Guardar resultado en quant_trades.json"""
         try:
@@ -603,32 +601,32 @@ class QuantitativeEngine:
                     trades = json.load(f)
             else:
                 trades = []
-            
+
             # Create new trade record
             trade_record = {
                 "timestamp": datetime.now().isoformat(),
                 "return": return_pct,
                 "entry_score": entry_score
             }
-            
+
             # Add new trade
             trades.append(trade_record)
-            
+
             # Save back to file
             with open(self.quant_trades_file, 'w') as f:
                 json.dump(trades, f)
-            
+
             logging.info(f"Recorded quant trade: {return_pct:.3f}, entry_score: {entry_score:.3f}")
         except Exception as e:
             logging.error(f"Error recording trade result: {e}")
 if __name__ == "__main__":
     # Test the quantitative engine
     engine = QuantitativeEngine()
-    
+
     # Simulate some price data
     np.random.seed(42)
     prices = 100 + np.cumsum(np.random.normal(0, 0.1, 100))  # Random walk
-    
+
     # Test entry score calculation
     result = engine.calculate_entry_score(
         prices=prices,
@@ -636,19 +634,19 @@ if __name__ == "__main__":
         di_plus=20.0,
         di_minus=15.0
     )
-    
+
     print("Quantitative Analysis Result:")
     print(f"Entry Score: {result['entry_score']:.3f}")
     print(f"Recommendation: {result['recommendation']}")
     print(f"Components: {result['components']}")
-    
+
     # Test position sizing
     optimal_size = engine.calculate_optimal_position_size(
         account_balance=10000,
         entry_score=result['entry_score']
     )
     print(f"Optimal Position Size: {optimal_size:.3f} lots")
-    
+
     # Test with historical trades
     historical_trades = [0.02, -0.01, 0.03, 0.015, -0.005, 0.025, 0.01, -0.02, 0.018, 0.022, 0.015, -0.01, 0.02, 0.017, -0.008]
     optimal_size_with_trades = engine.calculate_optimal_position_size(
@@ -658,7 +656,7 @@ if __name__ == "__main__":
     )
     print(f"Optimal Position Size with Historical Trades: {optimal_size_with_trades:.3f} lots")
     print(f"Hurst Exponent: {result['hurst_exponent']:.3f}")
-    
+
     # Test recording a trade result
     engine.record_trade_result(0.025, result['entry_score'])
     print("Trade result recorded successfully")

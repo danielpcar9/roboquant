@@ -85,8 +85,8 @@ class CircuitBreaker:
     - OPEN: Failure threshold exceeded, requests are blocked
     - HALF_OPEN: Testing if service is restored
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  failure_threshold: int = 3,
                  timeout: int = 60,
                  expected_exception: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception):
@@ -104,7 +104,7 @@ class CircuitBreaker:
         self.failure_count = 0
         self.last_failure_time = None
         self.state = CircuitState.CLOSED
-    
+
     def call(self, func: Callable, *args, **kwargs) -> Any:
         """
         Call a function through the circuit breaker.
@@ -126,7 +126,7 @@ class CircuitBreaker:
                 self.state = CircuitState.HALF_OPEN
             else:
                 raise CircuitBreakerError("Circuit breaker is OPEN")
-        
+
         try:
             result = func(*args, **kwargs)
             self._on_success()
@@ -140,13 +140,13 @@ class CircuitBreaker:
             else:
                 # Re-raise unexpected exceptions without changing circuit state
                 raise e
-    
+
     def _should_attempt_reset(self) -> bool:
         """Check if we should attempt to reset the circuit."""
         if self.last_failure_time is None:
             return False
         return time.time() - self.last_failure_time >= self.timeout
-    
+
     def _on_success(self) -> None:
         """Handle successful operation."""
         self.failure_count = 0
@@ -154,34 +154,34 @@ class CircuitBreaker:
         if self.state == CircuitState.HALF_OPEN:
             self.state = CircuitState.CLOSED
             error_logger.info("Circuit breaker closed after successful operation")
-    
+
     def _on_failure(self) -> None:
         """Handle failed operation."""
         self.failure_count += 1
         self.last_failure_time = time.time()
-        
+
         if self.failure_count >= self.failure_threshold:
             self.state = CircuitState.OPEN
             error_logger.warning(f"Circuit breaker opened after {self.failure_count} failures")
-    
+
     def is_closed(self) -> bool:
         """Check if circuit is closed."""
         return self.state == CircuitState.CLOSED
-    
+
     def is_open(self) -> bool:
         """Check if circuit is open."""
         return self.state == CircuitState.OPEN
-    
+
     def is_half_open(self) -> bool:
         """Check if circuit is half-open."""
         return self.state == CircuitState.HALF_OPEN
-    
+
     def get_state(self) -> CircuitState:
         """Get current circuit state."""
         return self.state
 
 
-def retry_with_exponential_backoff(max_retries: int = 3, 
+def retry_with_exponential_backoff(max_retries: int = 3,
                                  base_delay: float = 1.0,
                                  max_delay: float = 60.0,
                                  exceptions: Tuple[Type[Exception], ...] = (Exception,)):
@@ -198,24 +198,24 @@ def retry_with_exponential_backoff(max_retries: int = 3,
         @wraps(func)
         def wrapper(*args, **kwargs):
             last_exception: Optional[Exception] = None
-            
+
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    
+
                     if attempt < max_retries:
                         # Calculate delay with exponential backoff and jitter
                         delay = min(base_delay * (2 ** attempt), max_delay)
                         jitter = random.uniform(0, delay * 0.1)  # 10% jitter
                         total_delay = delay + jitter
-                        
+
                         error_logger.warning(
                             f"Attempt {attempt + 1} failed for {func.__name__}: {str(e)}. "
                             f"Retrying in {total_delay:.2f} seconds..."
                         )
-                        
+
                         time.sleep(total_delay)
                     else:
                         error_logger.error(
@@ -224,7 +224,7 @@ def retry_with_exponential_backoff(max_retries: int = 3,
                         error_logger.debug(
                             f"Full traceback:\n{traceback.format_exc()}"
                         )
-            
+
             # If we get here, all retries failed
             if last_exception is not None:
                 raise last_exception
@@ -276,7 +276,7 @@ def safe_mt5_call(func: Callable):
             circuit = order_execution_circuit
         else:
             circuit = market_data_circuit
-        
+
         # Wrap with retry logic and circuit breaker
         @retry_with_exponential_backoff(
             max_retries=3,
@@ -286,9 +286,9 @@ def safe_mt5_call(func: Callable):
         )
         def protected_call():
             return circuit.call(func, *args, **kwargs)
-        
+
         return protected_call()
-    
+
     return wrapper
 
 
@@ -328,7 +328,7 @@ def handle_exception(func: Callable):
             error_logger.error(f"Unexpected error in {func.__name__}: {str(e)}")
             error_logger.debug(f"Full traceback:\n{traceback.format_exc()}")
             raise
-    
+
     return wrapper
 
 
@@ -430,14 +430,14 @@ def log_error_to_file(error_info: dict, log_file: str = "error_log.json"):
                     existing_logs = json.load(f)
                 except json.JSONDecodeError:
                     existing_logs = []
-        
+
         # Add new error info
         existing_logs.append(error_info)
-        
+
         # Keep only the last 1000 errors to prevent file from growing too large
         if len(existing_logs) > 1000:
             existing_logs = existing_logs[-1000:]
-        
+
         # Write back to file
         with open(log_file, 'w') as f:
             json.dump(existing_logs, f, indent=2)

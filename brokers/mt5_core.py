@@ -2,11 +2,8 @@
 """
 Core MT5 functionality consolidated in one place to eliminate duplication.
 """
-import os
 import time
 import logging
-from dotenv import load_dotenv
-from typing import Optional
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
@@ -21,12 +18,12 @@ def initialize_mt5():
     """Initialize MT5 connection with credentials from secure credential manager"""
     # Add more detailed initialization info
     logging.info("Attempting to initialize MT5...")
-    
+
     # Get credentials from secure credential manager
     login = credential_manager.get_credential('MT5_LOGIN')
     password = credential_manager.get_credential('MT5_PASSWORD')
     server = credential_manager.get_credential('MT5_SERVER')
-    
+
     # Initialize with credentials if available
     if login and password and server:
         try:
@@ -48,7 +45,7 @@ def initialize_mt5():
             error = mt5.last_error()  # type: ignore
             logging.error(f"MT5 initialization error: {error}")
             return False
-    
+
     logging.info("MT5 initialized successfully")
     return True
 
@@ -76,7 +73,7 @@ def strategy_performance_monitor(func):
     def wrapper(*args, **kwargs):
         if not STRATEGY_PERFORMANCE_MONITORING:
             return func(*args, **kwargs)
-            
+
         start_time = time.perf_counter()
         try:
             result = func(*args, **kwargs)
@@ -84,12 +81,12 @@ def strategy_performance_monitor(func):
             execution_time = end_time - start_time
             strategy_execution_times.append(execution_time)
             logging.debug(f"Strategy Performance: {func.__name__} executed in {execution_time:.4f} seconds")
-            
+
             # Log average execution time every 10 executions
             if len(strategy_execution_times) % 10 == 0:
                 avg_time = sum(strategy_execution_times[-10:]) / min(10, len(strategy_execution_times))
                 logging.info(f"Average execution time (last 10): {avg_time:.4f} seconds")
-            
+
             return result
         except Exception as e:
             end_time = time.perf_counter()
@@ -114,7 +111,7 @@ def mt5_performance_monitor(func):
     def wrapper(*args, **kwargs):
         if not PERFORMANCE_MONITORING_ENABLED:
             return func(*args, **kwargs)
-            
+
         start_time = time.perf_counter()
         try:
             result = func(*args, **kwargs)
@@ -147,35 +144,35 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
     """
     if mt5_module is None:
         mt5_module = mt5
-    
+
     # Get symbol info
     symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
     if not symbol_info:
         logging.warning(f"Could not get symbol info for {symbol}, returning original SL/TP")
         return sl, tp
-    
+
     point = symbol_info.point
     digits = symbol_info.digits
-    
+
     # Get minimum stop distance (in points)
     # For Exness, this is typically available as freeze_level or distance fields
     min_stop_distance = getattr(symbol_info, 'freeze_level', 0)
     if min_stop_distance == 0:
         min_stop_distance = getattr(symbol_info, 'distance', 0)
-    
+
     # If we still don't have a minimum distance, use a safe default
     # For XAUUSD, 400 points should be sufficient based on your config
     if min_stop_distance == 0:
         min_stop_distance = 400  # Default safe value
-    
+
     logging.debug(f"Symbol {symbol} min stop distance: {min_stop_distance} points, point: {point}, digits: {digits}")
-    
+
     # Round prices to correct number of decimal places
     if sl is not None:
         sl = round(sl, digits)
     if tp is not None:
         tp = round(tp, digits)
-    
+
     # Adjust SL/TP based on order side and minimum distance requirements
     if side == "BUY":
         # For BUY orders: SL must be below entry, TP must be above entry
@@ -190,7 +187,7 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
             adjusted_sl = min(sl, safe_sl)  # SL further from entry is safer
         else:
             adjusted_sl = None
-            
+
         if tp is not None:
             # Ensure TP is at least min_stop_distance above entry
             min_tp = entry_price + (min_stop_distance * point)
@@ -215,7 +212,7 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
             adjusted_sl = max(sl, safe_sl)  # SL further from entry is safer
         else:
             adjusted_sl = None
-            
+
         if tp is not None:
             # Ensure TP is at least min_stop_distance below entry
             min_tp = entry_price - (min_stop_distance * point)
@@ -227,57 +224,57 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
             adjusted_tp = min(tp, safe_tp)  # TP further from entry is better
         else:
             adjusted_tp = None
-    
+
     # Round final values to correct decimal places
     if adjusted_sl is not None:
         adjusted_sl = round(adjusted_sl, digits)
     if adjusted_tp is not None:
         adjusted_tp = round(adjusted_tp, digits)
-    
+
     logging.debug(f"SL/TP adjustment - Original: SL={sl}, TP={tp} | Adjusted: SL={adjusted_sl}, TP={adjusted_tp}")
     return adjusted_sl, adjusted_tp
 
 def get_filling_mode(symbol, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
-    
+
     # For Exness accounts, use ORDER_FILLING_RETURN as the primary mode
     # Exness typically uses RETURN mode (mode 0) for most operations
     if hasattr(mt5_module, 'ORDER_FILLING_RETURN'):  # type: ignore
         return mt5_module.ORDER_FILLING_RETURN  # type: ignore
-    
+
     # Fallback to symbol-specific filling mode if available
     sym = mt5_module.symbol_info(symbol)  # type: ignore
     if not sym:
         logging.warning("Symbol %s info not available", symbol)
         return mt5_module.ORDER_FILLING_RETURN if hasattr(mt5_module, 'ORDER_FILLING_RETURN') else 0  # type: ignore
-    
+
     try:
         filling_mode = getattr(sym, 'filling_mode', None)
     except AttributeError:
         return mt5_module.ORDER_FILLING_RETURN if hasattr(mt5_module, 'ORDER_FILLING_RETURN') else 0  # type: ignore
-    
+
     if filling_mode is None:
         return mt5_module.ORDER_FILLING_RETURN if hasattr(mt5_module, 'ORDER_FILLING_RETURN') else 0  # type: ignore
-    
+
     try:
         # Try FOK first (Fill or Kill)
         if hasattr(mt5_module, 'ORDER_FILLING_FOK'):  # type: ignore
             if filling_mode & mt5_module.ORDER_FILLING_FOK:  # type: ignore
                 return mt5_module.ORDER_FILLING_FOK  # type: ignore
-        
+
         # Try IOC next (Immediate or Cancel)
         if hasattr(mt5_module, 'ORDER_FILLING_IOC'):  # type: ignore
             if filling_mode & mt5_module.ORDER_FILLING_IOC:  # type: ignore
                 return mt5_module.ORDER_FILLING_IOC  # type: ignore
-                
+
         # Try RETURN as fallback (Return if not filled)
         if hasattr(mt5_module, 'ORDER_FILLING_RETURN'):  # type: ignore
             if filling_mode & mt5_module.ORDER_FILLING_RETURN:  # type: ignore
                 return mt5_module.ORDER_FILLING_RETURN  # type: ignore
     except Exception as e:
         logging.debug("Error checking filling mode: %s", e)
-    
+
     # Default fallback
     logging.warning("Using default ORDER_FILLING_RETURN for %s", symbol)
     return mt5_module.ORDER_FILLING_RETURN if hasattr(mt5_module, 'ORDER_FILLING_RETURN') else 0  # type: ignore
@@ -285,19 +282,19 @@ def get_filling_mode(symbol, mt5_module=None):
 def normalize_volume(symbol, requested_volume, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
-    
+
     info = mt5_module.symbol_info(symbol)  # type: ignore
     if not info:
         logging.error("Symbol %s info not available", symbol)
         return requested_volume
-    
+
     volume_min = getattr(info, 'volume_min', 0.01) or 0.01
     volume_step = getattr(info, 'volume_step', 0.01) or 0.01
     volume_max = getattr(info, 'volume_max', 100.0)
-    
+
     normalized = max(volume_min, round(requested_volume / volume_step) * volume_step)
-    
+
     if volume_max and normalized > volume_max:
         normalized = volume_max
-    
+
     return float(normalized)

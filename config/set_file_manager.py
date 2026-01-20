@@ -1,6 +1,6 @@
 import os
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 import logging
 
 # Set up logging
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class SetFileManager:
     """Manages configuration sets loaded from JSON files."""
-    
+
     def __init__(self, config_dir: str = "config"):
         """
         Initialize the SetFileManager.
@@ -20,12 +20,12 @@ class SetFileManager:
         self.config_dir = config_dir
         self.current_config = {}
         self.loaded_file = None
-        
+
         # Ensure config directory exists
         if not os.path.exists(self.config_dir):
             os.makedirs(self.config_dir)
             logger.info(f"Created config directory: {self.config_dir}")
-    
+
     def load_set_file(self, filename: str) -> Dict[str, Any]:
         """
         Load a configuration set from a JSON file.
@@ -42,25 +42,25 @@ class SetFileManager:
             ValueError: If the configuration structure is invalid
         """
         filepath = os.path.join(self.config_dir, filename)
-        
+
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Configuration file not found: {filepath}")
-        
+
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 config = json.load(f)
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(f"Invalid JSON in {filepath}: {str(e)}", e.doc, e.pos)
-        
+
         # Validate configuration structure
         self._validate_config(config)
-        
+
         self.current_config = config
         self.loaded_file = filename
         logger.info(f"Loaded configuration from {filename}")
-        
+
         return config
-    
+
     def get(self, key_path: str, default: Any = None) -> Any:
         """
         Get a configuration value using dot notation.
@@ -74,7 +74,7 @@ class SetFileManager:
         """
         keys = key_path.split('.')
         value = self.current_config
-        
+
         try:
             for key in keys:
                 value = value[key]
@@ -82,7 +82,7 @@ class SetFileManager:
         except (KeyError, TypeError):
             logger.debug(f"Configuration key '{key_path}' not found, returning default: {default}")
             return default
-    
+
     def list_available_sets(self) -> List[str]:
         """
         List all available configuration set files.
@@ -92,7 +92,7 @@ class SetFileManager:
         """
         if not os.path.exists(self.config_dir):
             return []
-        
+
         try:
             files = [f for f in os.listdir(self.config_dir) if f.endswith('.json')]
             logger.info(f"Found {len(files)} configuration files")
@@ -100,7 +100,7 @@ class SetFileManager:
         except OSError as e:
             logger.error(f"Error listing configuration files: {e}")
             return []
-    
+
     def _validate_config(self, config: Dict[str, Any]) -> bool:
         """
         Validate the configuration structure.
@@ -116,14 +116,14 @@ class SetFileManager:
         """
         if not isinstance(config, dict):
             raise ValueError("Configuration must be a dictionary")
-        
+
         # Basic structure validation - ensure required sections exist
         required_sections = []  # No required sections for now, but can be added
-        
+
         for section in required_sections:
             if section not in config:
                 raise ValueError(f"Missing required configuration section: {section}")
-        
+
         logger.debug("Configuration validation passed")
         return True
 

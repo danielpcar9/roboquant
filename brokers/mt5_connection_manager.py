@@ -4,7 +4,7 @@ Eliminates duplication across the codebase and provides consistent error handlin
 """
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 from services.security_manager import SecureCredentialManager, sanitize_error_message
 from services.error_handler import handle_exception, MT5ConnectionError
 

@@ -1,20 +1,19 @@
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any
-import math
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
 
 class TradeScorer:
     """Trade setup quality scorer with 0-100 point system"""
-    
+
     def __init__(self, mt5_module=None):
         self.mt5 = mt5_module or mt5
-        
-    def score_trade_setup(self, symbol: str, price: float, upper_channel: float, 
-                         lower_channel: float, current_momentum: float, 
-                         historical_momentum: float, atr: float | None = None, 
+
+    def score_trade_setup(self, symbol: str, price: float, upper_channel: float,
+                         lower_channel: float, current_momentum: float,
+                         historical_momentum: float, atr: float | None = None,
                          avg_atr: float | None = None) -> Dict[str, Any]:
         """
         Score a trade setup based on multiple heuristics
@@ -34,7 +33,7 @@ class TradeScorer:
         """
         score = 0
         details = {}
-        
+
         # H1: Breakout strength (25pts)
         breakout_strength = self._calculate_breakout_strength(price, upper_channel, lower_channel)
         h1_score = self._score_breakout_strength(breakout_strength)
@@ -45,7 +44,7 @@ class TradeScorer:
             'max_points': 25
         }
         logging.debug(f"H1 Breakout Strength: {breakout_strength:.4f}, Score: {h1_score}/25")
-        
+
         # H2: Momentum ratio (25pts)
         momentum_ratio = current_momentum / historical_momentum if historical_momentum > 0 else 0
         h2_score = self._score_momentum_ratio(momentum_ratio)
@@ -56,7 +55,7 @@ class TradeScorer:
             'max_points': 25
         }
         logging.debug(f"H2 Momentum Ratio: {momentum_ratio:.2f}, Score: {h2_score}/25")
-        
+
         # H3: Time session (20pts)
         h3_score = self._score_time_session()
         score += h3_score
@@ -65,7 +64,7 @@ class TradeScorer:
             'max_points': 20
         }
         logging.debug(f"H3 Time Session Score: {h3_score}/20")
-        
+
         # H4: ATR volatility (15pts)
         if atr is not None and avg_atr is not None:
             atr_ratio = atr / avg_atr if avg_atr > 0 else 0
@@ -83,7 +82,7 @@ class TradeScorer:
                 'score': 0,
                 'max_points': 15
             }
-        
+
         # H5: Spread (15pts)
         spread_score = self._score_spread(symbol)
         score += spread_score
@@ -92,28 +91,28 @@ class TradeScorer:
             'max_points': 15
         }
         logging.debug(f"H5 Spread Score: {spread_score}/15")
-        
+
         # Determine grade and recommendation
         grade = self._get_grade(score)
         trade_recommended = score >= 60
-        
+
         result = {
             'score': score,
             'grade': grade,
             'trade_recommended': trade_recommended,
             'details': details
         }
-        
+
         logging.info(f"Trade Setup Score: {score}/100, Grade: {grade}, Recommended: {trade_recommended}")
         return result
-    
-    def _calculate_breakout_strength(self, price: float, upper_channel: float, 
+
+    def _calculate_breakout_strength(self, price: float, upper_channel: float,
                                    lower_channel: float) -> float:
         """Calculate breakout strength as percentage from channel"""
         channel_width = upper_channel - lower_channel
         if channel_width == 0:
             return 0
-            
+
         # For buy breakout (price above upper channel)
         if price > upper_channel:
             return (price - upper_channel) / channel_width
@@ -122,7 +121,7 @@ class TradeScorer:
             return (lower_channel - price) / channel_width
         else:
             return 0
-    
+
     def _score_breakout_strength(self, breakout_strength: float) -> int:
         """Score breakout strength (0-25 points)"""
         if breakout_strength > 0.15:  # >15% breakout
@@ -135,7 +134,7 @@ class TradeScorer:
             return 10
         else:
             return 0
-    
+
     def _score_momentum_ratio(self, momentum_ratio: float) -> int:
         """Score momentum ratio (0-25 points) - refined for better quality"""
         # Require positive momentum (current > historical) for full points
@@ -151,11 +150,11 @@ class TradeScorer:
             return 8
         else:
             return 5  # Very low score for weak momentum
-    
+
     def _score_time_session(self) -> int:
         """Score based on trading session (0-20 points) - enhanced for overlap periods"""
         current_hour_utc = datetime.now(timezone.utc).hour
-        
+
         # Best sessions: London/NY overlap 13-16h UTC (highest liquidity)
         if 13 <= current_hour_utc <= 16:
             return 20
@@ -170,7 +169,7 @@ class TradeScorer:
             return 8
         else:
             return 0  # Low liquidity periods
-    
+
     def _score_atr_volatility(self, atr_ratio: float) -> int:
         """Score ATR volatility (0-15 points)"""
         if 1.0 < atr_ratio < 1.5:  # Optimal volatility
@@ -181,7 +180,7 @@ class TradeScorer:
             return 5
         else:
             return 0
-    
+
     def _score_spread(self, symbol: str) -> int:
         """Score based on spread (0-15 points)"""
         try:
@@ -191,7 +190,7 @@ class TradeScorer:
                 if symbol_info:
                     point = symbol_info.point
                     spread_points = (tick.ask - tick.bid) / point if point > 0 else 0
-                    
+
                     if spread_points < 20:  # Excellent spread
                         return 15
                     elif spread_points < 30:  # Good spread
@@ -204,10 +203,10 @@ class TradeScorer:
                         return 0
         except Exception as e:
             logging.debug(f"Error calculating spread score: {e}")
-        
+
         # Default score if unable to calculate
         return 8
-    
+
     def _get_grade(self, score: int) -> str:
         """Convert score to letter grade"""
         if score >= 90:

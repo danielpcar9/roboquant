@@ -6,34 +6,33 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
 import logging
-from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 def generate_dashboard(trades_csv='logs/trades.csv', output_html='dashboard.html'):
     """Genera dashboard HTML con métricas visuales"""
-    
+
     if not os.path.exists(trades_csv):
         print(f"No se encontró {trades_csv}")
         return
-    
+
     try:
         df = pd.read_csv(trades_csv)
         df['timestamp_open'] = pd.to_datetime(df['timestamp_open'])
-        
+
         # Calcular equity curve
         df['cumulative_pnl'] = df['pnl'].cumsum()
-        
+
         # Crear subplots
         fig = make_subplots(
             rows=3, cols=2,
             subplot_titles=(
-                'Equity Curve', 
+                'Equity Curve',
                 'Drawdown %',
-                'Win/Loss Distribution', 
+                'Win/Loss Distribution',
                 'Trades by Hour of Day',
-                'Monthly Performance', 
+                'Monthly Performance',
                 'Profit Factor Evolution'
             ),
             specs=[
@@ -42,11 +41,11 @@ def generate_dashboard(trades_csv='logs/trades.csv', output_html='dashboard.html
                 [{"type": "bar"}, {"type": "scatter"}]
             ]
         )
-        
+
         # 1. Equity Curve
         fig.add_trace(
             go.Scatter(
-                x=df['timestamp_open'], 
+                x=df['timestamp_open'],
                 y=df['cumulative_pnl'],
                 mode='lines',
                 name='Equity',
@@ -54,13 +53,13 @@ def generate_dashboard(trades_csv='logs/trades.csv', output_html='dashboard.html
             ),
             row=1, col=1
         )
-        
+
         # 2. Drawdown
         running_max = df['cumulative_pnl'].cummax()
         drawdown = ((df['cumulative_pnl'] - running_max) / running_max * 100)
         fig.add_trace(
             go.Scatter(
-                x=df['timestamp_open'], 
+                x=df['timestamp_open'],
                 y=drawdown,
                 fill='tozeroy',
                 name='Drawdown',
@@ -68,7 +67,7 @@ def generate_dashboard(trades_csv='logs/trades.csv', output_html='dashboard.html
             ),
             row=1, col=2
         )
-        
+
         # 3. Win/Loss Distribution
         fig.add_trace(
             go.Histogram(
@@ -83,7 +82,7 @@ def generate_dashboard(trades_csv='logs/trades.csv', output_html='dashboard.html
             ),
             row=2, col=1
         )
-        
+
         # 4. Trades by Hour
         if 'hour_of_day' in df.columns:
             trades_by_hour = df.groupby('hour_of_day').size()
@@ -96,7 +95,7 @@ def generate_dashboard(trades_csv='logs/trades.csv', output_html='dashboard.html
                 ),
                 row=2, col=2
             )
-        
+
         # 5. Monthly Performance
         df['month'] = df['timestamp_open'].dt.to_period('M').astype(str)
         monthly_pnl = df.groupby('month')['pnl'].sum()
@@ -113,14 +112,14 @@ def generate_dashboard(trades_csv='logs/trades.csv', output_html='dashboard.html
             ),
             row=3, col=1
         )
-        
+
         # 6. Profit Factor Evolution (rolling 20 trades)
         if len(df) >= 20:
             window = min(20, len(df))
             wins = df['pnl'].rolling(window).apply(lambda x: x[x > 0].sum() if len(x[x > 0]) > 0 else 0)
             losses = df['pnl'].rolling(window).apply(lambda x: abs(x[x < 0].sum()) if len(x[x < 0]) > 0 else 1)
             pf = wins / losses.replace(0, 1)
-            
+
             fig.add_trace(
                 go.Scatter(
                     x=df.index,
@@ -131,18 +130,18 @@ def generate_dashboard(trades_csv='logs/trades.csv', output_html='dashboard.html
                 ),
                 row=3, col=2
             )
-        
+
         # Update layout
         fig.update_layout(
             title="Trading Performance Dashboard",
             height=900,
             showlegend=False
         )
-        
+
         # Save to HTML
         fig.write_html(output_html)
         print(f"Dashboard saved to {output_html}")
-        
+
     except Exception as e:
         logging.error(f"Error generating dashboard: {e}")
 

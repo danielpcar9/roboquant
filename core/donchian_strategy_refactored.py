@@ -9,7 +9,7 @@ Componentes organizados en:
 - validators/: Validación de riesgo y condiciones de mercado  
 - managers/: Gestión de posiciones y ejecución de trades
 
-Autor: Edgar Roboto
+Autor: Daniel Bot
 Fecha: 2026-01-20
 """
 import logging

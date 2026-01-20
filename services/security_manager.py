@@ -8,9 +8,8 @@ import os
 import time
 import logging
 import re
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 from dotenv import load_dotenv
-import hashlib
 import hmac
 import ipaddress
 from functools import wraps
@@ -38,7 +37,7 @@ if not security_logger.handlers:
 
 class SecureCredentialManager:
     """Securely loads and manages credentials with encryption support."""
-    
+
     def __init__(self, env_file_path: Optional[str] = None, use_encryption: bool = True):
         """
         Initialize the credential manager.
@@ -50,7 +49,7 @@ class SecureCredentialManager:
         self._credentials = {}
         self._use_encryption = use_encryption and KEYRING_AVAILABLE
         self._load_credentials(env_file_path)
-    
+
     def _load_credentials(self, env_file_path: Optional[str] = None) -> None:
         """Load credentials from environment variables or encrypted storage."""
         try:
@@ -59,7 +58,7 @@ class SecureCredentialManager:
                 load_dotenv(env_file_path)
             else:
                 load_dotenv()
-            
+
             # Store credential keys (not values) for validation
             credential_keys = [
                 'MT5_LOGIN',
@@ -69,7 +68,7 @@ class SecureCredentialManager:
                 'TELEGRAM_BOT_TOKEN',
                 'TELEGRAM_CHAT_ID'
             ]
-            
+
             for key in credential_keys:
                 if self._use_encryption and keyring:
                     # Try to get from encrypted storage first
@@ -85,7 +84,7 @@ class SecureCredentialManager:
                             continue
                     except Exception:
                         pass  # Fall back to environment variables
-                
+
                 # Fall back to environment variables
                 value = os.getenv(key)
                 if value is not None:
@@ -97,12 +96,12 @@ class SecureCredentialManager:
                     }
                 else:
                     self._credentials[key] = {'exists': False}
-                    
+
             security_logger.info("Credentials loaded securely")
         except Exception as e:
             security_logger.error("Failed to load credentials: %s", str(e))
             raise
-    
+
     def get_credential(self, key: str) -> Optional[str]:
         """
         Get a credential value by key.
@@ -121,10 +120,10 @@ class SecureCredentialManager:
                     return value
             except Exception:
                 pass  # Fall back to environment variables
-        
+
         # Fall back to environment variables
         return os.getenv(key)
-    
+
     def set_credential(self, key: str, value: str) -> bool:
         """
         Set a credential value securely.
@@ -148,7 +147,7 @@ class SecureCredentialManager:
             # This is just for compatibility
             security_logger.warning("Non-encrypted credential storage requested or keyring not available - not setting environment variable")
             return False
-    
+
     def credential_exists(self, key: str) -> bool:
         """
         Check if a credential exists.
@@ -160,7 +159,7 @@ class SecureCredentialManager:
             True if the credential exists, False otherwise
         """
         return self._credentials.get(key, {}).get('exists', False)
-    
+
     def validate_webhook_secret(self) -> bool:
         """
         Validate that the webhook secret key meets security requirements.
@@ -172,23 +171,23 @@ class SecureCredentialManager:
         if not secret:
             security_logger.error("WEBHOOK_SECRET_KEY not configured")
             return False
-        
+
         if len(secret) < 32:
             security_logger.error("WEBHOOK_SECRET_KEY must be at least 32 characters")
             return False
-            
+
         return True
 
 
 class InputValidator:
     """Validates inputs for trading operations."""
-    
+
     # Symbol validation regex (alphanumeric, underscores, dots, slashes)
     SYMBOL_PATTERN = re.compile(r'^[A-Za-z0-9_./]+$')
-    
+
     # Price validation (positive numbers with up to 5 decimal places)
     PRICE_PATTERN = re.compile(r'^\d+(\.\d{1,5})?$')
-    
+
     @classmethod
     def validate_symbol(cls, symbol: str) -> bool:
         """
@@ -202,12 +201,12 @@ class InputValidator:
         """
         if not symbol or not isinstance(symbol, str):
             return False
-            
+
         if len(symbol) > 20:  # Reasonable limit for symbol length
             return False
-            
+
         return bool(cls.SYMBOL_PATTERN.match(symbol))
-    
+
     @classmethod
     def validate_volume(cls, volume: Union[float, int, str]) -> bool:
         """
@@ -224,7 +223,7 @@ class InputValidator:
             return 0 < vol <= 1000  # Reasonable limits for volume
         except (ValueError, TypeError):
             return False
-    
+
     @classmethod
     def validate_price(cls, price: Union[float, int, str]) -> bool:
         """
@@ -241,7 +240,7 @@ class InputValidator:
             return 0 < prc <= 1000000  # Reasonable limits for price
         except (ValueError, TypeError):
             return False
-    
+
     @classmethod
     def validate_order_type(cls, order_type: str) -> bool:
         """
@@ -256,7 +255,7 @@ class InputValidator:
         if not order_type or not isinstance(order_type, str):
             return False
         return order_type.upper() in ['BUY', 'SELL']
-    
+
     @classmethod
     def sanitize_input(cls, data: Any) -> Any:
         """
@@ -285,7 +284,7 @@ class InputValidator:
 
 class RateLimiter:
     """Rate limiter to prevent abuse of trading endpoints."""
-    
+
     def __init__(self, max_requests: int = 10, time_window: int = 60):
         """
         Initialize the rate limiter.
@@ -298,7 +297,7 @@ class RateLimiter:
         self.time_window = time_window
         self.requests = {}  # Dictionary of IP -> list of timestamps
         self.global_requests = []  # List of all request timestamps for global limiting
-    
+
     def is_allowed(self, ip_address: Optional[str] = None) -> bool:
         """
         Check if a request is allowed based on rate limiting rules.
@@ -310,32 +309,32 @@ class RateLimiter:
             True if allowed, False if rate limited
         """
         now = time.time()
-        
+
         # Global rate limiting
         self.global_requests = [req_time for req_time in self.global_requests if now - req_time < self.time_window]
         if len(self.global_requests) >= self.max_requests:
             return False
-        
+
         # Per-IP rate limiting
         if ip_address:
             # Initialize requests list for this IP if not exists
             if ip_address not in self.requests:
                 self.requests[ip_address] = []
-            
+
             # Remove old requests outside the time window
             self.requests[ip_address] = [req_time for req_time in self.requests[ip_address] if now - req_time < self.time_window]
-            
+
             # Check if we're under the limit
             if len(self.requests[ip_address]) >= self.max_requests:
                 return False
-            
+
             # Add the new request
             self.requests[ip_address].append(now)
-        
+
         # Add to global requests
         self.global_requests.append(now)
         return True
-    
+
     def get_retry_after(self) -> int:
         """
         Get the number of seconds to wait before the next allowed request.
@@ -345,10 +344,10 @@ class RateLimiter:
         """
         now = time.time()
         all_requests = self.global_requests[:]
-        
+
         if not all_requests:
             return 0
-            
+
         oldest_request = min(all_requests)
         return max(0, int(self.time_window - (now - oldest_request)))
 
@@ -365,12 +364,12 @@ def sanitize_error_message(error_msg: str) -> str:
     """
     if not error_msg or not isinstance(error_msg, str):
         return "An error occurred"
-    
+
     # Remove sensitive information
     sanitized = re.sub(r'[A-Za-z0-9]{10,}', '***', error_msg)  # Remove long alphanumeric strings
     sanitized = re.sub(r'\d{5,}', '*****', sanitized)  # Remove long number sequences
     sanitized = re.sub(r'password|secret|key|token|login', '***', sanitized, flags=re.IGNORECASE)
-    
+
     # Limit length
     return sanitized[:500]
 
@@ -409,7 +408,7 @@ def ip_whitelist(allowed_ips: list):
                 if client_ip is None:
                     security_logger.warning("Unable to determine client IP address")
                     return flask.jsonify({'error': 'Unable to determine client IP'}), 403
-                    
+
                 try:
                     client_ip_obj = ipaddress.ip_address(client_ip)
                     for allowed_ip in allowed_ips:
@@ -423,10 +422,10 @@ def ip_whitelist(allowed_ips: list):
                                 return func(*args, **kwargs)
                 except ValueError:
                     pass  # Invalid IP address
-                
+
                 security_logger.warning(f"Access denied from IP: {client_ip}")
                 return flask.jsonify({'error': 'Access denied'}), 403
-            
+
             # If not in Flask context, allow access
             return func(*args, **kwargs)
         return wrapper

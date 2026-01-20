@@ -1,6 +1,6 @@
 {
   "risk_management": {
-    "risk_per_trade_pct": 1.0,
+    "risk_per_trade_pct": 2.0,
     "adaptive_risk_scaling": true
   },
   "strategy": {
@@ -20,16 +20,16 @@
     "preferred_sessions": ["OVERLAP", "EUROPEAN"]
   },
   "position_limits": {
-    "max_positions": 2,
-    "max_positions_per_symbol": 2,
+    "max_positions": 3,
+    "max_positions_per_symbol": 3,
     "allow_pyramiding": true,
-    "min_pending_gap_pips": 120
+    "min_pending_gap_pips": 60
   },
   "performance": {
     "daily_loss_limit_pct": -50.0,
     "overall_dd_limit_pct": 50.0,
-    "circuit_breaker_pct": 8.0,
-    "risk_reward_ratio": 2.0
+    "circuit_breaker_pct": 50.0,
+    "risk_reward_ratio": 2.5
   },
   "trading_parameters": {
     "breakout_threshold": 0.2,

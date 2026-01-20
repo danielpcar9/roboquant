@@ -7,7 +7,7 @@ import logging
 import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 try:
     from supabase import create_client, Client

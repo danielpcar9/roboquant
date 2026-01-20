@@ -1,7 +1,7 @@
 import logging
 import json
 import os
-from datetime import datetime, time, timezone, timedelta
+from datetime import datetime, time, timedelta
 from typing import Dict, Optional, Tuple
 import pytz
 
@@ -10,7 +10,7 @@ import MetaTrader5 as mt5  # type: ignore
 
 class FTMOManager:
     """FTMO Challenge Compliance Manager"""
-    
+
     def __init__(self, config_file: str = "ftmo_config.json", ftmo_starting_balance: float = 10000.0):
         self.config_file = config_file
         self.midnight_balance = 0.0
@@ -21,7 +21,7 @@ class FTMOManager:
         self.daily_losses = {}  # date -> loss
         self.trading_blocked_until = None
         self.load_config()
-        
+
         # Initialize balances on first run
         if self.initial_balance == 0.0:
             account_info = mt5.account_info()  # type: ignore
@@ -30,7 +30,7 @@ class FTMOManager:
                 self.midnight_balance = account_info.balance
                 self.last_reset_date = datetime.now().date()
                 self.save_config()
-    
+
     def load_config(self):
         """Load FTMO configuration from file"""
         if os.path.exists(self.config_file):
@@ -47,7 +47,7 @@ class FTMOManager:
                     self.trading_blocked_until = datetime.fromisoformat(blocked_until) if blocked_until else None
             except Exception as e:
                 logging.warning(f"Failed to load FTMO config: {e}")
-    
+
     def save_config(self):
         """Save FTMO configuration to file"""
         try:
@@ -64,13 +64,13 @@ class FTMOManager:
                 json.dump(config, f, indent=2)
         except Exception as e:
             logging.warning(f"Failed to save FTMO config: {e}")
-    
+
     def update_daily_balance(self):
         """Update midnight balance at 00:00 CET"""
         cet = pytz.timezone('CET')
         now_cet = datetime.now(cet)
         today = now_cet.date()
-        
+
         # Reset at midnight CET
         if self.last_reset_date != today:
             account_info = mt5.account_info()  # type: ignore
@@ -80,28 +80,28 @@ class FTMOManager:
                 self.trading_days += 1
                 self.save_config()
                 logging.info(f"FTMO daily reset: Midnight balance updated to {self.midnight_balance}")
-    
+
     def get_current_metrics(self) -> Dict:
         """Get current FTMO compliance metrics"""
         account_info = mt5.account_info()  # type: ignore
         if not account_info:
             return {}
-        
+
         current_balance = account_info.balance
         equity = account_info.equity
-        
+
         # Calculate daily loss from midnight balance
         cet = pytz.timezone('CET')
         today_str = datetime.now(cet).strftime('%Y-%m-%d')
         daily_loss = ((current_balance - self.midnight_balance) / self.midnight_balance * 100) if self.midnight_balance > 0 else 0
-        
+
         # Calculate overall drawdown from FTMO starting balance (clamped at 0% if equity >= starting)
         # Drawdown = max(0, (Starting Balance - Equity) / Starting Balance * 100)
         floor_balance = self.ftmo_starting_balance * 0.90
         overall_drawdown = max(0.0, ((self.ftmo_starting_balance - equity) / self.ftmo_starting_balance * 100)) if self.ftmo_starting_balance > 0 else 0
         buffer_to_floor_usd = max(0.0, equity - floor_balance)
         buffer_to_floor_pct = (buffer_to_floor_usd / self.ftmo_starting_balance * 100) if self.ftmo_starting_balance > 0 else 0
-        
+
         # Load performance limits from configuration
         try:
             from config.set_file_manager import get_set_manager
@@ -120,7 +120,7 @@ class FTMOManager:
             logging.warning(f"Failed to load performance limits from set file: {e}. Using defaults.")
             daily_loss_limit = -4.0
             drawdown_limit = 10.0
-        
+
         return {
             'current_balance': current_balance,
             'equity': equity,
@@ -137,16 +137,16 @@ class FTMOManager:
             'drawdown_limit': drawdown_limit,
             'min_trading_days': 1       # Changed from 4 to 1 for testing
         }
-    
+
     def is_trade_allowed(self, symbol: str = "XAUUSD") -> Tuple[bool, Optional[str]]:
         """Check if trading is allowed according to FTMO rules"""
         # Update daily balance
         self.update_daily_balance()
-        
+
         # Get CET timezone
         cet = pytz.timezone('CET')
         now_cet = datetime.now(cet)
-        
+
         # Check if trading is temporarily blocked (news protection)
         if self.trading_blocked_until:
             if now_cet < self.trading_blocked_until:
@@ -154,15 +154,15 @@ class FTMOManager:
             else:
                 self.trading_blocked_until = None
                 self.save_config()
-        
+
         # Get current metrics
         metrics = self.get_current_metrics()
         if not metrics:
             return False, "Failed to get account information"
-        
+
         # Check trading hours (from configuration)
         from config.config_manager import config_manager
-        
+
         # Try to get trading hours from set file first, fallback to config_manager
         try:
             from config.set_file_manager import get_set_manager
@@ -187,31 +187,31 @@ class FTMOManager:
             # Fallback to config_manager if set file manager is not available
             trading_start_hour = config_manager.get('TRADING_HOUR_START', 0)
             trading_end_hour = config_manager.get('TRADING_HOUR_END', 23)
-        
+
         trading_start = time(trading_start_hour, 0)
         # Fix: When end_hour is 23, we want to include the entire 23rd hour (until 23:59:59)
         if trading_end_hour == 23:
             trading_end = time(23, 59, 59)
         else:
             trading_end = time(trading_end_hour, 0)
-        
+
         if not (trading_start <= now_cet.time() <= trading_end):
             return False, f"Outside trading hours ({trading_start.strftime('%H:%M')}-{trading_end.strftime('%H:%M')} CET)"
-        
+
         # Check daily loss limit (-4%)
         if metrics['daily_loss_percent'] < metrics['daily_loss_limit']:
             return False, f"Daily loss limit exceeded: {metrics['daily_loss_percent']:.2f}% < {metrics['daily_loss_limit']}%"
-        
+
         # Check overall drawdown limit
         # Circuit breaker ELIMINADO - Permite trading continuo
         # Solo se bloquea si supera el límite máximo absoluto
         if metrics['overall_drawdown_percent'] >= 50.0:  # Límite máximo muy alto
             return False, f"Overall drawdown limit exceeded: {metrics['overall_drawdown_percent']:.2f}% >= 50.0%"
-        
+
         # Check minimum trading days
         if metrics['trading_days'] < metrics['min_trading_days']:
             return False, f"Minimum trading days not met: {metrics['trading_days']} < {metrics['min_trading_days']}"
-        
+
         # Check spread - REMOVED as per user request
         # tick = mt5.symbol_info_tick(symbol)  # type: ignore
         # if tick:
@@ -221,33 +221,33 @@ class FTMOManager:
         #         spread_points = (tick.ask - tick.bid) / point if point > 0 else 0
         #         if spread_points > 50:  # 50 points max spread
         #             return False, f"Spread too high: {spread_points:.1f} points > 50 points"
-        
+
         return True, None
-    
+
     def block_trading_during_news(self, event_time: datetime):
         """Block trading 2 minutes before and after high-impact news"""
         cet = pytz.timezone('CET')
         event_time_cet = event_time.astimezone(cet)
-        
+
         # Block 2 minutes before and after
         start_block = event_time_cet - timedelta(minutes=2)
         end_block = event_time_cet + timedelta(minutes=2)
-        
+
         # Update blocking period if it's later than current
         if not self.trading_blocked_until or end_block > self.trading_blocked_until:
             self.trading_blocked_until = end_block
             self.save_config()
             logging.info(f"Trading blocked until {end_block.strftime('%H:%M:%S')} CET due to high-impact news")
-    
+
     def get_ftmo_dashboard(self) -> str:
         """Get FTMO compliance dashboard"""
         metrics = self.get_current_metrics()
         if not metrics:
             return "Failed to get metrics"
-        
+
         cet = pytz.timezone('CET')
         now_cet = datetime.now(cet)
-        
+
         dashboard = f"""
 === FTMO CHALLENGE DASHBOARD ===
 Time (CET): {now_cet.strftime('%Y-%m-%d %H:%M:%S')}
@@ -281,9 +281,9 @@ STATUS: {"TRADE ALLOWED" if self.is_trade_allowed()[0] else "TRADING BLOCKED"}
         metrics = self.get_current_metrics()
         if not metrics:
             return 1.0
-        
+
         dd = metrics['overall_drawdown_percent']
-        
+
         # Risk scaling tiers:
         # DD < 3%: 100% risk
         # 3-5%: 70% risk

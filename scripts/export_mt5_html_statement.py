@@ -87,7 +87,8 @@ def main():
         end = datetime.now(utc)
     try:
         if start_env:
-            start = utc.localize(datetime.strptime(start_env, "%Y.%m.%d %H:%M"))
+            start_naive = datetime.strptime(start_env, "%Y.%m.%d %H:%M")
+            start = utc.localize(start_naive)
         else:
             start = end - timedelta(days=DAYS_BACK)
     except Exception:

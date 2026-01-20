@@ -10,10 +10,10 @@ from analysis.trade_scorer import TradeScorer
 def test_trade_scorer():
     """Test the TradeScorer implementation"""
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
-    
+
     # Create a TradeScorer instance
     scorer = TradeScorer()
-    
+
     # Test data (simulated)
     symbol = "XAUUSD"
     price = 1950.50
@@ -23,7 +23,7 @@ def test_trade_scorer():
     historical_momentum = 1.5
     atr = 5.2
     avg_atr = 4.8
-    
+
     # Score a trade setup
     quality = scorer.score_trade_setup(
         symbol=symbol,
@@ -35,12 +35,12 @@ def test_trade_scorer():
         atr=atr,
         avg_atr=avg_atr
     )
-    
+
     print(f"Trade Quality Score: {quality['score']}/100")
     print(f"Grade: {quality['grade']}")
     print(f"Trade Recommended: {quality['trade_recommended']}")
     print(f"Details: {quality['details']}")
-    
+
     # Test another scenario with lower quality
     quality2 = scorer.score_trade_setup(
         symbol=symbol,
@@ -52,7 +52,7 @@ def test_trade_scorer():
         atr=3.0,  # Lower volatility
         avg_atr=4.8
     )
-    
+
     print("\n--- Second Test ---")
     print(f"Trade Quality Score: {quality2['score']}/100")
     print(f"Grade: {quality2['grade']}")
