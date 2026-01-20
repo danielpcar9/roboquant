@@ -7,9 +7,12 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from analysis.trade_scorer import TradeScorer
 
+
 def test_trade_scorer():
     """Test the TradeScorer implementation"""
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s"
+    )
 
     # Create a TradeScorer instance
     scorer = TradeScorer()
@@ -33,7 +36,7 @@ def test_trade_scorer():
         current_momentum=current_momentum,
         historical_momentum=historical_momentum,
         atr=atr,
-        avg_atr=avg_atr
+        avg_atr=avg_atr,
     )
 
     print(f"Trade Quality Score: {quality['score']}/100")
@@ -50,13 +53,14 @@ def test_trade_scorer():
         current_momentum=1.2,  # Lower momentum
         historical_momentum=1.5,
         atr=3.0,  # Lower volatility
-        avg_atr=4.8
+        avg_atr=4.8,
     )
 
     print("\n--- Second Test ---")
     print(f"Trade Quality Score: {quality2['score']}/100")
     print(f"Grade: {quality2['grade']}")
     print(f"Trade Recommended: {quality2['trade_recommended']}")
+
 
 if __name__ == "__main__":
     test_trade_scorer()

@@ -5,15 +5,24 @@ import logging
 from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
+
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
 
-KILL_SWITCH_FILE = os.path.join(os.path.dirname(__file__), 'config', 'kill_switch.flag')
+KILL_SWITCH_FILE = os.path.join(os.path.dirname(__file__), "config", "kill_switch.flag")
+
 
 class Safety:
-
-    def __init__(self, mt5_module=None, hwm_file='hwm.json', daily_file='daily_eq.json',
-                 max_dd_pct=10.0, max_daily_loss_pct=3.0, max_concurrent=3, corr_threshold=0.75):
+    def __init__(
+        self,
+        mt5_module=None,
+        hwm_file="hwm.json",
+        daily_file="daily_eq.json",
+        max_dd_pct=10.0,
+        max_daily_loss_pct=3.0,
+        max_concurrent=3,
+        corr_threshold=0.75,
+    ):
         self.mt5 = mt5_module if mt5_module else mt5
         self.hwm_file = os.path.join(os.path.dirname(__file__), hwm_file)
         self.daily_file = os.path.join(os.path.dirname(__file__), daily_file)
@@ -24,35 +33,32 @@ class Safety:
 
     def check_kill_switch(self):
         if os.path.exists(KILL_SWITCH_FILE):
-            logging.critical('KILL SWITCH ACTIVADO')
-            return False, 'kill_switch'
+            logging.critical("KILL SWITCH ACTIVADO")
+            return False, "kill_switch"
         return True, None
 
     def _load_hwm(self):
         if os.path.exists(self.hwm_file):
             try:
-                with open(self.hwm_file, 'r') as f:
+                with open(self.hwm_file, "r") as f:
                     data = json.load(f)
-                    return float(data.get('hwm', 0.0))
+                    return float(data.get("hwm", 0.0))
             except Exception as e:
                 logging.debug("Error cargando HWM: %s", e)
                 return 0.0
         return 0.0
 
     def _save_hwm(self, value):
-        data = {
-            'hwm': float(value),
-            'timestamp': datetime.utcnow().isoformat()
-        }
+        data = {"hwm": float(value), "timestamp": datetime.utcnow().isoformat()}
         os.makedirs(os.path.dirname(self.hwm_file), exist_ok=True)
-        with open(self.hwm_file, 'w') as f:
+        with open(self.hwm_file, "w") as f:
             json.dump(data, f)
 
     def check_global_drawdown(self):
         info = self.mt5.account_info()  # type: ignore
         if info is None:
             logging.warning("No se pudo obtener account_info")
-            return False, 'no_account_info'
+            return False, "no_account_info"
 
         equity = float(info.equity)
         hwm = self._load_hwm() or equity
@@ -64,25 +70,27 @@ class Safety:
         dd_pct = ((hwm - equity) / hwm * 100) if hwm > 0 else 0.0
 
         if dd_pct >= self.max_dd_pct:
-            logging.error("Drawdown global %.2f%% excede limite %.2f%%", dd_pct, self.max_dd_pct)
-            return False, 'global_dd_' + str(round(dd_pct, 2))
+            logging.error(
+                "Drawdown global %.2f%% excede limite %.2f%%", dd_pct, self.max_dd_pct
+            )
+            return False, "global_dd_" + str(round(dd_pct, 2))
 
         return True, None
 
     def check_daily_loss(self):
         info = self.mt5.account_info()  # type: ignore
         if info is None:
-            return False, 'no_account_info'
+            return False, "no_account_info"
 
         balance = float(info.balance)
         today = datetime.utcnow().date().isoformat()
 
         if os.path.exists(self.daily_file):
             try:
-                with open(self.daily_file, 'r') as f:
+                with open(self.daily_file, "r") as f:
                     data = json.load(f)
-                    start_balance = float(data.get('balance', balance))
-                    start_date = data.get('date')
+                    start_balance = float(data.get("balance", balance))
+                    start_date = data.get("date")
             except Exception:
                 start_balance, start_date = balance, None
         else:
@@ -90,15 +98,23 @@ class Safety:
 
         if start_date != today:
             os.makedirs(os.path.dirname(self.daily_file), exist_ok=True)
-            with open(self.daily_file, 'w') as f:
-                json.dump({'balance': balance, 'date': today}, f)
+            with open(self.daily_file, "w") as f:
+                json.dump({"balance": balance, "date": today}, f)
             return True, None
 
-        loss_pct = ((start_balance - balance) / start_balance * 100) if start_balance > 0 else 0.0
+        loss_pct = (
+            ((start_balance - balance) / start_balance * 100)
+            if start_balance > 0
+            else 0.0
+        )
 
         if loss_pct >= self.max_daily_loss_pct:
-            logging.error("Perdida diaria %.2f%% excede limite %.2f%%", loss_pct, self.max_daily_loss_pct)
-            return False, 'daily_loss_' + str(round(loss_pct, 2))
+            logging.error(
+                "Perdida diaria %.2f%% excede limite %.2f%%",
+                loss_pct,
+                self.max_daily_loss_pct,
+            )
+            return False, "daily_loss_" + str(round(loss_pct, 2))
 
         return True, None
 
@@ -107,8 +123,12 @@ class Safety:
         count = len(positions) if positions else 0
 
         if count >= self.max_concurrent:
-            logging.warning("Posiciones concurrentes (%d) alcanzan limite (%d)", count, self.max_concurrent)
-            return False, 'concurrent_' + str(count)
+            logging.warning(
+                "Posiciones concurrentes (%d) alcanzan limite (%d)",
+                count,
+                self.max_concurrent,
+            )
+            return False, "concurrent_" + str(count)
 
         return True, None
 
@@ -123,7 +143,7 @@ class Safety:
             return np.array([])
 
         df = pd.DataFrame(rates)
-        returns = df['close'].pct_change().dropna().values
+        returns = df["close"].pct_change().dropna().values
 
         return returns
 
@@ -162,7 +182,12 @@ class Safety:
                 corr = corr_matrix[0, 1] if corr_matrix.size > 1 else 0.0
 
                 if abs(corr) > threshold:
-                    logging.warning("Alta correlacion (%.2f) entre %s y %s", corr, new_symbol, pos.symbol)
+                    logging.warning(
+                        "Alta correlacion (%.2f) entre %s y %s",
+                        corr,
+                        new_symbol,
+                        pos.symbol,
+                    )
                     return False, float(corr), pos.symbol
 
             except Exception as e:
@@ -192,8 +217,10 @@ class Safety:
             ok, corr, other_symbol = self.correlation_ok(new_symbol)
             if not ok:
                 corr_str = str(round(corr, 2)) if corr is not None else "unknown"
-                other_symbol_str = other_symbol if other_symbol is not None else "unknown"
-                return False, 'corr_' + corr_str + '_with_' + other_symbol_str
+                other_symbol_str = (
+                    other_symbol if other_symbol is not None else "unknown"
+                )
+                return False, "corr_" + corr_str + "_with_" + other_symbol_str
 
         return True, None
 
@@ -201,7 +228,7 @@ class Safety:
 def activate_kill_switch(reason="manual"):
     os.makedirs(os.path.dirname(KILL_SWITCH_FILE), exist_ok=True)
 
-    with open(KILL_SWITCH_FILE, 'w') as f:
+    with open(KILL_SWITCH_FILE, "w") as f:
         f.write("Activated at: " + datetime.utcnow().isoformat() + "\n")
         f.write("Reason: " + reason + "\n")
 
@@ -221,11 +248,18 @@ class FTMOSafety(Safety):
 
     def __init__(self, mt5_module=None):
         # Initialize with FTMO-specific parameters
-        super().__init__(mt5_module, max_dd_pct=9.0, max_daily_loss_pct=4.0, max_concurrent=3, corr_threshold=0.75)
+        super().__init__(
+            mt5_module,
+            max_dd_pct=9.0,
+            max_daily_loss_pct=4.0,
+            max_concurrent=3,
+            corr_threshold=0.75,
+        )
 
         # Import FTMO manager
         try:
             from risk.ftmo_manager import ftmo_manager
+
             self.ftmo_manager = ftmo_manager
         except ImportError:
             logging.error("Failed to import FTMO manager")
@@ -252,7 +286,6 @@ class FTMOSafety(Safety):
                 return False, reason
 
         return True, None
-
 
     def update_after_trade(self):
         """Update metrics after executing a trade"""

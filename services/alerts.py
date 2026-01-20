@@ -2,7 +2,7 @@
 import os
 import logging
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,17 +19,23 @@ def telegram_alert(message, parse_mode="Markdown"):
     url = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/sendMessage"
 
     try:
-        response = requests.post(url, data={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": message,
-            "parse_mode": parse_mode
-        }, timeout=10)
+        response = requests.post(
+            url,
+            data={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": message,
+                "parse_mode": parse_mode,
+            },
+            timeout=10,
+        )
 
         if response.status_code == 200:
             logging.info("Alerta enviada a Telegram")
             return True
         else:
-            logging.error("Error API Telegram: %d %s", response.status_code, response.text)
+            logging.error(
+                "Error API Telegram: %d %s", response.status_code, response.text
+            )
             return False
 
     except Exception as e:
@@ -51,7 +57,16 @@ SL: {:.5f}
 TP: {:.5f}
 
 Time: {}
-""".format(ticket, symbol, emoji, volume, entry, sl, tp, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+""".format(
+        ticket,
+        symbol,
+        emoji,
+        volume,
+        entry,
+        sl,
+        tp,
+        datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+    )
     return telegram_alert(msg)
 
 
@@ -67,7 +82,14 @@ Result: {}
 Reason: {}
 
 Time: {}
-""".format(ticket, symbol, pnl, emoji, reason, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+""".format(
+        ticket,
+        symbol,
+        pnl,
+        emoji,
+        reason,
+        datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+    )
     return telegram_alert(msg)
 
 
@@ -80,7 +102,7 @@ Reason: {}
 Trading halted until issue is resolved.
 
 Time: {}
-""".format(reason, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+""".format(reason, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
     return telegram_alert(msg)
 
 
@@ -94,7 +116,7 @@ All trading stopped immediately.
 Remove config/kill_switch.flag to resume.
 
 Time: {}
-""".format(reason, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+""".format(reason, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
     return telegram_alert(msg)
 
 
@@ -102,6 +124,7 @@ def alert_daily_summary():
     """Envía resumen diario automático al final del día"""
     try:
         from analysis.post_mortem import analyze_recent_trades
+
         # Import MetaTrader5 (official package name)
         import MetaTrader5 as mt5  # type: ignore
 
@@ -115,7 +138,7 @@ def alert_daily_summary():
         # Analizar trades del día (últimos 999 = todos del día típicamente)
         metrics = analyze_recent_trades(n=999)
 
-        if not metrics or metrics.get('n_trades', 0) == 0:
+        if not metrics or metrics.get("n_trades", 0) == 0:
             msg = """
 📊 RESUMEN DIARIO
 
@@ -123,8 +146,10 @@ Sin trades hoy.
 Balance: ${:.2f}
 
 Fecha: {}
-""".format(account_info.balance if account_info else 0,
-           datetime.utcnow().strftime('%Y-%m-%d'))
+""".format(
+                account_info.balance if account_info else 0,
+                datetime.utcnow().strftime("%Y-%m-%d"),
+            )
         else:
             msg = """
 📊 RESUMEN DIARIO
@@ -142,16 +167,16 @@ Balance: ${:.2f}
 
 Fecha: {}
 """.format(
-    metrics.get('n_trades', 0),
-    metrics.get('wins', 0),
-    metrics.get('win_rate', 0) * 100,
-    metrics.get('losses', 0),
-    metrics.get('total_pnl', 0),
-    metrics.get('profit_factor', 0),
-    metrics.get('max_losing_streak', 0),
-    account_info.balance if account_info else 0,
-    datetime.utcnow().strftime('%Y-%m-%d')
-)
+                metrics.get("n_trades", 0),
+                metrics.get("wins", 0),
+                metrics.get("win_rate", 0) * 100,
+                metrics.get("losses", 0),
+                metrics.get("total_pnl", 0),
+                metrics.get("profit_factor", 0),
+                metrics.get("max_losing_streak", 0),
+                account_info.balance if account_info else 0,
+                datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            )
 
         # Cerrar MT5
         mt5.shutdown()  # type: ignore

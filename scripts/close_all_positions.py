@@ -6,7 +6,7 @@ Script to close all open positions in MetaTrader 5
 import logging
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
@@ -16,6 +16,7 @@ from brokers.mt5_utils import MT5Gateway
 
 # Import consolidated MT5 functions
 from brokers.mt5_core import initialize_mt5
+
 
 def close_all_positions():
     """Main function to close all open positions using MT5Gateway"""
@@ -60,6 +61,7 @@ def close_all_positions():
         except Exception as e:
             logging.error(f"Error shutting down MT5: {e}")
 
+
 def main():
     """Main entry point"""
     try:
@@ -71,6 +73,7 @@ def main():
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
         print("❌ Error inesperado:", e)
+
 
 if __name__ == "__main__":
     main()

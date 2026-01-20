@@ -3,8 +3,9 @@ from datetime import datetime, timedelta
 import calendar
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
 
 class NewsFilter:
     """News filter to avoid trading during major economic events"""
@@ -19,12 +20,14 @@ class NewsFilter:
     def load_config(self, config):
         """Load configuration from set file"""
         try:
-            if 'news_filter' in config:
-                nf_config = config['news_filter']
-                self.enabled = nf_config.get('enabled', True)
-                self.major_events_only = nf_config.get('major_events_only', True)
-                self.avoid_events = nf_config.get('avoid_events', ["NFP", "CPI", "PPI", "FOMC"])
-                self.buffer_minutes = nf_config.get('buffer_minutes', 30)
+            if "news_filter" in config:
+                nf_config = config["news_filter"]
+                self.enabled = nf_config.get("enabled", True)
+                self.major_events_only = nf_config.get("major_events_only", True)
+                self.avoid_events = nf_config.get(
+                    "avoid_events", ["NFP", "CPI", "PPI", "FOMC"]
+                )
+                self.buffer_minutes = nf_config.get("buffer_minutes", 30)
                 logger.info("News filter configuration loaded successfully")
         except Exception as e:
             logger.warning(f"Failed to load news filter configuration: {e}")
@@ -34,7 +37,7 @@ class NewsFilter:
         # First day of month
         first_day = date.replace(day=1)
         # Find first Friday
-        first_friday = first_day + timedelta(days=(4-first_day.weekday()) % 7)
+        first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
         return date.date() == first_friday.date()
 
     def is_news_time(self):
@@ -46,7 +49,6 @@ class NewsFilter:
             return False
 
         now = datetime.utcnow()
-        current_time = now.time()
 
         # Check for NFP (First Friday of month at 13:30 UTC)
         if "NFP" in self.avoid_events and self.is_first_friday(now):
@@ -90,6 +92,7 @@ class NewsFilter:
                         return True
 
         return False
+
 
 # Global instance
 news_filter = NewsFilter()

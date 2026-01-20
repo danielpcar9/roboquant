@@ -2,6 +2,7 @@
 import time
 import logging
 from datetime import datetime, timedelta
+
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
 
@@ -17,15 +18,53 @@ from brokers.mt5_core import validate_and_adjust_stops, normalize_volume
 # Performance monitoring
 PERFORMANCE_MONITORING_ENABLED = True
 
+
 class MT5Gateway:
     """Object-oriented wrapper around MT5 utility functions.
     Preserves existing behavior by delegating to module-level functions.
     """
-    def build_and_send_order(self, symbol, side, volume, sl=None, tp=None, deviation=30, retries=1, magic=123456, mt5_module=None):
-        return build_and_send_order(symbol, side, volume, sl, tp, deviation, retries, magic, mt5_module)
 
-    def place_pending_order(self, symbol, order_type, volume, price, sl=None, tp=None, deviation=30, expiration_hours=4, magic=123456, mt5_module=None):
-        return place_pending_order(symbol, order_type, volume, price, sl, tp, deviation, expiration_hours, magic, mt5_module)
+    def build_and_send_order(
+        self,
+        symbol,
+        side,
+        volume,
+        sl=None,
+        tp=None,
+        deviation=30,
+        retries=1,
+        magic=123456,
+        mt5_module=None,
+    ):
+        return build_and_send_order(
+            symbol, side, volume, sl, tp, deviation, retries, magic, mt5_module
+        )
+
+    def place_pending_order(
+        self,
+        symbol,
+        order_type,
+        volume,
+        price,
+        sl=None,
+        tp=None,
+        deviation=30,
+        expiration_hours=4,
+        magic=123456,
+        mt5_module=None,
+    ):
+        return place_pending_order(
+            symbol,
+            order_type,
+            volume,
+            price,
+            sl,
+            tp,
+            deviation,
+            expiration_hours,
+            magic,
+            mt5_module,
+        )
 
     def cancel_expired_pending_orders(self, magic=123456, mt5_module=None):
         return cancel_expired_pending_orders(magic, mt5_module)
@@ -36,7 +75,9 @@ class MT5Gateway:
     def monitor_and_update_stops(self, mt5_module=None):
         return monitor_and_update_stops(mt5_module)
 
-    def close_position_by_ticket(self, ticket, deviation=30, retries=1, mt5_module=None):
+    def close_position_by_ticket(
+        self, ticket, deviation=30, retries=1, mt5_module=None
+    ):
         return close_position_by_ticket(ticket, deviation, retries, mt5_module)
 
     def get_open_positions(self, mt5_module=None):
@@ -78,7 +119,6 @@ class MT5Gateway:
         return closed_count, error_count
 
 
-
 # validate_and_adjust_stops function removed - using consolidated version from mt5_core.py
 
 # performance_monitor function removed - using consolidated version from mt5_core.py
@@ -86,6 +126,7 @@ class MT5Gateway:
 # get_filling_mode function removed - using consolidated version from mt5_core.py
 
 # normalize_volume function removed - using consolidated version from mt5_core.py
+
 
 @performance_monitor
 def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=None):
@@ -108,7 +149,7 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
 
     point = sym_info.point
     # Adjust point value for NASDAQ
-    if 'NASDAQ' in symbol.upper():
+    if "NASDAQ" in symbol.upper():
         point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
     volume_min = sym_info.volume_min
 
@@ -120,25 +161,31 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
 
     # CORRECTION: More accurate tick values for different instruments
     # For XAU/USD, 1 lot = 100 oz troy, so point value is 100
-    if 'XAU' in symbol or 'GOLD' in symbol:
+    if "XAU" in symbol or "GOLD" in symbol:
         tick_value = 100.0
     else:
-        tick_value = getattr(sym_info, 'trade_tick_value', None)
+        tick_value = getattr(sym_info, "trade_tick_value", None)
         if tick_value is None or tick_value == 0:
-            logging.warning("tick_value no disponible del broker, usando valor por defecto")
+            logging.warning(
+                "tick_value no disponible del broker, usando valor por defecto"
+            )
             # Default values by instrument type
-            if 'JPY' in symbol:
+            if "JPY" in symbol:
                 # Pairs with JPY (ej: USDJPY)
                 tick_value = 1000.0
-            elif any(curr in symbol for curr in ['EUR', 'GBP', 'AUD', 'NZD']):
+            elif any(curr in symbol for curr in ["EUR", "GBP", "AUD", "NZD"]):
                 # Major forex pairs
                 tick_value = 10.0
             else:
                 # Conservative default
                 tick_value = 10.0
 
-    logging.info("DEBUG: tick_value=%s, point=%s, contract_size=%s",
-                 tick_value, point, getattr(sym_info, 'trade_contract_size', 'N/A'))
+    logging.info(
+        "DEBUG: tick_value=%s, point=%s, contract_size=%s",
+        tick_value,
+        point,
+        getattr(sym_info, "trade_contract_size", "N/A"),
+    )
 
     lots = risk_amount / (stop_distance_points * tick_value)
 
@@ -152,19 +199,36 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
 
     # Validación final: Si el resultado normalizado es > límite, forzar al límite
     if result > max_allowed_lots:
-        logging.warning(f"SEGURIDAD: Lotaje calculado {result:.2f} excede límite {max_allowed_lots:.2f}, forzando a límite")
+        logging.warning(
+            f"SEGURIDAD: Lotaje calculado {result:.2f} excede límite {max_allowed_lots:.2f}, forzando a límite"
+        )
         result = max_allowed_lots
 
-    logging.info("Risk calc: balance=%.2f, risk_amount=%.2f, stop_distance=%.1f points, lots=%.2f",
-                 balance, risk_amount, stop_distance_points, result)
+    logging.info(
+        "Risk calc: balance=%.2f, risk_amount=%.2f, stop_distance=%.1f points, lots=%.2f",
+        balance,
+        risk_amount,
+        stop_distance_points,
+        result,
+    )
 
     return result
+
 
 @performance_monitor
 @safe_mt5_call
 @retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
-def build_and_send_order(symbol, side, volume, sl=None, tp=None,
-                         deviation=30, retries=1, magic=123456, mt5_module=None):
+def build_and_send_order(
+    symbol,
+    side,
+    volume,
+    sl=None,
+    tp=None,
+    deviation=30,
+    retries=1,
+    magic=123456,
+    mt5_module=None,
+):
     if mt5_module is None:
         mt5_module = mt5
 
@@ -185,7 +249,9 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
     sl, tp = validate_and_adjust_stops(symbol, price, sl, tp, side, mt5_module)
 
     # Try different approaches to handle the filling mode issue
-    order_type = mt5_module.ORDER_TYPE_BUY if side == "BUY" else mt5_module.ORDER_TYPE_SELL  # type: ignore
+    order_type = (
+        mt5_module.ORDER_TYPE_BUY if side == "BUY" else mt5_module.ORDER_TYPE_SELL
+    )  # type: ignore
 
     # For Exness accounts, use ORDER_FILLING_RETURN (mode 0) as the primary and only mode
     # This eliminates unnecessary retries and speeds up order execution
@@ -202,23 +268,23 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
 
         # Try with SL/TP first
         request = {
-            'action': mt5_module.TRADE_ACTION_DEAL,  # type: ignore
-            'symbol': symbol,
-            'volume': volume,
-            'type': order_type,
-            'price': price,
-            'deviation': deviation,
-            'magic': magic,
-            'comment': 'bot_order',
-            'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-            'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
+            "action": mt5_module.TRADE_ACTION_DEAL,  # type: ignore
+            "symbol": symbol,
+            "volume": volume,
+            "type": order_type,
+            "price": price,
+            "deviation": deviation,
+            "magic": magic,
+            "comment": "bot_order",
+            "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
+            "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
         }
 
         # Add SL/TP if provided
         if sl is not None:
-            request['sl'] = float(sl)
+            request["sl"] = float(sl)
         if tp is not None:
-            request['tp'] = float(tp)
+            request["tp"] = float(tp)
 
         # Try this filling mode for the specified number of retries
         for attempt_in_mode in range(1, retries + 1):
@@ -229,18 +295,34 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
             try:
                 result = mt5_module.order_send(request)  # type: ignore
             except Exception:
-                logging.exception("Exception en order_send (modo=%s, intento %d)", filling_mode, attempt_in_mode)
+                logging.exception(
+                    "Exception en order_send (modo=%s, intento %d)",
+                    filling_mode,
+                    attempt_in_mode,
+                )
                 result = None
 
-            if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-                logging.info("Orden enviada exitosamente. Ticket: %s", getattr(result, 'order', 'N/A'))
+            if (
+                result
+                and getattr(result, "retcode", None) == mt5_module.TRADE_RETCODE_DONE
+            ):  # type: ignore
+                logging.info(
+                    "Orden enviada exitosamente. Ticket: %s",
+                    getattr(result, "order", "N/A"),
+                )
                 return result
 
             last_result = result
-            retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
-            comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
-            logging.warning("Intento %d/%d (modo=%s) fallo: retcode=%s, comment=%s",
-                          attempts_made, max_total_attempts, filling_mode, retcode, comment)
+            retcode = getattr(result, "retcode", "N/A") if result else "N/A"
+            comment = getattr(result, "comment", "N/A") if result else "N/A"
+            logging.warning(
+                "Intento %d/%d (modo=%s) fallo: retcode=%s, comment=%s",
+                attempts_made,
+                max_total_attempts,
+                filling_mode,
+                retcode,
+                comment,
+            )
 
             # If we get "Invalid stops" error, try a different approach
             if retcode == 10016:  # Invalid stops
@@ -248,28 +330,36 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
 
                 # Approach 1: Place order without SL/TP first, then modify
                 request_no_stops = request.copy()
-                request_no_stops.pop('sl', None)
-                request_no_stops.pop('tp', None)
+                request_no_stops.pop("sl", None)
+                request_no_stops.pop("tp", None)
 
                 try:
                     result_no_stops = mt5_module.order_send(request_no_stops)  # type: ignore
-                    if result_no_stops and getattr(result_no_stops, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-                        order_ticket = getattr(result_no_stops, 'order', None)
+                    if (
+                        result_no_stops
+                        and getattr(result_no_stops, "retcode", None)
+                        == mt5_module.TRADE_RETCODE_DONE
+                    ):  # type: ignore
+                        order_ticket = getattr(result_no_stops, "order", None)
                         if order_ticket:
-                            logging.info("Orden enviada sin SL/TP. Ticket: %s", order_ticket)
+                            logging.info(
+                                "Orden enviada sin SL/TP. Ticket: %s", order_ticket
+                            )
 
                             # Now try to modify the order to add SL/TP
                             if sl is not None or tp is not None:
                                 # Try multiple attempts to set SL/TP
                                 max_modification_attempts = 3
-                                for mod_attempt in range(1, max_modification_attempts + 1):
+                                for mod_attempt in range(
+                                    1, max_modification_attempts + 1
+                                ):
                                     modification_request = {
-                                        'action': mt5_module.TRADE_ACTION_SLTP,  # type: ignore
-                                        'symbol': symbol,
-                                        'position': int(order_ticket),
-                                        'deviation': deviation,
-                                        'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-                                        'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
+                                        "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+                                        "symbol": symbol,
+                                        "position": int(order_ticket),
+                                        "deviation": deviation,
+                                        "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
+                                        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
                                     }
 
                                     # Use potentially adjusted SL/TP values
@@ -278,47 +368,110 @@ def build_and_send_order(symbol, side, volume, sl=None, tp=None,
 
                                     # For subsequent attempts, use adjusted values
                                     if mod_attempt > 1:
-                                        current_sl, current_tp = validate_and_adjust_stops(symbol, price, sl, tp, side, mt5_module)
-                                        logging.info("Attempt %d with adjusted SL/TP: SL=%s, TP=%s", mod_attempt, current_sl, current_tp)
+                                        current_sl, current_tp = (
+                                            validate_and_adjust_stops(
+                                                symbol, price, sl, tp, side, mt5_module
+                                            )
+                                        )
+                                        logging.info(
+                                            "Attempt %d with adjusted SL/TP: SL=%s, TP=%s",
+                                            mod_attempt,
+                                            current_sl,
+                                            current_tp,
+                                        )
 
                                     if current_sl is not None:
-                                        modification_request['sl'] = float(current_sl)
+                                        modification_request["sl"] = float(current_sl)
                                     if current_tp is not None:
-                                        modification_request['tp'] = float(current_tp)
+                                        modification_request["tp"] = float(current_tp)
 
-                                    modification_result = mt5_module.order_send(modification_request)  # type: ignore
-                                    if modification_result and getattr(modification_result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-                                        logging.info("SL/TP modificados exitosamente para orden %s", order_ticket)
+                                    modification_result = mt5_module.order_send(
+                                        modification_request
+                                    )  # type: ignore
+                                    if (
+                                        modification_result
+                                        and getattr(
+                                            modification_result, "retcode", None
+                                        )
+                                        == mt5_module.TRADE_RETCODE_DONE
+                                    ):  # type: ignore
+                                        logging.info(
+                                            "SL/TP modificados exitosamente para orden %s",
+                                            order_ticket,
+                                        )
                                         break  # Success, exit retry loop
                                     else:
-                                        mod_retcode = getattr(modification_result, 'retcode', 'N/A') if modification_result else 'N/A'
-                                        mod_comment = getattr(modification_result, 'comment', 'N/A') if modification_result else 'N/A'
-                                        logging.warning("Attempt %d failed to modify SL/TP: retcode=%s, comment=%s", mod_attempt, mod_retcode, mod_comment)
+                                        mod_retcode = (
+                                            getattr(
+                                                modification_result, "retcode", "N/A"
+                                            )
+                                            if modification_result
+                                            else "N/A"
+                                        )
+                                        mod_comment = (
+                                            getattr(
+                                                modification_result, "comment", "N/A"
+                                            )
+                                            if modification_result
+                                            else "N/A"
+                                        )
+                                        logging.warning(
+                                            "Attempt %d failed to modify SL/TP: retcode=%s, comment=%s",
+                                            mod_attempt,
+                                            mod_retcode,
+                                            mod_comment,
+                                        )
 
                                         # Wait before retrying
                                         if mod_attempt < max_modification_attempts:
-                                            time.sleep(0.5 * (2 ** (mod_attempt - 1)))  # Exponential backoff
+                                            time.sleep(
+                                                0.5 * (2 ** (mod_attempt - 1))
+                                            )  # Exponential backoff
                                 else:
                                     # All modification attempts failed
-                                    logging.warning("La orden %s se ejecutó sin SL/TP después de %d intentos. Deberás gestionarla manualmente.", order_ticket, max_modification_attempts)
+                                    logging.warning(
+                                        "La orden %s se ejecutó sin SL/TP después de %d intentos. Deberás gestionarla manualmente.",
+                                        order_ticket,
+                                        max_modification_attempts,
+                                    )
 
                             return result_no_stops
                         else:
                             logging.warning("No se pudo obtener el ticket de la orden")
                     else:
-                        retcode_no_stops = getattr(result_no_stops, 'retcode', 'N/A') if result_no_stops else 'N/A'
-                        comment_no_stops = getattr(result_no_stops, 'comment', 'N/A') if result_no_stops else 'N/A'
-                        logging.warning("Intento sin SL/TP fallo: retcode=%s, comment=%s", retcode_no_stops, comment_no_stops)
+                        retcode_no_stops = (
+                            getattr(result_no_stops, "retcode", "N/A")
+                            if result_no_stops
+                            else "N/A"
+                        )
+                        comment_no_stops = (
+                            getattr(result_no_stops, "comment", "N/A")
+                            if result_no_stops
+                            else "N/A"
+                        )
+                        logging.warning(
+                            "Intento sin SL/TP fallo: retcode=%s, comment=%s",
+                            retcode_no_stops,
+                            comment_no_stops,
+                        )
                 except Exception:
                     logging.exception("Exception en order_send sin SL/TP o modificando")
 
             if attempts_made < max_total_attempts:
-                wait_time = 0.5 * (2 ** ((attempts_made - 1) // len(filling_modes_to_try)))
+                wait_time = 0.5 * (
+                    2 ** ((attempts_made - 1) // len(filling_modes_to_try))
+                )
                 time.sleep(wait_time)
 
-    error_msg = "Orden fallo despues de " + str(attempts_made) + " intentos. Ultimo retcode: " + str(getattr(last_result, 'retcode', 'N/A'))
+    error_msg = (
+        "Orden fallo despues de "
+        + str(attempts_made)
+        + " intentos. Ultimo retcode: "
+        + str(getattr(last_result, "retcode", "N/A"))
+    )
     logging.error(error_msg)
     raise RuntimeError(error_msg)
+
 
 @performance_monitor
 @safe_mt5_call
@@ -350,43 +503,67 @@ def close_position_by_ticket(ticket, deviation=30, retries=1, mt5_module=None):
     # Try each filling mode
     for filling_mode in filling_modes_to_try:
         request = {
-            'action': mt5_module.TRADE_ACTION_DEAL,  # type: ignore
-            'symbol': symbol,
-            'volume': volume,
-            'type': close_type,
-            'position': int(pos.ticket),
-            'price': price,
-            'deviation': deviation,
-            'magic': int(getattr(pos, 'magic', 0)),
-            'comment': 'close_by_bot',
-            'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-            'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
+            "action": mt5_module.TRADE_ACTION_DEAL,  # type: ignore
+            "symbol": symbol,
+            "volume": volume,
+            "type": close_type,
+            "position": int(pos.ticket),
+            "price": price,
+            "deviation": deviation,
+            "magic": int(getattr(pos, "magic", 0)),
+            "comment": "close_by_bot",
+            "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
+            "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
         }
 
         try:
             result = mt5_module.order_send(request)  # type: ignore
 
-            if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+            if (
+                result
+                and getattr(result, "retcode", None) == mt5_module.TRADE_RETCODE_DONE
+            ):  # type: ignore
                 logging.info("Posicion %s cerrada exitosamente", ticket)
                 return True
             else:
-                retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
-                comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
-                logging.warning("Intento con modo=%s fallo: retcode=%s, comment=%s", filling_mode, retcode, comment)
+                retcode = getattr(result, "retcode", "N/A") if result else "N/A"
+                comment = getattr(result, "comment", "N/A") if result else "N/A"
+                logging.warning(
+                    "Intento con modo=%s fallo: retcode=%s, comment=%s",
+                    filling_mode,
+                    retcode,
+                    comment,
+                )
         except Exception:
-            logging.exception("Exception al cerrar posicion %s con modo=%s", ticket, filling_mode)
+            logging.exception(
+                "Exception al cerrar posicion %s con modo=%s", ticket, filling_mode
+            )
 
-    logging.error("Error al cerrar posicion %s despues de intentar todos los modos de llenado", ticket)
+    logging.error(
+        "Error al cerrar posicion %s despues de intentar todos los modos de llenado",
+        ticket,
+    )
     return False
 
 
 @performance_monitor
 @safe_mt5_call
 @retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
-def place_pending_order(symbol, order_type, volume, price, sl=None, tp=None, deviation=30, expiration_hours=4, magic=123456, mt5_module=None):
+def place_pending_order(
+    symbol,
+    order_type,
+    volume,
+    price,
+    sl=None,
+    tp=None,
+    deviation=30,
+    expiration_hours=4,
+    magic=123456,
+    mt5_module=None,
+):
     """
     Place a pending order (Buy Stop or Sell Stop) with optional SL/TP and expiration.
-    
+
     Args:
         symbol: Trading symbol
         order_type: "BUY_STOP" or "SELL_STOP"
@@ -398,7 +575,7 @@ def place_pending_order(symbol, order_type, volume, price, sl=None, tp=None, dev
         expiration_hours: Hours until order expires (default 4 hours)
         magic: Magic number for order identification
         mt5_module: MT5 module instance
-    
+
     Returns:
         Order result or None if failed
     """
@@ -407,7 +584,9 @@ def place_pending_order(symbol, order_type, volume, price, sl=None, tp=None, dev
 
     # Validate inputs
     if not symbol or not order_type or volume <= 0 or price <= 0:
-        logging.error(f"Invalid parameters for pending order: symbol={symbol}, type={order_type}, volume={volume}, price={price}")
+        logging.error(
+            f"Invalid parameters for pending order: symbol={symbol}, type={order_type}, volume={volume}, price={price}"
+        )
         return None
 
     # Select symbol
@@ -425,41 +604,47 @@ def place_pending_order(symbol, order_type, volume, price, sl=None, tp=None, dev
         return None
 
     # Calculate expiration time (4 hours from now)
-    expiration_time = int((datetime.now() + timedelta(hours=expiration_hours)).timestamp())
+    expiration_time = int(
+        (datetime.now() + timedelta(hours=expiration_hours)).timestamp()
+    )
 
     # Prepare order request
     request = {
-        'action': mt5_module.TRADE_ACTION_PENDING,  # type: ignore
-        'symbol': symbol,
-        'volume': float(volume),
-        'type': order_type_mt5,
-        'price': float(price),
-        'deviation': deviation,
-        'magic': magic,
-        'comment': f'pending_{order_type.lower()}',
-        'type_time': mt5_module.ORDER_TIME_SPECIFIED,  # type: ignore
-        'type_filling': mt5_module.ORDER_FILLING_FOK,  # type: ignore
-        'expiration': expiration_time
+        "action": mt5_module.TRADE_ACTION_PENDING,  # type: ignore
+        "symbol": symbol,
+        "volume": float(volume),
+        "type": order_type_mt5,
+        "price": float(price),
+        "deviation": deviation,
+        "magic": magic,
+        "comment": f"pending_{order_type.lower()}",
+        "type_time": mt5_module.ORDER_TIME_SPECIFIED,  # type: ignore
+        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
+        "expiration": expiration_time,
     }
 
     # Add SL/TP if provided
     if sl is not None and sl > 0:
-        request['sl'] = float(sl)
+        request["sl"] = float(sl)
     if tp is not None and tp > 0:
-        request['tp'] = float(tp)
+        request["tp"] = float(tp)
 
     # Send order
     try:
         result = mt5_module.order_send(request)  # type: ignore
 
-        if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-            logging.info(f"Pending order placed successfully: {order_type} {symbol} @ {price}")
+        if result and getattr(result, "retcode", None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+            logging.info(
+                f"Pending order placed successfully: {order_type} {symbol} @ {price}"
+            )
             logging.info(f"Order ticket: {getattr(result, 'order', 'N/A')}")
             return result
         else:
-            retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
-            comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
-            logging.error(f"Failed to place pending order: retcode={retcode}, comment={comment}")
+            retcode = getattr(result, "retcode", "N/A") if result else "N/A"
+            comment = getattr(result, "comment", "N/A") if result else "N/A"
+            logging.error(
+                f"Failed to place pending order: retcode={retcode}, comment={comment}"
+            )
             return None
     except Exception as e:
         logging.exception(f"Exception placing pending order: {str(e)}")
@@ -471,7 +656,7 @@ def place_pending_order(symbol, order_type, volume, price, sl=None, tp=None, dev
 def cancel_expired_pending_orders(magic=123456, mt5_module=None):
     """
     Cancel pending orders that have expired (older than 4 hours).
-    
+
     Args:
         magic: Magic number to filter orders
         mt5_module: MT5 module instance
@@ -489,26 +674,36 @@ def cancel_expired_pending_orders(magic=123456, mt5_module=None):
 
     for order in orders:
         # Check if order matches our magic number
-        if getattr(order, 'magic', 0) == magic:
+        if getattr(order, "magic", 0) == magic:
             # Check if order has expiration time
-            expiration = getattr(order, 'expiration', 0)
+            expiration = getattr(order, "expiration", 0)
             if expiration > 0 and current_time > expiration:
                 # Cancel expired order
                 request = {
-                    'action': mt5_module.TRADE_ACTION_REMOVE,  # type: ignore
-                    'order': int(order.ticket),
-                    'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-                    'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
+                    "action": mt5_module.TRADE_ACTION_REMOVE,  # type: ignore
+                    "order": int(order.ticket),
+                    "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
+                    "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
                 }
 
                 try:
                     result = mt5_module.order_send(request)  # type: ignore
-                    if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-                        logging.info(f"Expired pending order {order.ticket} cancelled successfully")
+                    if (
+                        result
+                        and getattr(result, "retcode", None)
+                        == mt5_module.TRADE_RETCODE_DONE
+                    ):  # type: ignore
+                        logging.info(
+                            f"Expired pending order {order.ticket} cancelled successfully"
+                        )
                     else:
-                        logging.warning(f"Failed to cancel expired pending order {order.ticket}")
+                        logging.warning(
+                            f"Failed to cancel expired pending order {order.ticket}"
+                        )
                 except Exception as e:
-                    logging.exception(f"Exception cancelling expired pending order {order.ticket}: {str(e)}")
+                    logging.exception(
+                        f"Exception cancelling expired pending order {order.ticket}: {str(e)}"
+                    )
 
 
 @performance_monitor
@@ -518,13 +713,13 @@ def update_trailing_stops(mt5_module=None):
     """
     Update trailing stops for all open positions based on configuration.
     Implements smarter trade management with break-even and trailing stops.
-    
+
     Default settings:
     - Volatility feature off
     - Trailing start at 10 pips
     - Trailing distance at 15 pips
     - Trailing mode enabled by default
-    
+
     Configuration can be overridden via set files in the "trailing" section.
     """
     if mt5_module is None:
@@ -538,19 +733,20 @@ def update_trailing_stops(mt5_module=None):
     # Get set file configuration for trailing stops
     try:
         from config.set_file_manager import get_set_manager
+
         cfg = get_set_manager()
         # Get trailing stop configuration with defaults
-        trailing_enabled = cfg.get('trailing.enabled', True)
-        trailing_start_pips = cfg.get('trailing.start_pips', 10)
-        trailing_distance_pips = cfg.get('trailing.distance_pips', 15)
-        break_even_enabled = cfg.get('trailing.break_even_enabled', True)
-        partial_tp_enabled = cfg.get('trailing.partial_tp_enabled', False)
-        partial_tp_percent = cfg.get('trailing.partial_tp_percent', 50.0)
-        partial_tp_at_r = cfg.get('trailing.partial_tp_at_r', 1.0)
+        trailing_enabled = cfg.get("trailing.enabled", True)
+        trailing_start_pips = cfg.get("trailing.start_pips", 10)
+        trailing_distance_pips = cfg.get("trailing.distance_pips", 15)
+        break_even_enabled = cfg.get("trailing.break_even_enabled", True)
+        partial_tp_enabled = cfg.get("trailing.partial_tp_enabled", False)
+        partial_tp_percent = cfg.get("trailing.partial_tp_percent", 50.0)
+        partial_tp_at_r = cfg.get("trailing.partial_tp_at_r", 1.0)
         # ATR-based trailing configuration
-        use_atr = cfg.get('trailing.use_atr', True)
-        start_atr_mult = cfg.get('trailing.start_atr_mult', 1.0)
-        distance_atr_mult = cfg.get('trailing.distance_atr_mult', 1.5)
+        use_atr = cfg.get("trailing.use_atr", True)
+        start_atr_mult = cfg.get("trailing.start_atr_mult", 1.0)
+        distance_atr_mult = cfg.get("trailing.distance_atr_mult", 1.5)
     except Exception as e:
         # Use default values if configuration cannot be loaded
         trailing_enabled = True
@@ -570,7 +766,9 @@ def update_trailing_stops(mt5_module=None):
     if not trailing_enabled:
         return
 
-    logging.debug(f"Trailing stops update - Enabled: {trailing_enabled}, Start: {trailing_start_pips} pips, Distance: {trailing_distance_pips} pips, BE: {break_even_enabled}")
+    logging.debug(
+        f"Trailing stops update - Enabled: {trailing_enabled}, Start: {trailing_start_pips} pips, Distance: {trailing_distance_pips} pips, BE: {break_even_enabled}"
+    )
 
     for pos in positions:
         try:
@@ -588,7 +786,7 @@ def update_trailing_stops(mt5_module=None):
 
             point = symbol_info.point
             # Adjust point value for NASDAQ
-            if 'NASDAQ' in symbol.upper():
+            if "NASDAQ" in symbol.upper():
                 point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
             digits = symbol_info.digits
 
@@ -597,7 +795,10 @@ def update_trailing_stops(mt5_module=None):
 
             # Determine trailing thresholds: ATR-based preferred
             try:
-                from core.donchian_strategy import MarketDataService
+                from core.donchian_components.calculators.technical_indicators import (
+                    TechnicalIndicatorsCalculator as MarketDataService,
+                )
+
                 market_data = MarketDataService(mt5_module)
                 atr = market_data.calculate_atr(symbol)
             except Exception:
@@ -623,33 +824,49 @@ def update_trailing_stops(mt5_module=None):
                 # Check for partial TP if enabled and not yet executed
                 if partial_tp_enabled:
                     # Calculate 1R profit level (entry + SL distance)
-                    sl_distance = abs(price_open - sl) if sl > 0 else trailing_start_price
+                    sl_distance = (
+                        abs(price_open - sl) if sl > 0 else trailing_start_price
+                    )
                     one_r_profit = sl_distance * partial_tp_at_r
 
                     # If profit >= 1R and volume hasn't been reduced yet
-                    if profit_price >= one_r_profit and pos.volume == normalize_volume(symbol, pos.volume, mt5_module):
+                    if profit_price >= one_r_profit and pos.volume == normalize_volume(
+                        symbol, pos.volume, mt5_module
+                    ):
                         # Close partial position
-                        partial_volume = round(pos.volume * (partial_tp_percent / 100.0), 2)
+                        partial_volume = round(
+                            pos.volume * (partial_tp_percent / 100.0), 2
+                        )
                         if partial_volume >= symbol_info.volume_min:
                             try:
                                 close_request = {
-                                    'action': mt5_module.TRADE_ACTION_DEAL,
-                                    'symbol': symbol,
-                                    'volume': partial_volume,
-                                    'type': mt5_module.ORDER_TYPE_SELL if order_type == mt5_module.POSITION_TYPE_BUY else mt5_module.ORDER_TYPE_BUY,
-                                    'position': int(ticket),
-                                    'price': current_price,
-                                    'deviation': 30,
-                                    'magic': int(getattr(pos, 'magic', 0)),
-                                    'comment': 'partial_tp',
-                                    'type_time': mt5_module.ORDER_TIME_GTC,
-                                    'type_filling': mt5_module.ORDER_FILLING_FOK
+                                    "action": mt5_module.TRADE_ACTION_DEAL,
+                                    "symbol": symbol,
+                                    "volume": partial_volume,
+                                    "type": mt5_module.ORDER_TYPE_SELL
+                                    if order_type == mt5_module.POSITION_TYPE_BUY
+                                    else mt5_module.ORDER_TYPE_BUY,
+                                    "position": int(ticket),
+                                    "price": current_price,
+                                    "deviation": 30,
+                                    "magic": int(getattr(pos, "magic", 0)),
+                                    "comment": "partial_tp",
+                                    "type_time": mt5_module.ORDER_TIME_GTC,
+                                    "type_filling": mt5_module.ORDER_FILLING_FOK,
                                 }
                                 result = mt5_module.order_send(close_request)
-                                if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:
-                                    logging.info(f"Partial TP ({partial_tp_percent}%) executed for position {ticket} at 1R profit")
+                                if (
+                                    result
+                                    and getattr(result, "retcode", None)
+                                    == mt5_module.TRADE_RETCODE_DONE
+                                ):
+                                    logging.info(
+                                        f"Partial TP ({partial_tp_percent}%) executed for position {ticket} at 1R profit"
+                                    )
                             except Exception as e:
-                                logging.exception(f"Error executing partial TP for position {ticket}: {str(e)}")
+                                logging.exception(
+                                    f"Error executing partial TP for position {ticket}: {str(e)}"
+                                )
 
                 # Calculate new stop loss level based on trailing distance
                 if order_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
@@ -673,41 +890,66 @@ def update_trailing_stops(mt5_module=None):
                 rounded_new_sl = round(new_sl, digits)
                 rounded_sl = round(sl, digits) if sl > 0 else 0
                 should_update = False
-                if order_type == mt5_module.POSITION_TYPE_BUY and (sl == 0 or rounded_new_sl > rounded_sl):  # type: ignore
+                if order_type == mt5_module.POSITION_TYPE_BUY and (
+                    sl == 0 or rounded_new_sl > rounded_sl
+                ):  # type: ignore
                     should_update = True
-                elif order_type == mt5_module.POSITION_TYPE_SELL and (sl == 0 or rounded_new_sl < rounded_sl):  # type: ignore
+                elif order_type == mt5_module.POSITION_TYPE_SELL and (
+                    sl == 0 or rounded_new_sl < rounded_sl
+                ):  # type: ignore
                     should_update = True
 
                 if should_update:
                     # Debug log: show previous vs calculated SL
-                    logging.debug(f"Trailing calc for {symbol} ticket {ticket}: prev_sl={rounded_sl:.{digits}f}, calc_sl={rounded_new_sl:.{digits}f}, price={current_price:.{digits}f}, type={'BUY' if order_type == mt5_module.POSITION_TYPE_BUY else 'SELL'}")
+                    logging.debug(
+                        f"Trailing calc for {symbol} ticket {ticket}: prev_sl={rounded_sl:.{digits}f}, calc_sl={rounded_new_sl:.{digits}f}, price={current_price:.{digits}f}, type={'BUY' if order_type == mt5_module.POSITION_TYPE_BUY else 'SELL'}"
+                    )
                     # Prepare modification request
                     request = {
-                        'action': mt5_module.TRADE_ACTION_SLTP,  # type: ignore
-                        'symbol': symbol,
-                        'position': int(ticket),
-                        'sl': rounded_new_sl,
-                        'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-                        'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
+                        "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+                        "symbol": symbol,
+                        "position": int(ticket),
+                        "sl": rounded_new_sl,
+                        "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
+                        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
                     }
 
                     # Send modification request
                     try:
                         result = mt5_module.order_send(request)  # type: ignore
-                        if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-                            logging.info(f"Trailing stop updated for position {ticket}: SL moved to {rounded_new_sl:.{digits}f}")
+                        if (
+                            result
+                            and getattr(result, "retcode", None)
+                            == mt5_module.TRADE_RETCODE_DONE
+                        ):  # type: ignore
+                            logging.info(
+                                f"Trailing stop updated for position {ticket}: SL moved to {rounded_new_sl:.{digits}f}"
+                            )
                         else:
-                            retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
-                            comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
-                            logging.warning(f"Failed to update trailing stop for position {ticket}: retcode={retcode}, comment={comment}")
+                            retcode = (
+                                getattr(result, "retcode", "N/A") if result else "N/A"
+                            )
+                            comment = (
+                                getattr(result, "comment", "N/A") if result else "N/A"
+                            )
+                            logging.warning(
+                                f"Failed to update trailing stop for position {ticket}: retcode={retcode}, comment={comment}"
+                            )
                     except Exception as e:
-                        logging.exception(f"Exception updating trailing stop for position {ticket}: {str(e)}")
+                        logging.exception(
+                            f"Exception updating trailing stop for position {ticket}: {str(e)}"
+                        )
             else:
-                logging.debug(f"Position {ticket} profit ({profit_price/point:.1f} pips) below trailing start threshold ({trailing_start_pips} pips)")
+                logging.debug(
+                    f"Position {ticket} profit ({profit_price / point:.1f} pips) below trailing start threshold ({trailing_start_pips} pips)"
+                )
 
         except Exception as e:
-            logging.exception(f"Error processing position {pos.ticket if hasattr(pos, 'ticket') else 'unknown'}: {str(e)}")
+            logging.exception(
+                f"Error processing position {pos.ticket if hasattr(pos, 'ticket') else 'unknown'}: {str(e)}"
+            )
             continue
+
 
 # Global variable to track previous positions for trade closure detection
 previous_positions = set()
@@ -745,17 +987,17 @@ def record_closed_trade_result(ticket, mt5_module=None):
             history_positions = mt5_module.history_positions_get(
                 datetime.now() - timedelta(days=7),  # Last 7 days
                 datetime.now(),
-                ticket=ticket
+                ticket=ticket,
             )
 
             if history_positions:
                 pos = history_positions[0]  # Get the closed position
 
                 # Calculate return percentage as requested: (close_profit / initial_margin) * 100
-                close_profit = pos.profit if hasattr(pos, 'profit') else 0
+                close_profit = pos.profit if hasattr(pos, "profit") else 0
 
                 # Calculate initial margin based on volume and symbol-specific margin requirements
-                volume = pos.volume if hasattr(pos, 'volume') else 1
+                volume = pos.volume if hasattr(pos, "volume") else 1
                 symbol = pos.symbol
 
                 # Get symbol info to determine margin requirements
@@ -763,14 +1005,21 @@ def record_closed_trade_result(ticket, mt5_module=None):
                 if symbol_info:
                     # Calculate initial margin based on volume and symbol requirements
                     # Use margin_initial if available, otherwise use fallback
-                    if hasattr(symbol_info, 'margin_initial') and symbol_info.margin_initial > 0:
+                    if (
+                        hasattr(symbol_info, "margin_initial")
+                        and symbol_info.margin_initial > 0
+                    ):
                         initial_margin = volume * symbol_info.margin_initial
                     else:
                         # For specific symbols like XAUUSD, adjust accordingly
-                        if 'XAU' in symbol or 'GOLD' in symbol:
-                            initial_margin = volume * 1000  # XAUUSD has specific margin requirements
-                        elif 'JPY' in symbol:
-                            initial_margin = volume * 1000  # Adjust as needed for JPY pairs
+                        if "XAU" in symbol or "GOLD" in symbol:
+                            initial_margin = (
+                                volume * 1000
+                            )  # XAUUSD has specific margin requirements
+                        elif "JPY" in symbol:
+                            initial_margin = (
+                                volume * 1000
+                            )  # Adjust as needed for JPY pairs
                         else:
                             initial_margin = volume * 1000  # Default fallback
                 else:
@@ -784,18 +1033,25 @@ def record_closed_trade_result(ticket, mt5_module=None):
 
                 # Import quantitative engine and record the result
                 from core.quant_engine import QuantitativeEngine
+
                 quant_engine = QuantitativeEngine()  # Create instance
                 quant_engine.record_trade_result(return_pct, entry_score)
 
                 # Log the recorded trade
                 total_quant_trades = len(quant_engine._load_quant_trades())
-                logging.info(f"📊 Quant trade recorded: {return_pct:.2f}%, score: {entry_score:.3f}, total: {total_quant_trades}")
+                logging.info(
+                    f"📊 Quant trade recorded: {return_pct:.2f}%, score: {entry_score:.3f}, total: {total_quant_trades}"
+                )
             else:
                 logging.warning(f"Could not find history for closed position {ticket}")
         else:
             logging.debug(f"No entry score found for ticket {ticket}")
     except Exception as e:
-        logging.error(f"Error recording closed trade result for ticket {ticket}: {e}", exc_info=True)
+        logging.error(
+            f"Error recording closed trade result for ticket {ticket}: {e}",
+            exc_info=True,
+        )
+
 
 @performance_monitor
 @safe_mt5_call
@@ -831,7 +1087,7 @@ def monitor_and_update_stops(mt5_module=None):
 
     for pos in positions:
         # Check if position has SL
-        sl = getattr(pos, 'sl', 0)
+        sl = getattr(pos, "sl", 0)
 
         # Only add SL/TP if SL is missing (avoid overwriting trailing stops)
         # TP can be zero if trailing removed it, but we preserve SL
@@ -854,11 +1110,14 @@ def monitor_and_update_stops(mt5_module=None):
                 # Set reasonable SL/TP based on config - using ATR multipliers
                 symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
                 point = symbol_info.point if symbol_info else 0.01
-                if 'NASDAQ' in symbol.upper():
+                if "NASDAQ" in symbol.upper():
                     point = 1.0
                 # Use ATR-based SL/TP distances
                 try:
-                    from core.donchian_strategy import MarketDataService
+                    from core.donchian_components.calculators.technical_indicators import (
+                        TechnicalIndicatorsCalculator as MarketDataService,
+                    )
+
                     market_data = MarketDataService(mt5_module)
                     atr = market_data.calculate_atr(symbol)
                 except Exception:
@@ -866,9 +1125,10 @@ def monitor_and_update_stops(mt5_module=None):
                 # Multipliers from set file if available
                 try:
                     from config.set_file_manager import get_set_manager
+
                     cfg = get_set_manager()
-                    sl_mult = cfg.get('strategy.sl_atr_multiplier', 3.0)
-                    tp_mult = cfg.get('strategy.tp_atr_multiplier', 6.0)
+                    sl_mult = cfg.get("strategy.sl_atr_multiplier", 3.0)
+                    tp_mult = cfg.get("strategy.tp_atr_multiplier", 6.0)
                 except Exception:
                     sl_mult = 3.0
                     tp_mult = 6.0
@@ -882,11 +1142,14 @@ def monitor_and_update_stops(mt5_module=None):
                 # Set reasonable SL/TP based on config - using ATR multipliers
                 symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
                 point = symbol_info.point if symbol_info else 0.01
-                if 'NASDAQ' in symbol.upper():
+                if "NASDAQ" in symbol.upper():
                     point = 1.0
                 # Use ATR-based SL/TP distances
                 try:
-                    from core.donchian_strategy import MarketDataService
+                    from core.donchian_components.calculators.technical_indicators import (
+                        TechnicalIndicatorsCalculator as MarketDataService,
+                    )
+
                     market_data = MarketDataService(mt5_module)
                     atr = market_data.calculate_atr(symbol)
                 except Exception:
@@ -894,9 +1157,10 @@ def monitor_and_update_stops(mt5_module=None):
                 # Multipliers from set file if available
                 try:
                     from config.set_file_manager import get_set_manager
+
                     cfg = get_set_manager()
-                    sl_mult = cfg.get('strategy.sl_atr_multiplier', 3.0)
-                    tp_mult = cfg.get('strategy.tp_atr_multiplier', 6.0)
+                    sl_mult = cfg.get("strategy.sl_atr_multiplier", 3.0)
+                    tp_mult = cfg.get("strategy.tp_atr_multiplier", 6.0)
                 except Exception:
                     sl_mult = 3.0
                     tp_mult = 6.0
@@ -906,7 +1170,9 @@ def monitor_and_update_stops(mt5_module=None):
                 tp_price = entry_price - tp_distance
 
             # Validate stops
-            sl_price, tp_price = validate_and_adjust_stops(symbol, entry_price, sl_price, tp_price, side, mt5_module)
+            sl_price, tp_price = validate_and_adjust_stops(
+                symbol, entry_price, sl_price, tp_price, side, mt5_module
+            )
 
             # For Exness accounts, use ORDER_FILLING_RETURN (mode 0) as the primary and only mode
             # This eliminates unnecessary retries and speeds up order execution
@@ -918,42 +1184,79 @@ def monitor_and_update_stops(mt5_module=None):
                 for attempt in range(1, max_retries + 1):
                     # Try to modify position
                     modification_request = {
-                        'action': mt5_module.TRADE_ACTION_SLTP,  # type: ignore
-                        'symbol': symbol,
-                        'position': int(ticket),
-                        'sl': float(sl_price) if sl_price is not None else 0,
-                        'tp': float(tp_price) if tp_price is not None else 0,
-                        'type_time': mt5_module.ORDER_TIME_GTC,  # type: ignore
-                        'type_filling': mt5_module.ORDER_FILLING_FOK  # type: ignore
+                        "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+                        "symbol": symbol,
+                        "position": int(ticket),
+                        "sl": float(sl_price) if sl_price is not None else 0,
+                        "tp": float(tp_price) if tp_price is not None else 0,
+                        "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
+                        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
                     }
 
                     # Remove zero values
-                    if modification_request['sl'] == 0:
-                        modification_request.pop('sl')
-                    if modification_request['tp'] == 0:
-                        modification_request.pop('tp')
+                    if modification_request["sl"] == 0:
+                        modification_request.pop("sl")
+                    if modification_request["tp"] == 0:
+                        modification_request.pop("tp")
 
                     # If we still have something to set
-                    if 'sl' in modification_request or 'tp' in modification_request:
+                    if "sl" in modification_request or "tp" in modification_request:
                         try:
                             result = mt5_module.order_send(modification_request)  # type: ignore
-                            if result and getattr(result, 'retcode', None) == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
-                                logging.info(f"SL/TP added successfully to position {ticket}")
+                            if (
+                                result
+                                and getattr(result, "retcode", None)
+                                == mt5_module.TRADE_RETCODE_DONE
+                            ):  # type: ignore
+                                logging.info(
+                                    f"SL/TP added successfully to position {ticket}"
+                                )
                                 break  # Success, exit retry loop
                             else:
-                                retcode = getattr(result, 'retcode', 'N/A') if result else 'N/A'
-                                comment = getattr(result, 'comment', 'N/A') if result else 'N/A'
-                                logging.warning(f"Attempt {attempt} failed to add SL/TP to position {ticket}: retcode={retcode}, comment={comment}")
+                                retcode = (
+                                    getattr(result, "retcode", "N/A")
+                                    if result
+                                    else "N/A"
+                                )
+                                comment = (
+                                    getattr(result, "comment", "N/A")
+                                    if result
+                                    else "N/A"
+                                )
+                                logging.warning(
+                                    f"Attempt {attempt} failed to add SL/TP to position {ticket}: retcode={retcode}, comment={comment}"
+                                )
 
                                 # If we get "Invalid stops" error, try with adjusted stops
                                 if retcode == 10016:  # Invalid stops
-                                    logging.warning("Invalid stops detected for position %s, trying with adjusted levels", ticket)
-                                    adjusted_sl, adjusted_tp = validate_and_adjust_stops(symbol, entry_price, sl_price, tp_price, side, mt5_module)
-                                    if adjusted_sl != sl_price or adjusted_tp != tp_price:
-                                        logging.info("Retrying with adjusted SL/TP: SL=%s, TP=%s", adjusted_sl, adjusted_tp)
+                                    logging.warning(
+                                        "Invalid stops detected for position %s, trying with adjusted levels",
+                                        ticket,
+                                    )
+                                    adjusted_sl, adjusted_tp = (
+                                        validate_and_adjust_stops(
+                                            symbol,
+                                            entry_price,
+                                            sl_price,
+                                            tp_price,
+                                            side,
+                                            mt5_module,
+                                        )
+                                    )
+                                    if (
+                                        adjusted_sl != sl_price
+                                        or adjusted_tp != tp_price
+                                    ):
+                                        logging.info(
+                                            "Retrying with adjusted SL/TP: SL=%s, TP=%s",
+                                            adjusted_sl,
+                                            adjusted_tp,
+                                        )
                                         sl_price, tp_price = adjusted_sl, adjusted_tp
                         except Exception:
-                            logging.exception(f"Exception while adding SL/TP to position {ticket} (attempt {attempt})")
+                            logging.exception(
+                                f"Exception while adding SL/TP to position {ticket} (attempt {attempt})"
+                            )
                     else:
                         logging.warning(f"No valid SL/TP to add to position {ticket}")
                         break  # Nothing to set, exit retry loop
@@ -967,4 +1270,6 @@ def monitor_and_update_stops(mt5_module=None):
                 # If we succeeded, break out of filling mode loop
                 break
             else:
-                logging.error(f"Failed to add SL/TP to position {ticket} after all attempts")
+                logging.error(
+                    f"Failed to add SL/TP to position {ticket} after all attempts"
+                )

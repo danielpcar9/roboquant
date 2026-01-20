@@ -1,8 +1,15 @@
 """
 Test script for the quantitative trading engine
 """
+
 import numpy as np
-from core.quant_engine import QuantitativeEngine, QuantitativeAnalyzer, PositionSizer, QuantitativeOptimizer
+from core.quant_engine import (
+    QuantitativeEngine,
+    QuantitativeAnalyzer,
+    PositionSizer,
+    QuantitativeOptimizer,
+)
+
 
 def test_quantitative_analyzer():
     """Test the quantitative analyzer components"""
@@ -36,12 +43,13 @@ def test_quantitative_analyzer():
         trend_strength=trend_strength,
         adx_value=25.0,
         di_plus=20.0,
-        di_minus=15.0
+        di_minus=15.0,
     )
     print(f"Entry Probability: {prob_result['probability']:.3f}")
     print(f"Components: {prob_result['components']}")
 
     return True
+
 
 def test_position_sizer():
     """Test the position sizing components"""
@@ -51,9 +59,7 @@ def test_position_sizer():
 
     # Test Kelly Criterion
     kelly_size = sizer.kelly_criterion(
-        win_rate=0.55,
-        avg_win_ratio=2.0,
-        avg_loss_ratio=1.0
+        win_rate=0.55, avg_win_ratio=2.0, avg_loss_ratio=1.0
     )
     print(f"Kelly Criterion Size: {kelly_size:.3f}")
 
@@ -63,6 +69,7 @@ def test_position_sizer():
     print(f"Sharpe-based Size: {sharpe_size:.3f}")
 
     return True
+
 
 def test_optimizer():
     """Test the optimization components"""
@@ -83,6 +90,7 @@ def test_optimizer():
 
     return True
 
+
 def test_full_engine():
     """Test the full quantitative engine"""
     print("\n=== Testing Full Quantitative Engine ===")
@@ -98,10 +106,7 @@ def test_full_engine():
 
     # Test entry score calculation
     entry_result = engine.calculate_entry_score(
-        prices=prices,
-        adx_value=28.0,
-        di_plus=25.0,
-        di_minus=12.0
+        prices=prices, adx_value=28.0, di_plus=25.0, di_minus=12.0
     )
 
     print(f"Entry Score: {entry_result['entry_score']:.3f}")
@@ -110,12 +115,12 @@ def test_full_engine():
 
     # Test position sizing
     position_size = engine.calculate_optimal_position_size(
-        account_balance=10000,
-        entry_score=entry_result['entry_score']
+        account_balance=10000, entry_score=entry_result["entry_score"]
     )
     print(f"Optimal Position Size: {position_size:.3f} lots")
 
     return True
+
 
 def run_all_tests():
     """Run all tests"""
@@ -133,8 +138,10 @@ def run_all_tests():
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 if __name__ == "__main__":
     run_all_tests()

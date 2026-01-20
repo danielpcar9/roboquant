@@ -2,6 +2,7 @@
 Backtest Optimizado para Estrategia Donchian
 Versión FINAL con todas las mejoras aplicadas
 """
+
 import vectorbt as vbt
 import pandas as pd
 import numpy as np
@@ -11,20 +12,19 @@ import os
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s'
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
 
 def load_data(symbol="XAUUSD", timeframe="H1", days_back=1825):
     """
     Carga datos históricos desde CSV
-    
+
     Args:
         symbol: Símbolo a cargar (ej: XAUUSD)
         timeframe: Temporalidad (H1, M5, etc)
         days_back: Días hacia atrás a filtrar
-    
+
     Returns:
         DataFrame con datos filtrados o None si error
     """
@@ -37,8 +37,8 @@ def load_data(symbol="XAUUSD", timeframe="H1", days_back=1825):
 
         # Cargar CSV
         df = pd.read_csv(filename)
-        df['time'] = pd.to_datetime(df['time'])
-        df.set_index('time', inplace=True)
+        df["time"] = pd.to_datetime(df["time"])
+        df.set_index("time", inplace=True)
         df.sort_index(inplace=True)
 
         # Filtrar últimos N días
@@ -53,7 +53,8 @@ def load_data(symbol="XAUUSD", timeframe="H1", days_back=1825):
 
         # Check for null values - handle both Series and ndarray
         import numpy as np
-        close_data = df['close']
+
+        close_data = df["close"]
         if isinstance(close_data, pd.Series):
             has_nulls = close_data.isna().any()
         else:
@@ -61,7 +62,7 @@ def load_data(symbol="XAUUSD", timeframe="H1", days_back=1825):
             has_nulls = np.isnan(close_data).any()
         if has_nulls:
             logging.warning("⚠️ Datos con valores null, rellenando...")
-            df.fillna(method='ffill', inplace=True)
+            df.fillna(method="ffill", inplace=True)
 
         logging.info(f"✅ Cargados {len(df):,} registros ({days_back} días)")
         logging.info(f"📅 Rango: {df.index[0]} → {df.index[-1]}")
@@ -73,17 +74,25 @@ def load_data(symbol="XAUUSD", timeframe="H1", days_back=1825):
         return None
 
 
-def generate_signals(df, donchian_period=20, adx_period=14, adx_threshold=18, di_threshold=26,
-                     sl_points=150, tp_points=300, breakout_threshold=0.0):
+def generate_signals(
+    df,
+    donchian_period=20,
+    adx_period=14,
+    adx_threshold=18,
+    di_threshold=26,
+    sl_points=150,
+    tp_points=300,
+    breakout_threshold=0.0,
+):
     """
     Genera señales de entrada + SL/TP para backtest
-    
+
     Usa parámetros OPTIMIZADOS para oro:
     - Donchian: 50 (aumentado de 20)
     - SL: 250 puntos (aumentado de 150 - CRÍTICO)
     - TP: 500 puntos (mantiene ratio 1:2)
     - Breakout Threshold: 0.0 (sin umbral adicional)
-    
+
     Args:
         df: DataFrame con OHLC
         donchian_period: Periodo Donchian Channels
@@ -92,50 +101,62 @@ def generate_signals(df, donchian_period=20, adx_period=14, adx_threshold=18, di
         sl_points: Stop Loss en puntos (1 punto = $0.01 para oro)
         tp_points: Take Profit en puntos
         breakout_threshold: Umbral adicional para confirmación de breakout (en múltiplos de ATR)
-    
+
     Returns:
         DataFrame con señales y stops
     """
     df = df.copy()
 
     logging.info("📊 Generando señales con parámetros:")
-    logging.info(f"   Donchian: {donchian_period} | ADX: {adx_period} (thr={adx_threshold}, DI≥{di_threshold})")
-    logging.info(f"   SL: {sl_points} pts | TP: {tp_points} pts | Breakout Threshold: {breakout_threshold}")
+    logging.info(
+        f"   Donchian: {donchian_period} | ADX: {adx_period} (thr={adx_threshold}, DI≥{di_threshold})"
+    )
+    logging.info(
+        f"   SL: {sl_points} pts | TP: {tp_points} pts | Breakout Threshold: {breakout_threshold}"
+    )
 
     # 1. DONCHIAN CHANNELS - Using rolling operations
-    df['donchian_upper'] = df['high'].rolling(window=donchian_period).max().shift(1)
-    df['donchian_lower'] = df['low'].rolling(window=donchian_period).min().shift(1)
+    df["donchian_upper"] = df["high"].rolling(window=donchian_period).max().shift(1)
+    df["donchian_lower"] = df["low"].rolling(window=donchian_period).min().shift(1)
 
     # 2. ADX / DI (Wilder)
-    df['high_low'] = df['high'] - df['low']
-    df['high_close'] = np.abs(df['high'] - df['close'].shift())
-    df['low_close'] = np.abs(df['low'] - df['close'].shift())
-    df['tr'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
+    df["high_low"] = df["high"] - df["low"]
+    df["high_close"] = np.abs(df["high"] - df["close"].shift())
+    df["low_close"] = np.abs(df["low"] - df["close"].shift())
+    df["tr"] = df[["high_low", "high_close", "low_close"]].max(axis=1)
 
-    df['up_move'] = df['high'] - df['high'].shift()
-    df['down_move'] = df['low'].shift() - df['low']
-    df['plus_dm'] = np.where((df['up_move'] > df['down_move']) & (df['up_move'] > 0), df['up_move'], 0)
-    df['minus_dm'] = np.where((df['down_move'] > df['up_move']) & (df['down_move'] > 0), df['down_move'], 0)
+    df["up_move"] = df["high"] - df["high"].shift()
+    df["down_move"] = df["low"].shift() - df["low"]
+    df["plus_dm"] = np.where(
+        (df["up_move"] > df["down_move"]) & (df["up_move"] > 0), df["up_move"], 0
+    )
+    df["minus_dm"] = np.where(
+        (df["down_move"] > df["up_move"]) & (df["down_move"] > 0), df["down_move"], 0
+    )
 
     alpha = 1 / adx_period
-    df['atr'] = df['tr'].ewm(alpha=alpha, adjust=False).mean()
-    df['plus_dm_smooth'] = df['plus_dm'].ewm(alpha=alpha, adjust=False).mean()
-    df['minus_dm_smooth'] = df['minus_dm'].ewm(alpha=alpha, adjust=False).mean()
+    df["atr"] = df["tr"].ewm(alpha=alpha, adjust=False).mean()
+    df["plus_dm_smooth"] = df["plus_dm"].ewm(alpha=alpha, adjust=False).mean()
+    df["minus_dm_smooth"] = df["minus_dm"].ewm(alpha=alpha, adjust=False).mean()
 
-    df['plus_di'] = 100 * (df['plus_dm_smooth'] / df['atr'])
-    df['minus_di'] = 100 * (df['minus_dm_smooth'] / df['atr'])
-    df['dx'] = 100 * np.abs(df['plus_di'] - df['minus_di']) / (df['plus_di'] + df['minus_di'])
-    df['adx'] = df['dx'].ewm(alpha=alpha, adjust=False).mean()
+    df["plus_di"] = 100 * (df["plus_dm_smooth"] / df["atr"])
+    df["minus_di"] = 100 * (df["minus_dm_smooth"] / df["atr"])
+    df["dx"] = (
+        100 * np.abs(df["plus_di"] - df["minus_di"]) / (df["plus_di"] + df["minus_di"])
+    )
+    df["adx"] = df["dx"].ewm(alpha=alpha, adjust=False).mean()
 
     # 3. ENTRY SIGNALS (Donchian + Regime filter)
-    close_series = df['close'].fillna(method='ffill')
-    donchian_upper_series = df['donchian_upper'].fillna(method='ffill')
-    donchian_lower_series = df['donchian_lower'].fillna(method='ffill')
+    close_series = df["close"].fillna(method="ffill")
+    donchian_upper_series = df["donchian_upper"].fillna(method="ffill")
+    donchian_lower_series = df["donchian_lower"].fillna(method="ffill")
 
-    trending_mask = (df['adx'] > adx_threshold) & (np.maximum(df['plus_di'], df['minus_di']) >= di_threshold)
+    trending_mask = (df["adx"] > adx_threshold) & (
+        np.maximum(df["plus_di"], df["minus_di"]) >= di_threshold
+    )
 
-    df['long_entry'] = (close_series > donchian_upper_series) & trending_mask
-    df['short_entry'] = (close_series < donchian_lower_series) & trending_mask
+    df["long_entry"] = (close_series > donchian_upper_series) & trending_mask
+    df["short_entry"] = (close_series < donchian_lower_series) & trending_mask
 
     # 4. SL/TP como FRACCIONES (método correcto para vectorbt)
     point_value = 0.01  # Para XAUUSD: 1 punto = $0.01
@@ -143,22 +164,32 @@ def generate_signals(df, donchian_period=20, adx_period=14, adx_threshold=18, di
     tp_distance = tp_points * point_value
 
     # Convertir a porcentaje del precio (para que vectorbt los aplique correctamente)
-    df['sl_stop'] = sl_distance / df['close']
-    df['tp_stop'] = tp_distance / df['close']
+    df["sl_stop"] = sl_distance / df["close"]
+    df["tp_stop"] = tp_distance / df["close"]
 
     # 5. ESTADÍSTICAS
-    total_signals = df['long_entry'].sum() + df['short_entry'].sum()
-    logging.info(f"🎯 Señales generadas: {total_signals} ({df['long_entry'].sum()} longs, {df['short_entry'].sum()} shorts)")
+    total_signals = df["long_entry"].sum() + df["short_entry"].sum()
+    logging.info(
+        f"🎯 Señales generadas: {total_signals} ({df['long_entry'].sum()} longs, {df['short_entry'].sum()} shorts)"
+    )
 
     return df
 
 
-def run_backtest(df, initial_capital=10000, lot_size=0.01,
-                 donchian_period=20, momentum_period=None, sample_period=None,
-                 sl_points=150, tp_points=300, breakout_threshold=0.0):
+def run_backtest(
+    df,
+    initial_capital=10000,
+    lot_size=0.01,
+    donchian_period=20,
+    momentum_period=None,
+    sample_period=None,
+    sl_points=150,
+    tp_points=300,
+    breakout_threshold=0.0,
+):
     """
     Ejecuta backtest con VectorBT
-    
+
     Args:
         df: DataFrame con datos históricos
         initial_capital: Capital inicial en USD
@@ -169,7 +200,7 @@ def run_backtest(df, initial_capital=10000, lot_size=0.01,
         sl_points: Stop Loss en puntos
         tp_points: Take Profit en puntos
         breakout_threshold: Umbral adicional para confirmación de breakout (en múltiplos de ATR)
-    
+
     Returns:
         Portfolio object de vectorbt o None si error
     """
@@ -182,24 +213,24 @@ def run_backtest(df, initial_capital=10000, lot_size=0.01,
             adx_threshold=18,
             di_threshold=26,
             sl_points=sl_points,
-            tp_points=tp_points
+            tp_points=tp_points,
         )
 
         logging.info("🚀 Ejecutando backtest...")
 
         # PORTFOLIO con SL/TP nativos y costos realistas (método correcto)
         portfolio = vbt.Portfolio.from_signals(
-            close=df['close'],
-            entries=df['long_entry'],
-            short_entries=df['short_entry'],
-            sl_stop=df['sl_stop'],      # ✅ Stop Loss como fracción
-            tp_stop=df['tp_stop'],      # ✅ Take Profit como fracción
+            close=df["close"],
+            entries=df["long_entry"],
+            short_entries=df["short_entry"],
+            sl_stop=df["sl_stop"],  # ✅ Stop Loss como fracción
+            tp_stop=df["tp_stop"],  # ✅ Take Profit como fracción
             init_cash=initial_capital,
-            fees=0.002,                 # 0.2% comisión por operación (Exness Pro típico)
-            slippage=0.0003,            # 3 pips de slippage realista (XAUUSD spread 2-5 pips)
+            fees=0.002,  # 0.2% comisión por operación (Exness Pro típico)
+            slippage=0.0003,  # 3 pips de slippage realista (XAUUSD spread 2-5 pips)
             size=lot_size,
-            size_type='amount',         # Tamaño fijo en lotes
-            freq='1H'                   # ✅ IMPORTANTE: Para Sharpe Ratio correcto
+            size_type="amount",  # Tamaño fijo en lotes
+            freq="1H",  # ✅ IMPORTANTE: Para Sharpe Ratio correcto
         )
 
         # RESULTADOS
@@ -220,9 +251,9 @@ def print_results(portfolio, initial_capital):
     try:
         stats = portfolio.stats()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("🎯 RESULTADOS DEL BACKTEST - ESTRATEGIA DONCHIAN OPTIMIZADA")
-        print("="*70)
+        print("=" * 70)
 
         # Métricas principales
         total_return = portfolio.total_return() * 100
@@ -255,7 +286,11 @@ def print_results(portfolio, initial_capital):
             print("\n📈 ESTADÍSTICAS")
             print(f"   Ganancia Promedio:  ${avg_win:.2f}")
             print(f"   Pérdida Promedio:   ${avg_loss:.2f}")
-            print(f"   Ratio G/P:          {avg_win/avg_loss:.2f}" if avg_loss > 0 else "   Ratio G/P:          N/A")
+            print(
+                f"   Ratio G/P:          {avg_win / avg_loss:.2f}"
+                if avg_loss > 0
+                else "   Ratio G/P:          N/A"
+            )
 
         # EVALUACIÓN
         print("\n🎓 EVALUACIÓN")
@@ -265,7 +300,7 @@ def print_results(portfolio, initial_capital):
             "Profit Factor >1.5": profit_factor >= 1.5,
             "Max Drawdown <15%": max_dd <= 15,
             "Sharpe Ratio >1.0": sharpe >= 1.0,
-            "Trades >20": total_trades >= 20
+            "Trades >20": total_trades >= 20,
         }
 
         for criterion, passed in criteria.items():
@@ -284,7 +319,7 @@ def print_results(portfolio, initial_capital):
         else:
             print("   ❌ INSUFICIENTE - Revisar parámetros")
 
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
 
     except Exception as e:
         logging.error(f"Error imprimiendo resultados: {e}")
@@ -307,21 +342,31 @@ def save_results(portfolio):
         try:
             output_html = os.path.expanduser(r"C:\Users\edgar\MT5_backtest.html")
             with open(output_html, "w", encoding="utf-8") as f:
-                f.write("""<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Account History Report</title></head><body>""")
+                f.write(
+                    """<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Account History Report</title></head><body>"""
+                )
                 f.write("<h2>Account History Report</h2>")
-                f.write("<table><tr><th>From</th><td>{}</td></tr><tr><th>To</th><td>{}</td></tr><tr><th>Symbol</th><td>XAUUSD</td></tr></table>".format(trades['Entry Time'].min(), trades['Exit Time'].max()))
+                f.write(
+                    "<table><tr><th>From</th><td>{}</td></tr><tr><th>To</th><td>{}</td></tr><tr><th>Symbol</th><td>XAUUSD</td></tr></table>".format(
+                        trades["Entry Time"].min(), trades["Exit Time"].max()
+                    )
+                )
                 f.write("<h3>Deals</h3>")
-                f.write("<table><thead><tr><th>Ticket</th><th>Open Time</th><th>Type</th><th>Size</th><th>Symbol</th><th>Price</th><th>S/L</th><th>T/P</th><th>Close Time</th><th>Close Price</th><th>Commission</th><th>Taxes</th><th>Swap</th><th>Profit</th></tr></thead><tbody>")
+                f.write(
+                    "<table><thead><tr><th>Ticket</th><th>Open Time</th><th>Type</th><th>Size</th><th>Symbol</th><th>Price</th><th>S/L</th><th>T/P</th><th>Close Time</th><th>Close Price</th><th>Commission</th><th>Taxes</th><th>Swap</th><th>Profit</th></tr></thead><tbody>"
+                )
                 for i, row in trades.iterrows():
-                    open_time = row.get('Entry Time', '')
-                    close_time = row.get('Exit Time', '')
-                    entry_price = row.get('Entry Price', row.get('entry_price', 0.0))
-                    exit_price = row.get('Exit Price', row.get('exit_price', 0.0))
-                    pnl = float(row.get('Pnl', row.get('pnl', 0.0)))
-                    direction = str(row.get('Direction', row.get('direction', 'Long')))
-                    type_str = 'Buy' if direction.lower().startswith('l') else 'Sell'
+                    open_time = row.get("Entry Time", "")
+                    close_time = row.get("Exit Time", "")
+                    entry_price = row.get("Entry Price", row.get("entry_price", 0.0))
+                    exit_price = row.get("Exit Price", row.get("exit_price", 0.0))
+                    pnl = float(row.get("Pnl", row.get("pnl", 0.0)))
+                    direction = str(row.get("Direction", row.get("direction", "Long")))
+                    type_str = "Buy" if direction.lower().startswith("l") else "Sell"
                     size = 0.01
-                    f.write(f"<tr><td>{i}</td><td>{open_time}</td><td>{type_str}</td><td class='right'>{size:.2f}</td><td>XAUUSD</td><td class='right'>{entry_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td>{close_time}</td><td class='right'>{exit_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{pnl:.2f}</td></tr>")
+                    f.write(
+                        f"<tr><td>{i}</td><td>{open_time}</td><td>{type_str}</td><td class='right'>{size:.2f}</td><td>XAUUSD</td><td class='right'>{entry_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td>{close_time}</td><td class='right'>{exit_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{pnl:.2f}</td></tr>"
+                    )
                 f.write("</tbody></table></body></html>")
             logging.info(f"📁 HTML para QA guardado: {output_html}")
         except Exception as e:
@@ -367,40 +412,48 @@ def optimize_parameters(df, initial_capital=10000):
                         initial_capital=initial_capital,
                         donchian_period=donchian,
                         sl_points=sl,
-                        tp_points=tp
+                        tp_points=tp,
                     )
 
                     # Check if portfolio is valid and has sufficient trades
                     if portfolio is not None:
                         try:
                             # Safely extract trade count
-                            trade_count = getattr(portfolio.trades, 'count', lambda: 0)()
+                            trade_count = getattr(
+                                portfolio.trades, "count", lambda: 0
+                            )()
                             if trade_count >= 10:
                                 # Safely extract metrics
-                                sharpe = getattr(portfolio, 'sharpe_ratio', lambda: 0)()
-                                pf = getattr(portfolio.trades, 'profit_factor', lambda: 0)()
-                                wr = getattr(portfolio.trades, 'win_rate', lambda: 0)()
+                                sharpe = getattr(portfolio, "sharpe_ratio", lambda: 0)()
+                                pf = getattr(
+                                    portfolio.trades, "profit_factor", lambda: 0
+                                )()
+                                wr = getattr(portfolio.trades, "win_rate", lambda: 0)()
 
-                                results.append({
-                                    'donchian': donchian,
-                                    'sl': sl,
-                                    'tp': tp,
-                                    'sharpe': sharpe,
-                                    'profit_factor': pf,
-                                    'win_rate': wr,
-                                    'trades': trade_count
-                                })
+                                results.append(
+                                    {
+                                        "donchian": donchian,
+                                        "sl": sl,
+                                        "tp": tp,
+                                        "sharpe": sharpe,
+                                        "profit_factor": pf,
+                                        "win_rate": wr,
+                                        "trades": trade_count,
+                                    }
+                                )
                         except Exception:
                             # Skip this combination if there are issues
                             pass
 
                         # Make sure sharpe is defined
-                        current_sharpe = locals().get('sharpe', -999)
+                        current_sharpe = locals().get("sharpe", -999)
                         if current_sharpe > best_sharpe:
                             best_sharpe = current_sharpe
                             best_params = (donchian, sl, tp)
 
-                    logging.info(f"[{current}/{total_combinations}] Donchian={donchian}, SL={sl}, TP={tp}")
+                    logging.info(
+                        f"[{current}/{total_combinations}] Donchian={donchian}, SL={sl}, TP={tp}"
+                    )
 
                 except Exception as e:
                     logging.warning(f"Error en combinación {donchian}/{sl}/{tp}: {e}")
@@ -425,9 +478,9 @@ def optimize_parameters(df, initial_capital=10000):
 
 def main():
     """Función principal"""
-    logging.info("="*70)
+    logging.info("=" * 70)
     logging.info("🚀 BACKTEST - ESTRATEGIA DONCHIAN OPTIMIZADA PARA ORO")
-    logging.info("="*70)
+    logging.info("=" * 70)
 
     # Cargar datos
     df = load_data("XAUUSD", "H1", days_back=1825)  # ~5 años
@@ -440,9 +493,9 @@ def main():
         df,
         initial_capital=10000,
         lot_size=0.01,
-        donchian_period=20,    # Donchian actualizado
-        sl_points=150,         # SL acorde a XAUUSD
-        tp_points=300          # TP 1:2
+        donchian_period=20,  # Donchian actualizado
+        sl_points=150,  # SL acorde a XAUUSD
+        tp_points=300,  # TP 1:2
     )
 
     if portfolio:

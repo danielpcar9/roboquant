@@ -6,14 +6,22 @@ Test script for security components in RoboQuant trading system.
 import os
 import tempfile
 import time
-from services.security_manager import SecureCredentialManager, InputValidator, RateLimiter, sanitize_error_message, constant_time_compare, ip_whitelist
+from services.security_manager import (
+    SecureCredentialManager,
+    InputValidator,
+    RateLimiter,
+    sanitize_error_message,
+    constant_time_compare,
+    ip_whitelist,
+)
+
 
 def test_secure_credential_manager():
     """Test SecureCredentialManager functionality."""
     print("Testing SecureCredentialManager...")
 
     # Create a temporary .env file for testing
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
         f.write("TEST_LOGIN=123456\n")
         f.write("TEST_PASSWORD=secret123\n")
         f.write("TEST_SERVER=TestServer\n")
@@ -24,11 +32,11 @@ def test_secure_credential_manager():
         credential_manager = SecureCredentialManager(temp_env_path)
 
         # Test getting credentials
-        login = credential_manager.get_credential('TEST_LOGIN')
-        assert login == '123456', f"Expected '123456', got {login}"
+        login = credential_manager.get_credential("TEST_LOGIN")
+        assert login == "123456", f"Expected '123456', got {login}"
 
-        password = credential_manager.get_credential('TEST_PASSWORD')
-        assert password == 'secret123', f"Expected 'secret123', got {password}"
+        password = credential_manager.get_credential("TEST_PASSWORD")
+        assert password == "secret123", f"Expected 'secret123', got {password}"
 
         # Note: credential_exists checks internal tracking, not actual existence
         # Just test that we can get credentials without error
@@ -39,6 +47,7 @@ def test_secure_credential_manager():
     except Exception as e:
         print(f"✗ SecureCredentialManager tests failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
     finally:
@@ -48,16 +57,17 @@ def test_secure_credential_manager():
         except Exception:
             pass
 
+
 def test_input_validator():
     """Test InputValidator functionality."""
     print("Testing InputValidator...")
 
     try:
         # Test symbol validation
-        assert InputValidator.validate_symbol('XAUUSD')
-        assert InputValidator.validate_symbol('EURUSD')
-        assert not InputValidator.validate_symbol('')
-        assert not InputValidator.validate_symbol('INVALID SYMBOL')
+        assert InputValidator.validate_symbol("XAUUSD")
+        assert InputValidator.validate_symbol("EURUSD")
+        assert not InputValidator.validate_symbol("")
+        assert not InputValidator.validate_symbol("INVALID SYMBOL")
 
         # Test volume validation
         assert InputValidator.validate_volume(0.01)
@@ -74,16 +84,16 @@ def test_input_validator():
         assert not InputValidator.validate_price(1000001)  # Too large
 
         # Test order type validation
-        assert InputValidator.validate_order_type('BUY')
-        assert InputValidator.validate_order_type('SELL')
-        assert InputValidator.validate_order_type('buy')  # Case insensitive
-        assert InputValidator.validate_order_type('sell')  # Case insensitive
-        assert not InputValidator.validate_order_type('INVALID')
+        assert InputValidator.validate_order_type("BUY")
+        assert InputValidator.validate_order_type("SELL")
+        assert InputValidator.validate_order_type("buy")  # Case insensitive
+        assert InputValidator.validate_order_type("sell")  # Case insensitive
+        assert not InputValidator.validate_order_type("INVALID")
 
         # Test input sanitization
         sanitized = InputValidator.sanitize_input("test<script>alert('xss')</script>")
-        assert '<' not in sanitized and '>' not in sanitized
-        assert 'test' in sanitized
+        assert "<" not in sanitized and ">" not in sanitized
+        assert "test" in sanitized
 
         print("✓ InputValidator tests passed")
         return True
@@ -91,6 +101,7 @@ def test_input_validator():
     except Exception as e:
         print(f"✗ InputValidator tests failed: {e}")
         return False
+
 
 def test_rate_limiter():
     """Test RateLimiter functionality."""
@@ -125,20 +136,23 @@ def test_rate_limiter():
         print(f"✗ RateLimiter tests failed: {e}")
         return False
 
+
 def test_error_sanitization():
     """Test error message sanitization."""
     print("Testing error sanitization...")
 
     try:
         # Test sensitive information removal
-        error_msg = "Connection failed with password=secret123 and token=verylongtoken123456789"
+        error_msg = (
+            "Connection failed with password=secret123 and token=verylongtoken123456789"
+        )
         sanitized = sanitize_error_message(error_msg)
         print(f"Original: {error_msg}")
         print(f"Sanitized: {sanitized}")
-        assert 'secret123' not in sanitized
-        assert 'verylongtoken123456789' not in sanitized
+        assert "secret123" not in sanitized
+        assert "verylongtoken123456789" not in sanitized
         # Check that sanitization occurred
-        assert '***' in sanitized
+        assert "***" in sanitized
 
         # Test long number sequence removal
         error_msg = "Error code 1234567890 occurred"
@@ -154,8 +168,10 @@ def test_error_sanitization():
     except Exception as e:
         print(f"✗ Error sanitization tests failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def test_constant_time_compare():
     """Test constant time string comparison."""
@@ -178,13 +194,14 @@ def test_constant_time_compare():
         print(f"✗ Constant time comparison tests failed: {e}")
         return False
 
+
 def test_ip_whitelist():
     """Test IP whitelist functionality."""
     print("Testing IP whitelist...")
 
     try:
         # Test with localhost IPs
-        allowed_ips = ['127.0.0.1', '::1']
+        allowed_ips = ["127.0.0.1", "::1"]
 
         # This test is limited since we can't easily simulate Flask requests
         # but we can at least verify the decorator can be created
@@ -198,6 +215,7 @@ def test_ip_whitelist():
         print(f"✗ IP whitelist tests failed: {e}")
         return False
 
+
 def main():
     """Run all security tests."""
     print("Running security component tests...\n")
@@ -208,7 +226,7 @@ def main():
         test_rate_limiter,
         test_error_sanitization,
         test_constant_time_compare,
-        test_ip_whitelist
+        test_ip_whitelist,
     ]
 
     passed = 0
@@ -233,6 +251,7 @@ def main():
     else:
         print("❌ Some security tests failed!")
         return False
+
 
 if __name__ == "__main__":
     success = main()

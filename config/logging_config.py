@@ -32,7 +32,7 @@ class LoggerSetup:
             return logger
 
         # Create logs directory if it doesn't exist
-        log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+        log_dir = os.path.join(os.path.dirname(__file__), "logs")
         os.makedirs(log_dir, exist_ok=True)
 
         # Set logger level
@@ -43,8 +43,8 @@ class LoggerSetup:
 
         # Formatter
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            "%(asctime)s - %(name)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
 
         # Console handler
@@ -54,18 +54,22 @@ class LoggerSetup:
         logger.addHandler(console_handler)
 
         # File handler with rotation
-        log_file = os.path.join(log_dir, f'roboquant_{datetime.now().strftime("%Y%m%d")}.log')
+        log_file = os.path.join(
+            log_dir, f"roboquant_{datetime.now().strftime('%Y%m%d')}.log"
+        )
         file_handler = logging.handlers.RotatingFileHandler(
             log_file,
             maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5
+            backupCount=5,
         )
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 
         # Error file handler
-        error_log_file = os.path.join(log_dir, f'roboquant_errors_{datetime.now().strftime("%Y%m%d")}.log')
+        error_log_file = os.path.join(
+            log_dir, f"roboquant_errors_{datetime.now().strftime('%Y%m%d')}.log"
+        )
         error_handler = logging.FileHandler(error_log_file)
         error_handler.setLevel(logging.ERROR)
         error_handler.setFormatter(formatter)

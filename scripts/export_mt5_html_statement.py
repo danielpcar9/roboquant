@@ -159,7 +159,13 @@ def main():
 
     # Write HTML
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        f.write(HTML_HEADER.format(start=start.strftime("%Y.%m.%d %H:%M"), end=end.strftime("%Y.%m.%d %H:%M"), symbol=(SYMBOL_FILTER or "ALL")))
+        f.write(
+            HTML_HEADER.format(
+                start=start.strftime("%Y.%m.%d %H:%M"),
+                end=end.strftime("%Y.%m.%d %H:%M"),
+                symbol=(SYMBOL_FILTER or "ALL"),
+            )
+        )
         for row in html_rows:
             f.write(row + "\n")
         f.write(HTML_FOOTER)
@@ -169,6 +175,7 @@ def main():
     print(f"   Operaciones incluidas: {len(html_rows)}")
     if SYMBOL_FILTER:
         print(f"   Símbolo: {SYMBOL_FILTER}")
+
 
 if __name__ == "__main__":
     main()

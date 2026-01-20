@@ -15,11 +15,13 @@ import traceback
 import json
 
 # Configure logging for error handling
-error_logger = logging.getLogger('error_handling')
+error_logger = logging.getLogger("error_handling")
 error_logger.setLevel(logging.INFO)
 if not error_logger.handlers:
     handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s - ERROR_HANDLING - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - ERROR_HANDLING - %(levelname)s - %(message)s"
+    )
     handler.setFormatter(formatter)
     error_logger.addHandler(handler)
 
@@ -27,16 +29,19 @@ if not error_logger.handlers:
 # Custom Exception Hierarchy
 class RoboQuantError(Exception):
     """Base exception for all RoboQuant errors."""
+
     pass
 
 
 class MT5ConnectionError(RoboQuantError):
     """Exception raised when MT5 connection fails."""
+
     pass
 
 
 class OrderExecutionError(RoboQuantError):
     """Exception raised when order execution fails."""
+
     def __init__(self, message: str, retcode: Optional[int] = None):
         super().__init__(message)
         self.retcode = retcode
@@ -44,6 +49,7 @@ class OrderExecutionError(RoboQuantError):
 
 class SafetyViolationError(RoboQuantError):
     """Exception raised when safety checks fail."""
+
     def __init__(self, message: str, violation_type: str):
         super().__init__(message)
         self.violation_type = violation_type
@@ -51,26 +57,31 @@ class SafetyViolationError(RoboQuantError):
 
 class CircuitBreakerError(RoboQuantError):
     """Exception raised when circuit breaker is open."""
+
     pass
 
 
 class ConfigurationError(RoboQuantError):
     """Exception raised when configuration is invalid."""
+
     pass
 
 
 class DataError(RoboQuantError):
     """Exception raised when data processing fails."""
+
     pass
 
 
 class NetworkError(RoboQuantError):
     """Exception raised when network operations fail."""
+
     pass
 
 
 class CircuitState(Enum):
     """States for the circuit breaker."""
+
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -79,20 +90,24 @@ class CircuitState(Enum):
 class CircuitBreaker:
     """
     Circuit breaker implementation to prevent cascading failures.
-    
+
     The circuit breaker has three states:
     - CLOSED: Normal operation, requests are allowed
     - OPEN: Failure threshold exceeded, requests are blocked
     - HALF_OPEN: Testing if service is restored
     """
 
-    def __init__(self,
-                 failure_threshold: int = 3,
-                 timeout: int = 60,
-                 expected_exception: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception):
+    def __init__(
+        self,
+        failure_threshold: int = 3,
+        timeout: int = 60,
+        expected_exception: Union[
+            Type[Exception], Tuple[Type[Exception], ...]
+        ] = Exception,
+    ):
         """
         Initialize the circuit breaker.
-        
+
         Args:
             failure_threshold: Number of failures before opening circuit
             timeout: Time in seconds before attempting to close circuit
@@ -108,15 +123,15 @@ class CircuitBreaker:
     def call(self, func: Callable, *args, **kwargs) -> Any:
         """
         Call a function through the circuit breaker.
-        
+
         Args:
             func: Function to call
             *args: Positional arguments for the function
             **kwargs: Keyword arguments for the function
-            
+
         Returns:
             Result of the function call
-            
+
         Raises:
             CircuitBreakerError: If circuit is open
             Exception: Any exception raised by the function (if circuit allows it)
@@ -133,8 +148,10 @@ class CircuitBreaker:
             return result
         except Exception as e:
             # Check if this exception matches our expected exception types
-            if isinstance(e, self.expected_exception) or \
-               (isinstance(self.expected_exception, tuple) and isinstance(e, self.expected_exception)):
+            if isinstance(e, self.expected_exception) or (
+                isinstance(self.expected_exception, tuple)
+                and isinstance(e, self.expected_exception)
+            ):
                 self._on_failure()
                 raise e
             else:
@@ -162,7 +179,9 @@ class CircuitBreaker:
 
         if self.failure_count >= self.failure_threshold:
             self.state = CircuitState.OPEN
-            error_logger.warning(f"Circuit breaker opened after {self.failure_count} failures")
+            error_logger.warning(
+                f"Circuit breaker opened after {self.failure_count} failures"
+            )
 
     def is_closed(self) -> bool:
         """Check if circuit is closed."""
@@ -181,19 +200,22 @@ class CircuitBreaker:
         return self.state
 
 
-def retry_with_exponential_backoff(max_retries: int = 3,
-                                 base_delay: float = 1.0,
-                                 max_delay: float = 60.0,
-                                 exceptions: Tuple[Type[Exception], ...] = (Exception,)):
+def retry_with_exponential_backoff(
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0,
+    exceptions: Tuple[Type[Exception], ...] = (Exception,),
+):
     """
     Decorator for retrying function calls with exponential backoff.
-    
+
     Args:
         max_retries: Maximum number of retry attempts
         base_delay: Base delay in seconds (will be multiplied by 2^attempt)
         max_delay: Maximum delay between retries
         exceptions: Tuple of exceptions that trigger retry
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -207,7 +229,7 @@ def retry_with_exponential_backoff(max_retries: int = 3,
 
                     if attempt < max_retries:
                         # Calculate delay with exponential backoff and jitter
-                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        delay = min(base_delay * (2**attempt), max_delay)
                         jitter = random.uniform(0, delay * 0.1)  # 10% jitter
                         total_delay = delay + jitter
 
@@ -221,58 +243,56 @@ def retry_with_exponential_backoff(max_retries: int = 3,
                         error_logger.error(
                             f"All {max_retries + 1} attempts failed for {func.__name__}: {str(e)}"
                         )
-                        error_logger.debug(
-                            f"Full traceback:\n{traceback.format_exc()}"
-                        )
+                        error_logger.debug(f"Full traceback:\n{traceback.format_exc()}")
 
             # If we get here, all retries failed
             if last_exception is not None:
                 raise last_exception
             else:
-                raise RuntimeError("All retry attempts failed but no exception was captured")
+                raise RuntimeError(
+                    "All retry attempts failed but no exception was captured"
+                )
+
         return wrapper
+
     return decorator
 
 
 # Predefined circuit breakers for common MT5 operations
 mt5_connection_circuit = CircuitBreaker(
-    failure_threshold=3,
-    timeout=60,
-    expected_exception=MT5ConnectionError
+    failure_threshold=3, timeout=60, expected_exception=MT5ConnectionError
 )
 
 order_execution_circuit = CircuitBreaker(
-    failure_threshold=5,
-    timeout=30,
-    expected_exception=OrderExecutionError
+    failure_threshold=5, timeout=30, expected_exception=OrderExecutionError
 )
 
 market_data_circuit = CircuitBreaker(
-    failure_threshold=3,
-    timeout=30,
-    expected_exception=(ConnectionError, TimeoutError)
+    failure_threshold=3, timeout=30, expected_exception=(ConnectionError, TimeoutError)
 )
 
 webhook_circuit = CircuitBreaker(
     failure_threshold=3,
     timeout=30,
-    expected_exception=(NetworkError, ConnectionError, TimeoutError)
+    expected_exception=(NetworkError, ConnectionError, TimeoutError),
 )
 
 
 def safe_mt5_call(func: Callable):
     """
     Decorator to wrap MT5 calls with circuit breaker and retry logic.
-    
+
     Args:
         func: MT5 function to wrap
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         # Determine which circuit breaker to use based on function name
-        if 'initialize' in func.__name__ or 'login' in func.__name__:
+        func_name = getattr(func, "__name__", "")
+        if "initialize" in func_name or "login" in func_name:
             circuit = mt5_connection_circuit
-        elif 'order' in func.__name__ or 'position' in func.__name__:
+        elif "order" in func_name or "position" in func_name:
             circuit = order_execution_circuit
         else:
             circuit = market_data_circuit
@@ -282,7 +302,12 @@ def safe_mt5_call(func: Callable):
             max_retries=3,
             base_delay=1.0,
             max_delay=30.0,
-            exceptions=(MT5ConnectionError, OrderExecutionError, ConnectionError, TimeoutError)
+            exceptions=(
+                MT5ConnectionError,
+                OrderExecutionError,
+                ConnectionError,
+                TimeoutError,
+            ),
         )
         def protected_call():
             return circuit.call(func, *args, **kwargs)
@@ -295,37 +320,46 @@ def safe_mt5_call(func: Callable):
 def handle_exception(func: Callable):
     """
     Decorator to provide centralized exception handling.
-    
+
     Args:
         func: Function to wrap with exception handling
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except ConfigurationError as e:
-            error_logger.error(f"Configuration error in {func.__name__}: {str(e)}")
+            func_name = getattr(func, "__name__", "unknown")
+            error_logger.error(f"Configuration error in {func_name}: {str(e)}")
             raise
         except SafetyViolationError as e:
-            error_logger.error(f"Safe violation in {func.__name__}: {str(e)}")
+            func_name = getattr(func, "__name__", "unknown")
+            error_logger.error(f"Safe violation in {func_name}: {str(e)}")
             raise
         except MT5ConnectionError as e:
-            error_logger.error(f"MT5 connection error in {func.__name__}: {str(e)}")
+            func_name = getattr(func, "__name__", "unknown")
+            error_logger.error(f"MT5 connection error in {func_name}: {str(e)}")
             raise
         except OrderExecutionError as e:
-            error_logger.error(f"Order execution error in {func.__name__}: {str(e)}")
+            func_name = getattr(func, "__name__", "unknown")
+            error_logger.error(f"Order execution error in {func_name}: {str(e)}")
             raise
         except CircuitBreakerError as e:
-            error_logger.error(f"Circuit breaker error in {func.__name__}: {str(e)}")
+            func_name = getattr(func, "__name__", "unknown")
+            error_logger.error(f"Circuit breaker error in {func_name}: {str(e)}")
             raise
         except DataError as e:
-            error_logger.error(f"Data error in {func.__name__}: {str(e)}")
+            func_name = getattr(func, "__name__", "unknown")
+            error_logger.error(f"Data error in {func_name}: {str(e)}")
             raise
         except NetworkError as e:
-            error_logger.error(f"Network error in {func.__name__}: {str(e)}")
+            func_name = getattr(func, "__name__", "unknown")
+            error_logger.error(f"Network error in {func_name}: {str(e)}")
             raise
         except Exception as e:
-            error_logger.error(f"Unexpected error in {func.__name__}: {str(e)}")
+            func_name = getattr(func, "__name__", "unknown")
+            error_logger.error(f"Unexpected error in {func_name}: {str(e)}")
             error_logger.debug(f"Full traceback:\n{traceback.format_exc()}")
             raise
 
@@ -409,14 +443,14 @@ MT5_ERROR_CODES = {
     10073: "Invalid trade operation for rsi calculation mode",
     10074: "Invalid trade operation for sar calculation mode",
     10075: "Invalid trade operation for stochastics calculation mode",
-    10076: "Invalid trade operation for wpr calculation mode"
+    10076: "Invalid trade operation for wpr calculation mode",
 }
 
 
 def log_error_to_file(error_info: dict, log_file: str = "error_log.json"):
     """
     Log error information to a JSON file for later analysis.
-    
+
     Args:
         error_info: Dictionary containing error information
         log_file: Path to the log file
@@ -425,7 +459,7 @@ def log_error_to_file(error_info: dict, log_file: str = "error_log.json"):
         # Read existing log file if it exists
         existing_logs = []
         if os.path.exists(log_file):
-            with open(log_file, 'r') as f:
+            with open(log_file, "r") as f:
                 try:
                     existing_logs = json.load(f)
                 except json.JSONDecodeError:
@@ -439,7 +473,7 @@ def log_error_to_file(error_info: dict, log_file: str = "error_log.json"):
             existing_logs = existing_logs[-1000:]
 
         # Write back to file
-        with open(log_file, 'w') as f:
+        with open(log_file, "w") as f:
             json.dump(existing_logs, f, indent=2)
     except Exception as e:
         error_logger.error(f"Failed to log error to file: {e}")

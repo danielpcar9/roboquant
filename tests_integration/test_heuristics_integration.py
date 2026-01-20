@@ -9,9 +9,12 @@ from analysis.trade_scorer import TradeScorer
 from risk.adaptive_risk import adaptive_risk_manager
 from core.session_filter import session_filter
 
+
 def test_heuristics_integration():
     """Test the integration of all heuristic components"""
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s"
+    )
 
     print("=== Testing Heuristics Integration ===\n")
 
@@ -28,10 +31,12 @@ def test_heuristics_integration():
         current_momentum=2.5,
         historical_momentum=1.5,
         atr=5.2,
-        avg_atr=4.8
+        avg_atr=4.8,
     )
 
-    print(f"   High quality trade score: {quality1['score']}/100 (Grade: {quality1['grade']})")
+    print(
+        f"   High quality trade score: {quality1['score']}/100 (Grade: {quality1['grade']})"
+    )
     print(f"   Trade recommended: {quality1['trade_recommended']}")
 
     # Low quality trade setup
@@ -43,10 +48,12 @@ def test_heuristics_integration():
         current_momentum=1.2,  # Lower momentum
         historical_momentum=1.5,
         atr=3.0,  # Lower volatility
-        avg_atr=4.8
+        avg_atr=4.8,
     )
 
-    print(f"   Low quality trade score: {quality2['score']}/100 (Grade: {quality2['grade']})")
+    print(
+        f"   Low quality trade score: {quality2['score']}/100 (Grade: {quality2['grade']})"
+    )
     print(f"   Trade recommended: {quality2['trade_recommended']}\n")
 
     # 2. Test Market Regime Detector
@@ -67,7 +74,7 @@ def test_heuristics_integration():
         entry_price=1950.0,
         order_type="BUY",
         atr=5.2,
-        risk_reward_ratio=2.0
+        risk_reward_ratio=2.0,
     )
 
     print(f"   Dynamic stops for BUY order: SL={sl:.2f}, TP={tp:.2f}")
@@ -75,9 +82,7 @@ def test_heuristics_integration():
     # Adjust position size by volatility
     base_lots = 0.1
     adjusted_lots = adaptive_risk_manager.adjust_position_size_by_volatility(
-        base_lots=base_lots,
-        atr=5.2,
-        avg_atr=4.8
+        base_lots=base_lots, atr=5.2, avg_atr=4.8
     )
 
     print(f"   Position size adjustment: {base_lots:.2f} -> {adjusted_lots:.2f}\n")
@@ -90,7 +95,7 @@ def test_heuristics_integration():
     # 2. Current session is favorable
     # 3. Market regime is trending (if we had real data)
 
-    if quality1['score'] >= 70 and is_favorable:
+    if quality1["score"] >= 70 and is_favorable:
         print("   ✅ ALL CONDITIONS MET - EXECUTE TRADE")
         print(f"      - Quality Score: {quality1['score']}/100")
         print(f"      - Session: {current_session} (favorable)")
@@ -98,10 +103,11 @@ def test_heuristics_integration():
         print(f"      - Dynamic Stops: SL={sl:.2f}, TP={tp:.2f}")
     else:
         print("   ❌ CONDITIONS NOT MET - SKIP TRADE")
-        if quality1['score'] < 70:
+        if quality1["score"] < 70:
             print(f"      - Quality Score too low: {quality1['score']}/100")
         if not is_favorable:
             print(f"      - Session not favorable: {current_session}")
+
 
 if __name__ == "__main__":
     test_heuristics_integration()

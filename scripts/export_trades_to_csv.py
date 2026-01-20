@@ -16,8 +16,7 @@ from typing import Optional, List, Dict
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 # ============================================================================
@@ -62,7 +61,9 @@ class TradeExporter:
         from_date = datetime.now() - timedelta(days=self.days_back)
         to_date = datetime.now()
 
-        logging.info(f"Fetching deals from {from_date.strftime('%Y-%m-%d')} to {to_date.strftime('%Y-%m-%d')}")
+        logging.info(
+            f"Fetching deals from {from_date.strftime('%Y-%m-%d')} to {to_date.strftime('%Y-%m-%d')}"
+        )
 
         deals = mt5.history_deals_get(from_date, to_date)
 
@@ -78,7 +79,9 @@ class TradeExporter:
 
         if self.magic_number is not None:
             deals = [d for d in deals if d.magic == self.magic_number]
-            logging.info(f"Filtered to {len(deals)} deals with magic number {self.magic_number}")
+            logging.info(
+                f"Filtered to {len(deals)} deals with magic number {self.magic_number}"
+            )
 
         return deals
 
@@ -94,26 +97,29 @@ class TradeExporter:
 
             if position_id not in positions:
                 positions[position_id] = {
-                    'entry_deal': None,
-                    'exit_deal': None,
-                    'commission': 0.0,
-                    'swap': 0.0
+                    "entry_deal": None,
+                    "exit_deal": None,
+                    "commission": 0.0,
+                    "swap": 0.0,
                 }
 
-            positions[position_id]['commission'] += deal.commission
-            positions[position_id]['swap'] += deal.swap
+            positions[position_id]["commission"] += deal.commission
+            positions[position_id]["swap"] += deal.swap
 
             if deal.entry == mt5.DEAL_ENTRY_IN:
-                positions[position_id]['entry_deal'] = deal
+                positions[position_id]["entry_deal"] = deal
             elif deal.entry == mt5.DEAL_ENTRY_OUT:
-                positions[position_id]['exit_deal'] = deal
+                positions[position_id]["exit_deal"] = deal
 
         complete_positions = {
-            pos_id: data for pos_id, data in positions.items()
-            if data['entry_deal'] is not None and data['exit_deal'] is not None
+            pos_id: data
+            for pos_id, data in positions.items()
+            if data["entry_deal"] is not None and data["exit_deal"] is not None
         }
 
-        logging.info(f"Found {len(complete_positions)} complete trades (with entry and exit)")
+        logging.info(
+            f"Found {len(complete_positions)} complete trades (with entry and exit)"
+        )
         return complete_positions
 
     def create_trade_dataframe(self, positions: Dict[int, Dict]) -> pd.DataFrame:
@@ -121,33 +127,37 @@ class TradeExporter:
         trades = []
 
         for position_id, data in positions.items():
-            entry = data['entry_deal']
-            exit_deal = data['exit_deal']
+            entry = data["entry_deal"]
+            exit_deal = data["exit_deal"]
 
             trade_type = 0 if entry.type == mt5.ORDER_TYPE_BUY else 1
             profit = exit_deal.profit
 
             trade = {
-                'Ticket': position_id,
-                'Open Time': datetime.fromtimestamp(entry.time).strftime('%Y.%m.%d %H:%M'),
-                'Type': trade_type,
-                'Size': entry.volume,
-                'Item': entry.symbol,
-                'Entry Price': round(entry.price, 5),
-                'S / L': 0.0,
-                'T / P': 0.0,
-                'Close Time': datetime.fromtimestamp(exit_deal.time).strftime('%Y.%m.%d %H:%M'),
-                'Exit Price': round(exit_deal.price, 5),
-                'Commission': round(data['commission'], 2),
-                'Taxes': 0.0,
-                'Swap': round(data['swap'], 2),
-                'Profit': round(profit, 2)
+                "Ticket": position_id,
+                "Open Time": datetime.fromtimestamp(entry.time).strftime(
+                    "%Y.%m.%d %H:%M"
+                ),
+                "Type": trade_type,
+                "Size": entry.volume,
+                "Item": entry.symbol,
+                "Entry Price": round(entry.price, 5),
+                "S / L": 0.0,
+                "T / P": 0.0,
+                "Close Time": datetime.fromtimestamp(exit_deal.time).strftime(
+                    "%Y.%m.%d %H:%M"
+                ),
+                "Exit Price": round(exit_deal.price, 5),
+                "Commission": round(data["commission"], 2),
+                "Taxes": 0.0,
+                "Swap": round(data["swap"], 2),
+                "Profit": round(profit, 2),
             }
 
             trades.append(trade)
 
         df = pd.DataFrame(trades)
-        df = df.sort_values('Open Time')
+        df = df.sort_values("Open Time")
         return df
 
     def calculate_statistics(self, df: pd.DataFrame) -> Dict:
@@ -156,45 +166,45 @@ class TradeExporter:
 
         if total_trades == 0:
             return {
-                'total_trades': 0,
-                'win_rate': 0.0,
-                'net_profit': 0.0,
-                'profit_factor': 0.0,
-                'avg_win': 0.0,
-                'avg_loss': 0.0
+                "total_trades": 0,
+                "win_rate": 0.0,
+                "net_profit": 0.0,
+                "profit_factor": 0.0,
+                "avg_win": 0.0,
+                "avg_loss": 0.0,
             }
 
-        winning_trades = df[df['Profit'] > 0]
-        losing_trades = df[df['Profit'] < 0]
+        winning_trades = df[df["Profit"] > 0]
+        losing_trades = df[df["Profit"] < 0]
 
         win_count = len(winning_trades)
         loss_count = len(losing_trades)
         win_rate = (win_count / total_trades) * 100 if total_trades > 0 else 0.0
 
-        total_profit = df['Profit'].sum()
-        gross_profit = winning_trades['Profit'].sum() if win_count > 0 else 0.0
-        gross_loss = abs(losing_trades['Profit'].sum()) if loss_count > 0 else 0.0
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+        total_profit = df["Profit"].sum()
+        gross_profit = winning_trades["Profit"].sum() if win_count > 0 else 0.0
+        gross_loss = abs(losing_trades["Profit"].sum()) if loss_count > 0 else 0.0
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
 
-        avg_win = winning_trades['Profit'].mean() if win_count > 0 else 0.0
-        avg_loss = losing_trades['Profit'].mean() if loss_count > 0 else 0.0
+        avg_win = winning_trades["Profit"].mean() if win_count > 0 else 0.0
+        avg_loss = losing_trades["Profit"].mean() if loss_count > 0 else 0.0
 
         return {
-            'total_trades': total_trades,
-            'win_count': win_count,
-            'loss_count': loss_count,
-            'win_rate': win_rate,
-            'net_profit': total_profit,
-            'gross_profit': gross_profit,
-            'gross_loss': gross_loss,
-            'profit_factor': profit_factor,
-            'avg_win': avg_win,
-            'avg_loss': avg_loss
+            "total_trades": total_trades,
+            "win_count": win_count,
+            "loss_count": loss_count,
+            "win_rate": win_rate,
+            "net_profit": total_profit,
+            "gross_profit": gross_profit,
+            "gross_loss": gross_loss,
+            "profit_factor": profit_factor,
+            "avg_win": avg_win,
+            "avg_loss": avg_loss,
         }
 
     def generate_html_statement(self, df: pd.DataFrame, stats: Dict) -> str:
         """Generate HTML statement in MT4/MT5 format"""
-        html = '''<!DOCTYPE html>
+        html = """<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -228,43 +238,43 @@ class TradeExporter:
             <th>Swap</th>
             <th>Profit</th>
         </tr>
-'''
+"""
 
         for _, row in df.iterrows():
-            profit_class = 'profit' if row['Profit'] > 0 else 'loss'
-            trade_type_str = 'buy' if row['Type'] == 0 else 'sell'
+            profit_class = "profit" if row["Profit"] > 0 else "loss"
+            trade_type_str = "buy" if row["Type"] == 0 else "sell"
 
             html += f'''        <tr>
-            <td>{row['Ticket']}</td>
-            <td>{row['Open Time']}</td>
+            <td>{row["Ticket"]}</td>
+            <td>{row["Open Time"]}</td>
             <td>{trade_type_str}</td>
-            <td>{row['Size']}</td>
-            <td>{row['Item']}</td>
-            <td>{row['Price']}</td>
-            <td>{row['S / L']}</td>
-            <td>{row['T / P']}</td>
-            <td>{row['Close Time']}</td>
-            <td>{row['Price']}</td>
-            <td>{row['Commission']}</td>
-            <td>{row['Taxes']}</td>
-            <td>{row['Swap']}</td>
-            <td class="{profit_class}">{row['Profit']:.2f}</td>
+            <td>{row["Size"]}</td>
+            <td>{row["Item"]}</td>
+            <td>{row["Price"]}</td>
+            <td>{row["S / L"]}</td>
+            <td>{row["T / P"]}</td>
+            <td>{row["Close Time"]}</td>
+            <td>{row["Price"]}</td>
+            <td>{row["Commission"]}</td>
+            <td>{row["Taxes"]}</td>
+            <td>{row["Swap"]}</td>
+            <td class="{profit_class}">{row["Profit"]:.2f}</td>
         </tr>
 '''
 
         html += f'''    </table>
     <h2>Summary</h2>
     <table style="width: 50%;">
-        <tr><td><b>Total Trades:</b></td><td>{stats['total_trades']}</td></tr>
-        <tr><td><b>Winning Trades:</b></td><td>{stats['win_count']}</td></tr>
-        <tr><td><b>Losing Trades:</b></td><td>{stats['loss_count']}</td></tr>
-        <tr><td><b>Win Rate:</b></td><td>{stats['win_rate']:.2f}%</td></tr>
-        <tr><td><b>Net Profit:</b></td><td class="{'profit' if stats['net_profit'] > 0 else 'loss'}">${stats['net_profit']:.2f}</td></tr>
-        <tr><td><b>Gross Profit:</b></td><td class="profit">${stats['gross_profit']:.2f}</td></tr>
-        <tr><td><b>Gross Loss:</b></td><td class="loss">${stats['gross_loss']:.2f}</td></tr>
-        <tr><td><b>Profit Factor:</b></td><td>{stats['profit_factor']:.2f}</td></tr>
-        <tr><td><b>Average Win:</b></td><td class="profit">${stats['avg_win']:.2f}</td></tr>
-        <tr><td><b>Average Loss:</b></td><td class="loss">${stats['avg_loss']:.2f}</td></tr>
+        <tr><td><b>Total Trades:</b></td><td>{stats["total_trades"]}</td></tr>
+        <tr><td><b>Winning Trades:</b></td><td>{stats["win_count"]}</td></tr>
+        <tr><td><b>Losing Trades:</b></td><td>{stats["loss_count"]}</td></tr>
+        <tr><td><b>Win Rate:</b></td><td>{stats["win_rate"]:.2f}%</td></tr>
+        <tr><td><b>Net Profit:</b></td><td class="{"profit" if stats["net_profit"] > 0 else "loss"}">${stats["net_profit"]:.2f}</td></tr>
+        <tr><td><b>Gross Profit:</b></td><td class="profit">${stats["gross_profit"]:.2f}</td></tr>
+        <tr><td><b>Gross Loss:</b></td><td class="loss">${stats["gross_loss"]:.2f}</td></tr>
+        <tr><td><b>Profit Factor:</b></td><td>{stats["profit_factor"]:.2f}</td></tr>
+        <tr><td><b>Average Win:</b></td><td class="profit">${stats["avg_win"]:.2f}</td></tr>
+        <tr><td><b>Average Loss:</b></td><td class="loss">${stats["avg_loss"]:.2f}</td></tr>
     </table>
 </body>
 </html>
@@ -278,7 +288,9 @@ class TradeExporter:
         print("=" * 70)
         print("Configuration:")
         print(f"  Days back: {self.days_back}")
-        print(f"  Magic number filter: {self.magic_number if self.magic_number else 'None (all trades)'}")
+        print(
+            f"  Magic number filter: {self.magic_number if self.magic_number else 'None (all trades)'}"
+        )
         print(f"  Output file: {self.output_file}")
         print("=" * 70 + "\n")
 
@@ -297,16 +309,20 @@ class TradeExporter:
             positions = self.group_deals_by_position(deals)
 
             if len(positions) == 0:
-                logging.warning("No complete trades found (trades with both entry and exit).")
+                logging.warning(
+                    "No complete trades found (trades with both entry and exit)."
+                )
                 return False
 
             df = self.create_trade_dataframe(positions)
             stats = self.calculate_statistics(df)
 
             html_content = self.generate_html_statement(df, stats)
-            with open(self.output_file, 'w', encoding='utf-8') as f:
+            with open(self.output_file, "w", encoding="utf-8") as f:
                 f.write(html_content)
-            logging.info(f"Successfully exported {len(df)} trades to {self.output_file}")
+            logging.info(
+                f"Successfully exported {len(df)} trades to {self.output_file}"
+            )
 
             print_statistics(stats)
             print_import_instructions(self.output_file)
@@ -316,6 +332,7 @@ class TradeExporter:
         except Exception as e:
             logging.error(f"Error during export: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -330,7 +347,9 @@ def initialize_mt5() -> bool:
     return exporter.initialize_mt5()
 
 
-def get_deals_history(days_back: int, magic_number: Optional[int] = None) -> Optional[List]:
+def get_deals_history(
+    days_back: int, magic_number: Optional[int] = None
+) -> Optional[List]:
     """Legacy function for backward compatibility"""
     exporter = TradeExporter(days_back, magic_number)
     return exporter.get_deals_history()
@@ -356,17 +375,17 @@ def calculate_statistics(df: pd.DataFrame) -> Dict:
 
     if total_trades == 0:
         return {
-            'total_trades': 0,
-            'win_rate': 0.0,
-            'net_profit': 0.0,
-            'profit_factor': 0.0,
-            'avg_win': 0.0,
-            'avg_loss': 0.0
+            "total_trades": 0,
+            "win_rate": 0.0,
+            "net_profit": 0.0,
+            "profit_factor": 0.0,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
         }
 
     # Calculate wins and losses
-    winning_trades = df[df['Profit'] > 0]
-    losing_trades = df[df['Profit'] < 0]
+    winning_trades = df[df["Profit"] > 0]
+    losing_trades = df[df["Profit"] < 0]
 
     win_count = len(winning_trades)
     loss_count = len(losing_trades)
@@ -374,26 +393,26 @@ def calculate_statistics(df: pd.DataFrame) -> Dict:
     win_rate = (win_count / total_trades) * 100 if total_trades > 0 else 0.0
 
     # Calculate profit metrics
-    total_profit = df['Profit'].sum()
-    gross_profit = winning_trades['Profit'].sum() if win_count > 0 else 0.0
-    gross_loss = abs(losing_trades['Profit'].sum()) if loss_count > 0 else 0.0
+    total_profit = df["Profit"].sum()
+    gross_profit = winning_trades["Profit"].sum() if win_count > 0 else 0.0
+    gross_loss = abs(losing_trades["Profit"].sum()) if loss_count > 0 else 0.0
 
-    profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
 
-    avg_win = winning_trades['Profit'].mean() if win_count > 0 else 0.0
-    avg_loss = losing_trades['Profit'].mean() if loss_count > 0 else 0.0
+    avg_win = winning_trades["Profit"].mean() if win_count > 0 else 0.0
+    avg_loss = losing_trades["Profit"].mean() if loss_count > 0 else 0.0
 
     return {
-        'total_trades': total_trades,
-        'win_count': win_count,
-        'loss_count': loss_count,
-        'win_rate': win_rate,
-        'net_profit': total_profit,
-        'gross_profit': gross_profit,
-        'gross_loss': gross_loss,
-        'profit_factor': profit_factor,
-        'avg_win': avg_win,
-        'avg_loss': avg_loss
+        "total_trades": total_trades,
+        "win_count": win_count,
+        "loss_count": loss_count,
+        "win_rate": win_rate,
+        "net_profit": total_profit,
+        "gross_profit": gross_profit,
+        "gross_loss": gross_loss,
+        "profit_factor": profit_factor,
+        "avg_win": avg_win,
+        "avg_loss": avg_loss,
     }
 
 
@@ -410,7 +429,7 @@ def print_statistics(stats: Dict):
     print(f"Gross Profit: ${stats['gross_profit']:.2f}")
     print(f"Gross Loss: ${stats['gross_loss']:.2f}")
 
-    if stats['profit_factor'] == float('inf'):
+    if stats["profit_factor"] == float("inf"):
         print("Profit Factor: ∞ (no losses)")
     else:
         print(f"Profit Factor: {stats['profit_factor']:.2f}")
@@ -418,8 +437,8 @@ def print_statistics(stats: Dict):
     print(f"\nAverage Win: ${stats['avg_win']:.2f}")
     print(f"Average Loss: ${stats['avg_loss']:.2f}")
 
-    if stats['avg_loss'] != 0:
-        rr_ratio = abs(stats['avg_win'] / stats['avg_loss'])
+    if stats["avg_loss"] != 0:
+        rr_ratio = abs(stats["avg_win"] / stats["avg_loss"])
         print(f"Risk/Reward Ratio: 1:{rr_ratio:.2f}")
 
     print("=" * 70 + "\n")

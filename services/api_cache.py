@@ -5,7 +5,8 @@ import logging
 from typing import Any, Optional, Dict
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
 
 class APICache:
     """A simple file-based cache system for API responses with TTL support."""
@@ -20,11 +21,13 @@ class APICache:
         """Load cache from JSON file."""
         try:
             if os.path.exists(self.cache_file_path):
-                with open(self.cache_file_path, 'r') as f:
+                with open(self.cache_file_path, "r") as f:
                     self.cache = json.load(f)
                 logging.debug(f"Cache loaded from {self.cache_file_path}")
             else:
-                logging.debug(f"Cache file {self.cache_file_path} not found, starting with empty cache")
+                logging.debug(
+                    f"Cache file {self.cache_file_path} not found, starting with empty cache"
+                )
         except Exception as e:
             logging.warning(f"Failed to load cache from {self.cache_file_path}: {e}")
             self.cache = {}
@@ -38,11 +41,13 @@ class APICache:
             # Limit cache size to 100 entries, remove oldest if needed
             if len(self.cache) > 100:
                 # Sort by timestamp and remove oldest entries
-                sorted_entries = sorted(self.cache.items(), key=lambda x: x[1].get('timestamp', 0))
+                sorted_entries = sorted(
+                    self.cache.items(), key=lambda x: x[1].get("timestamp", 0)
+                )
                 # Keep only the most recent 90 entries
                 self.cache = dict(sorted_entries[-90:])
 
-            with open(self.cache_file_path, 'w') as f:
+            with open(self.cache_file_path, "w") as f:
                 json.dump(self.cache, f, indent=2)
             logging.debug(f"Cache saved to {self.cache_file_path}")
         except Exception as e:
@@ -61,8 +66,8 @@ class APICache:
             return True
 
         entry = self.cache[key]
-        timestamp = entry.get('timestamp', 0)
-        ttl = entry.get('ttl', 0)
+        timestamp = entry.get("timestamp", 0)
+        ttl = entry.get("ttl", 0)
 
         return time.time() > (timestamp + ttl)
 
@@ -76,15 +81,11 @@ class APICache:
             return None
 
         logging.debug(f"Cache HIT for key: {key}")
-        return self.cache[key].get('data')
+        return self.cache[key].get("data")
 
     def set(self, key: str, data: Any, ttl: int) -> None:
         """Set cache data with TTL."""
-        self.cache[key] = {
-            'timestamp': time.time(),
-            'ttl': ttl,
-            'data': data
-        }
+        self.cache[key] = {"timestamp": time.time(), "ttl": ttl, "data": data}
         logging.debug(f"Cache SET for key: {key} with TTL: {ttl}")
         self._save_cache()
 
@@ -98,14 +99,16 @@ class APICache:
             logging.info(f"Removed {len(keys_to_remove)} expired cache entries")
             self._save_cache()
 
+
 # Initialize global cache instance
-CACHE_FILE_PATH = os.getenv('CACHE_FILE_PATH', 'data/api_cache.json')
+CACHE_FILE_PATH = os.getenv("CACHE_FILE_PATH", "data/api_cache.json")
 cache = APICache(CACHE_FILE_PATH)
+
 
 def test_cache() -> bool:
     """
     Test the cache functionality.
-    
+
     Returns:
         bool: True if cache is working correctly
     """
@@ -145,6 +148,7 @@ def test_cache() -> bool:
 
     logging.info("All cache tests passed!")
     return True
+
 
 if __name__ == "__main__":
     # Run cache tests when executed directly

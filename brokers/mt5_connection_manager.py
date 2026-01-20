@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 class MT5ConnectionManager:
     """Singleton manager for MT5 connections"""
 
-    _instance: Optional['MT5ConnectionManager'] = None
+    _instance: Optional["MT5ConnectionManager"] = None
     _initialized: bool = False
 
-    def __new__(cls) -> 'MT5ConnectionManager':
+    def __new__(cls) -> "MT5ConnectionManager":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -45,16 +45,20 @@ class MT5ConnectionManager:
 
         logger.info("Attempting to initialize MT5...")
 
-        login = self.credential_manager.get_credential('MT5_LOGIN')
-        password = self.credential_manager.get_credential('MT5_PASSWORD')
-        server = self.credential_manager.get_credential('MT5_SERVER')
+        login = self.credential_manager.get_credential("MT5_LOGIN")
+        password = self.credential_manager.get_credential("MT5_PASSWORD")
+        server = self.credential_manager.get_credential("MT5_SERVER")
 
         if login and password and server:
             try:
                 login_int = int(login)
-                logger.info(f"Initializing MT5 with credentials for account {login_int} on server {server}")
+                logger.info(
+                    f"Initializing MT5 with credentials for account {login_int} on server {server}"
+                )
 
-                if not mt5.initialize(login=login_int, password=password, server=server):  # type: ignore
+                if not mt5.initialize(
+                    login=login_int, password=password, server=server
+                ):  # type: ignore
                     error = mt5.last_error()  # type: ignore
                     logger.error(f"MT5 initialization failed: {error}")
                     raise MT5ConnectionError(f"Failed to initialize MT5: {error}")
@@ -68,7 +72,9 @@ class MT5ConnectionManager:
                 logger.error(f"Invalid login format: {login}. Error: {error_msg}")
                 raise MT5ConnectionError(f"Invalid credentials: {error_msg}")
         else:
-            logger.info("No credentials provided, attempting to initialize without authentication")
+            logger.info(
+                "No credentials provided, attempting to initialize without authentication"
+            )
             if not mt5.initialize():  # type: ignore
                 error = mt5.last_error()  # type: ignore
                 logger.error(f"MT5 initialization failed: {error}")
@@ -86,7 +92,9 @@ class MT5ConnectionManager:
                 self._is_connected = False
                 logger.info("MT5 connection closed")
             except Exception as e:
-                logger.error(f"Error closing MT5 connection: {sanitize_error_message(str(e))}")
+                logger.error(
+                    f"Error closing MT5 connection: {sanitize_error_message(str(e))}"
+                )
 
     def is_connected(self) -> bool:
         """Check if MT5 is connected"""
@@ -113,7 +121,9 @@ class MT5ConnectionManager:
             logger.debug(f"Symbol {symbol} selected")
             return True
         except Exception as e:
-            logger.error(f"Error selecting symbol {symbol}: {sanitize_error_message(str(e))}")
+            logger.error(
+                f"Error selecting symbol {symbol}: {sanitize_error_message(str(e))}"
+            )
             return False
 
     def get_mt5_module(self):

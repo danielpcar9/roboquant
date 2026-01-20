@@ -3,11 +3,12 @@ import sys
 import logging
 
 # Set up detailed logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 # Load environment variables (with error handling)
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except Exception as e:
     logging.warning(f"Could not load .env file: {e}")
@@ -23,9 +24,11 @@ SAFETY_MODULE_AVAILABLE = False
 Safety = None
 try:
     from risk.safety import Safety
+
     SAFETY_MODULE_AVAILABLE = True
 except ImportError:
     logging.warning("Safety module not available")
+
 
 def test_mt5_connection():
     """Test MT5 connection"""
@@ -56,6 +59,7 @@ def test_mt5_connection():
     except Exception as e:
         logging.error(f"MT5 connection test failed: {e}")
         return False
+
 
 def test_xauusd_symbol():
     """Test XAUUSD symbol availability"""
@@ -95,6 +99,7 @@ def test_xauusd_symbol():
         logging.error(f"XAUUSD symbol test failed: {e}")
         return False
 
+
 def test_safety_module():
     """Test safety module functionality"""
     logging.info("Testing safety module...")
@@ -122,6 +127,7 @@ def test_safety_module():
         logging.error(f"Safety module test failed: {e}")
         return False
 
+
 def test_telegram_integration():
     """Test Telegram integration"""
     logging.info("Testing Telegram integration...")
@@ -137,6 +143,7 @@ def test_telegram_integration():
     logging.info("Telegram credentials found")
     logging.info("Telegram integration test passed")
     return True
+
 
 def test_directory_structure():
     """Test required directory structure"""
@@ -159,6 +166,7 @@ def test_directory_structure():
     logging.info("Directory structure test passed")
     return True
 
+
 def test_essential_files():
     """Test essential file presence"""
     logging.info("Testing essential files...")
@@ -170,7 +178,7 @@ def test_essential_files():
         "backtest_apex_vectorbt.py",
         "export_mt5_data.py",
         "webhook_receiver.py",
-        "requirements.txt"
+        "requirements.txt",
     ]
 
     missing_files = []
@@ -188,6 +196,7 @@ def test_essential_files():
 
     logging.info("Essential files test passed")
     return True
+
 
 def test_order_execution():
     """Test order execution functionality (optional)"""
@@ -254,6 +263,7 @@ def test_order_execution():
         logging.error(f"Order execution test failed: {e}")
         return False
 
+
 def main():
     """Main function to execute all tests and display summary"""
     logging.info("=" * 60)
@@ -304,8 +314,11 @@ def main():
         logging.info("🎉 All tests passed! Your setup is complete.")
         return 0
     else:
-        logging.error(f"💥 {total_tests - passed_tests} test(s) failed. Please review the errors above.")
+        logging.error(
+            f"💥 {total_tests - passed_tests} test(s) failed. Please review the errors above."
+        )
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

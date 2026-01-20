@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Trade:
     """Trade data model"""
+
     timestamp_open: datetime
     symbol: str
     side: str  # 'BUY' or 'SELL'
@@ -39,6 +40,7 @@ class Trade:
 @dataclass
 class PerformanceMetrics:
     """Performance metrics data model"""
+
     period: str
     total_trades: int
     win_rate: float
@@ -51,10 +53,10 @@ class PerformanceMetrics:
 class DatabaseService:
     """Service for managing all database operations"""
 
-    _instance: Optional['DatabaseService'] = None
+    _instance: Optional["DatabaseService"] = None
     _initialized: bool = False
 
-    def __new__(cls) -> 'DatabaseService':
+    def __new__(cls) -> "DatabaseService":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -68,11 +70,13 @@ class DatabaseService:
     def _initialize_client(self) -> bool:
         """Initialize Supabase client"""
         try:
-            url = os.getenv('SUPABASE_URL')
-            key = os.getenv('SUPABASE_ANON_KEY')
+            url = os.getenv("SUPABASE_URL")
+            key = os.getenv("SUPABASE_ANON_KEY")
 
             if not url or not key:
-                logger.warning("Supabase credentials not configured, database service disabled")
+                logger.warning(
+                    "Supabase credentials not configured, database service disabled"
+                )
                 return False
 
             self.client = create_client(url, key)
@@ -105,24 +109,28 @@ class DatabaseService:
 
         try:
             trade_data = {
-                'timestamp_open': trade.timestamp_open.isoformat(),
-                'timestamp_close': trade.timestamp_close.isoformat() if trade.timestamp_close else None,
-                'ticket': trade.ticket,
-                'symbol': trade.symbol,
-                'side': trade.side,
-                'volume': trade.volume,
-                'entry_price': trade.entry_price,
-                'exit_price': trade.exit_price,
-                'sl': trade.sl,
-                'tp': trade.tp,
-                'pnl': trade.pnl,
-                'pnl_pct': trade.pnl_pct,
-                'duration_minutes': trade.duration_minutes,
-                'reason_closed': trade.reason_closed,
+                "timestamp_open": trade.timestamp_open.isoformat(),
+                "timestamp_close": trade.timestamp_close.isoformat()
+                if trade.timestamp_close
+                else None,
+                "ticket": trade.ticket,
+                "symbol": trade.symbol,
+                "side": trade.side,
+                "volume": trade.volume,
+                "entry_price": trade.entry_price,
+                "exit_price": trade.exit_price,
+                "sl": trade.sl,
+                "tp": trade.tp,
+                "pnl": trade.pnl,
+                "pnl_pct": trade.pnl_pct,
+                "duration_minutes": trade.duration_minutes,
+                "reason_closed": trade.reason_closed,
             }
 
-            result = self.client.table('trades').insert(trade_data).execute()  # type: ignore
-            logger.info(f"Trade saved successfully: {trade.symbol} {trade.side} @ {trade.entry_price}")
+            self.client.table("trades").insert(trade_data).execute()  # type: ignore
+            logger.info(
+                f"Trade saved successfully: {trade.symbol} {trade.side} @ {trade.entry_price}"
+            )
             return True
 
         except Exception as e:
@@ -130,10 +138,7 @@ class DatabaseService:
             return False
 
     def get_trades(
-        self,
-        symbol: Optional[str] = None,
-        days: int = 30,
-        limit: int = 100
+        self, symbol: Optional[str] = None, days: int = 30, limit: int = 100
     ) -> List[Dict[str, Any]]:
         """
         Retrieve trades from the database
@@ -152,10 +157,15 @@ class DatabaseService:
         try:
             cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
 
-            query = self.client.table('trades').select('*').gte('timestamp_open', cutoff_date).limit(limit)  # type: ignore
+            query = (
+                self.client.table("trades")
+                .select("*")
+                .gte("timestamp_open", cutoff_date)
+                .limit(limit)
+            )  # type: ignore
 
             if symbol:
-                query = query.eq('symbol', symbol)  # type: ignore
+                query = query.eq("symbol", symbol)  # type: ignore
 
             result = query.execute()  # type: ignore
             logger.debug(f"Retrieved {len(result.data)} trades from database")
@@ -171,7 +181,7 @@ class DatabaseService:
         exit_price: float,
         pnl: float,
         pnl_pct: float,
-        reason_closed: str
+        reason_closed: str,
     ) -> bool:
         """
         Update a trade with close information
@@ -191,15 +201,17 @@ class DatabaseService:
 
         try:
             update_data = {
-                'timestamp_close': datetime.now().isoformat(),
-                'exit_price': exit_price,
-                'pnl': pnl,
-                'pnl_pct': pnl_pct,
-                'reason_closed': reason_closed,
-                'duration_minutes': None,  # Will be calculated by DB trigger if needed
+                "timestamp_close": datetime.now().isoformat(),
+                "exit_price": exit_price,
+                "pnl": pnl,
+                "pnl_pct": pnl_pct,
+                "reason_closed": reason_closed,
+                "duration_minutes": None,  # Will be calculated by DB trigger if needed
             }
 
-            self.client.table('trades').update(update_data).eq('ticket', ticket).execute()  # type: ignore
+            self.client.table("trades").update(update_data).eq(
+                "ticket", ticket
+            ).execute()  # type: ignore
             logger.info(f"Trade {ticket} closed: P&L={pnl:.2f} ({pnl_pct:.2f}%)")
             return True
 
@@ -222,17 +234,17 @@ class DatabaseService:
 
         try:
             metrics_data = {
-                'calculated_at': datetime.now().isoformat(),
-                'period': metrics.period,
-                'total_trades': metrics.total_trades,
-                'win_rate': metrics.win_rate,
-                'profit_factor': metrics.profit_factor,
-                'sharpe_ratio': metrics.sharpe_ratio,
-                'max_drawdown': metrics.max_drawdown,
-                'total_pnl': metrics.total_pnl,
+                "calculated_at": datetime.now().isoformat(),
+                "period": metrics.period,
+                "total_trades": metrics.total_trades,
+                "win_rate": metrics.win_rate,
+                "profit_factor": metrics.profit_factor,
+                "sharpe_ratio": metrics.sharpe_ratio,
+                "max_drawdown": metrics.max_drawdown,
+                "total_pnl": metrics.total_pnl,
             }
 
-            self.client.table('performance_metrics').insert(metrics_data).execute()  # type: ignore
+            self.client.table("performance_metrics").insert(metrics_data).execute()  # type: ignore
             logger.info(f"Performance metrics saved for period: {metrics.period}")
             return True
 
@@ -240,7 +252,9 @@ class DatabaseService:
             logger.error(f"Failed to save performance metrics: {str(e)}")
             return False
 
-    def get_performance_metrics(self, period: str, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_performance_metrics(
+        self, period: str, limit: int = 10
+    ) -> List[Dict[str, Any]]:
         """
         Retrieve performance metrics
 
@@ -256,14 +270,16 @@ class DatabaseService:
 
         try:
             result = (
-                self.client.table('performance_metrics')
-                .select('*')
-                .eq('period', period)
-                .order('calculated_at', desc=True)
+                self.client.table("performance_metrics")
+                .select("*")
+                .eq("period", period)
+                .order("calculated_at", desc=True)
                 .limit(limit)
                 .execute()
             )  # type: ignore
-            logger.debug(f"Retrieved {len(result.data)} performance metrics for period: {period}")
+            logger.debug(
+                f"Retrieved {len(result.data)} performance metrics for period: {period}"
+            )
             return result.data
 
         except Exception as e:
@@ -286,17 +302,24 @@ class DatabaseService:
 
         try:
             config_data = {
-                'name': name,
-                'parameters': config,
-                'updated_at': datetime.now().isoformat(),
+                "name": name,
+                "parameters": config,
+                "updated_at": datetime.now().isoformat(),
             }
 
-            result = self.client.table('strategy_configs').select('*').eq('name', name).execute()  # type: ignore
+            result = (
+                self.client.table("strategy_configs")
+                .select("*")
+                .eq("name", name)
+                .execute()
+            )  # type: ignore
 
             if result.data:
-                self.client.table('strategy_configs').update(config_data).eq('name', name).execute()  # type: ignore
+                self.client.table("strategy_configs").update(config_data).eq(
+                    "name", name
+                ).execute()  # type: ignore
             else:
-                self.client.table('strategy_configs').insert(config_data).execute()  # type: ignore
+                self.client.table("strategy_configs").insert(config_data).execute()  # type: ignore
 
             logger.info(f"Strategy config saved: {name}")
             return True
@@ -319,11 +342,17 @@ class DatabaseService:
             return None
 
         try:
-            result = self.client.table('strategy_configs').select('*').eq('name', name).maybeSingle().execute()  # type: ignore
+            result = (
+                self.client.table("strategy_configs")
+                .select("*")
+                .eq("name", name)
+                .maybeSingle()
+                .execute()
+            )  # type: ignore
 
             if result.data:
                 logger.debug(f"Strategy config retrieved: {name}")
-                return result.data.get('parameters')
+                return result.data.get("parameters")
 
             logger.warning(f"Strategy config not found: {name}")
             return None

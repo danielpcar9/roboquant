@@ -2,25 +2,31 @@
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
+
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
 from risk.safety import Safety
 from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
 from analysis.post_mortem import log_trade
 from services.alerts import alert_trade_opened, alert_safety_violation
+
 # Import error handler
 from services.error_handler import handle_exception, retry_with_exponential_backoff
 
 # Import consolidated MT5 functions
 from brokers.mt5_core import initialize_mt5
+
 # Import ATR calculation function
-from core.donchian_strategy import MarketDataService
+from core.donchian_components.calculators.technical_indicators import (
+    TechnicalIndicatorsCalculator as MarketDataService,
+)
 
 # Initialize market data service for ATR calculation
 market_data_service = MarketDataService()
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
 
 @handle_exception
 # initialize_mt5 function removed - using consolidated version from mt5_core.py
@@ -82,19 +88,21 @@ def execute_risk_order():
 
     # Log the calculated prices for debugging
     logging.info(f"Current price: {price}, SL: {sl_price}, TP: {tp_price}")
-    logging.info(f"Price difference - SL: {abs(price - sl_price)/point} points, TP: {abs(price - tp_price)/point} points")
+    logging.info(
+        f"Price difference - SL: {abs(price - sl_price) / point} points, TP: {abs(price - tp_price) / point} points"
+    )
 
     # Ensure SL/TP are not too close to current price (minimum distance)
     min_distance_points = 100 * point  # Minimum 100 points distance
     if side == "BUY":
-        if (sl_price > price - min_distance_points):
+        if sl_price > price - min_distance_points:
             sl_price = price - min_distance_points
-        if (tp_price < price + min_distance_points * 2):
+        if tp_price < price + min_distance_points * 2:
             tp_price = price + min_distance_points * 2
     else:  # SELL
-        if (sl_price < price + min_distance_points):
+        if sl_price < price + min_distance_points:
             sl_price = price + min_distance_points
-        if (tp_price > price - min_distance_points * 2):
+        if tp_price > price - min_distance_points * 2:
             tp_price = price - min_distance_points * 2
 
     logging.info(f"Adjusted prices - Price: {price}, SL: {sl_price}, TP: {tp_price}")
@@ -105,10 +113,12 @@ def execute_risk_order():
         entry_price=price,
         stop_price=sl_price,
         risk_pct=risk_pct,
-        mt5_module=mt5
+        mt5_module=mt5,
     )
 
-    logging.info("Volumen calculado: %s lotes para %s porciento de riesgo", volume, risk_pct)
+    logging.info(
+        "Volumen calculado: %s lotes para %s porciento de riesgo", volume, risk_pct
+    )
 
     # Enviar orden
     try:
@@ -118,26 +128,30 @@ def execute_risk_order():
             volume=volume,
             sl=sl_price,
             tp=tp_price,
-            mt5_module=mt5
+            mt5_module=mt5,
         )
 
         # Logging para post-mortem
-        log_trade({
-            'timestamp_open': datetime.utcnow().isoformat(),
-            'ticket': result.order,
-            'symbol': symbol,
-            'side': side,
-            'volume': volume,
-            'entry_price': result.price,
-            'sl': sl_price,
-            'tp': tp_price,
-            'balance_before': mt5.account_info().balance,  # type: ignore
-            'hour_of_day': datetime.utcnow().hour,
-            'day_of_week': datetime.utcnow().weekday()
-        })
+        log_trade(
+            {
+                "timestamp_open": datetime.utcnow().isoformat(),
+                "ticket": result.order,
+                "symbol": symbol,
+                "side": side,
+                "volume": volume,
+                "entry_price": result.price,
+                "sl": sl_price,
+                "tp": tp_price,
+                "balance_before": mt5.account_info().balance,  # type: ignore
+                "hour_of_day": datetime.utcnow().hour,
+                "day_of_week": datetime.utcnow().weekday(),
+            }
+        )
 
         # Enviar alerta
-        alert_trade_opened(result.order, symbol, side, volume, result.price, sl_price, tp_price)
+        alert_trade_opened(
+            result.order, symbol, side, volume, result.price, sl_price, tp_price
+        )
 
         logging.info("Orden ejecutada exitosamente. Ticket: %s", result.order)
         return True
@@ -145,10 +159,12 @@ def execute_risk_order():
     except Exception as e:
         logging.exception("Error al ejecutar orden")
         from services.alerts import telegram_alert
+
         telegram_alert("Error al ejecutar orden: " + str(e))
         return False
     finally:
         mt5.shutdown()  # type: ignore
+
 
 if __name__ == "__main__":
     execute_risk_order()

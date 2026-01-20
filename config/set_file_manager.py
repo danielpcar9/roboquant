@@ -4,8 +4,9 @@ from typing import Any, Dict, List
 import logging
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
 
 class SetFileManager:
     """Manages configuration sets loaded from JSON files."""
@@ -13,7 +14,7 @@ class SetFileManager:
     def __init__(self, config_dir: str = "config"):
         """
         Initialize the SetFileManager.
-        
+
         Args:
             config_dir: Directory where configuration files are stored
         """
@@ -29,13 +30,13 @@ class SetFileManager:
     def load_set_file(self, filename: str) -> Dict[str, Any]:
         """
         Load a configuration set from a JSON file.
-        
+
         Args:
             filename: Name of the JSON file to load
-            
+
         Returns:
             Configuration dictionary
-            
+
         Raises:
             FileNotFoundError: If the file doesn't exist
             json.JSONDecodeError: If the file is not valid JSON
@@ -47,10 +48,12 @@ class SetFileManager:
             raise FileNotFoundError(f"Configuration file not found: {filepath}")
 
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, "r", encoding="utf-8") as f:
                 config = json.load(f)
         except json.JSONDecodeError as e:
-            raise json.JSONDecodeError(f"Invalid JSON in {filepath}: {str(e)}", e.doc, e.pos)
+            raise json.JSONDecodeError(
+                f"Invalid JSON in {filepath}: {str(e)}", e.doc, e.pos
+            )
 
         # Validate configuration structure
         self._validate_config(config)
@@ -64,15 +67,15 @@ class SetFileManager:
     def get(self, key_path: str, default: Any = None) -> Any:
         """
         Get a configuration value using dot notation.
-        
+
         Args:
             key_path: Dot-separated path to the configuration value (e.g., 'risk_management.risk_per_trade_pct')
             default: Default value to return if key is not found
-            
+
         Returns:
             Configuration value or default if not found
         """
-        keys = key_path.split('.')
+        keys = key_path.split(".")
         value = self.current_config
 
         try:
@@ -80,13 +83,15 @@ class SetFileManager:
                 value = value[key]
             return value
         except (KeyError, TypeError):
-            logger.debug(f"Configuration key '{key_path}' not found, returning default: {default}")
+            logger.debug(
+                f"Configuration key '{key_path}' not found, returning default: {default}"
+            )
             return default
 
     def list_available_sets(self) -> List[str]:
         """
         List all available configuration set files.
-        
+
         Returns:
             List of JSON filenames in the config directory
         """
@@ -94,7 +99,7 @@ class SetFileManager:
             return []
 
         try:
-            files = [f for f in os.listdir(self.config_dir) if f.endswith('.json')]
+            files = [f for f in os.listdir(self.config_dir) if f.endswith(".json")]
             logger.info(f"Found {len(files)} configuration files")
             return files
         except OSError as e:
@@ -104,13 +109,13 @@ class SetFileManager:
     def _validate_config(self, config: Dict[str, Any]) -> bool:
         """
         Validate the configuration structure.
-        
+
         Args:
             config: Configuration dictionary to validate
-            
+
         Returns:
             True if valid
-            
+
         Raises:
             ValueError: If the configuration structure is invalid
         """
@@ -127,13 +132,15 @@ class SetFileManager:
         logger.debug("Configuration validation passed")
         return True
 
+
 # Global instance for easy access
 _set_manager_instance = None
+
 
 def get_set_manager() -> SetFileManager:
     """
     Get the global SetFileManager instance.
-    
+
     Returns:
         SetFileManager instance
     """

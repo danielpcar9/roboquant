@@ -5,9 +5,16 @@ Test script to validate the refactored Donchian Strategy following SOLID princip
 
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.donchian_strategy_refactored import DonchianStrategy, MarketDataService, RiskCalculator, SessionManager, QuantitativeIntegration
+from core.donchian_strategy_refactored import (
+    DonchianStrategy,
+    MarketDataService,
+    RiskCalculator,
+    SessionManager,
+    QuantitativeIntegration,
+)
 from brokers.mt5_utils import MT5Gateway
 
 
@@ -20,10 +27,12 @@ def test_strategy_instantiation():
         print("✅ Strategy instantiated successfully")
 
         # Check that all required services are properly initialized
-        assert hasattr(strategy, 'market_data'), "MarketDataService not initialized"
-        assert hasattr(strategy, 'risk_calc'), "RiskCalculator not initialized"
-        assert hasattr(strategy, 'session_manager'), "SessionManager not initialized"
-        assert hasattr(strategy, 'quant_integration'), "QuantitativeIntegration not initialized"
+        assert hasattr(strategy, "market_data"), "MarketDataService not initialized"
+        assert hasattr(strategy, "risk_calc"), "RiskCalculator not initialized"
+        assert hasattr(strategy, "session_manager"), "SessionManager not initialized"
+        assert hasattr(strategy, "quant_integration"), (
+            "QuantitativeIntegration not initialized"
+        )
 
         print("✅ All services properly initialized")
         return True
@@ -43,13 +52,13 @@ def test_market_data_service():
 
         # Verify that required methods exist
         methods_to_check = [
-            'get_donchian_channels',
-            'calculate_momentum',
-            'calculate_atr',
-            'get_current_price',
-            'get_spread',
-            'get_volume_stats',
-            'detect_engulfing'
+            "get_donchian_channels",
+            "calculate_momentum",
+            "calculate_atr",
+            "get_current_price",
+            "get_spread",
+            "get_volume_stats",
+            "detect_engulfing",
         ]
 
         for method in methods_to_check:
@@ -73,10 +82,7 @@ def test_risk_calculator():
         print("✅ RiskCalculator instantiated successfully")
 
         # Verify that required methods exist
-        methods_to_check = [
-            'calculate_dynamic_stops',
-            'compute_lot_size'
-        ]
+        methods_to_check = ["calculate_dynamic_stops", "compute_lot_size"]
 
         for method in methods_to_check:
             assert hasattr(risk_calc, method), f"Method {method} not found"
@@ -102,11 +108,11 @@ def test_session_manager():
 
         # Verify that required methods exist
         methods_to_check = [
-            'get_current_session',
-            'get_session_high_low',
-            'place_session_breakout_orders',
-            'cancel_session_orders',
-            'check_existing_session_orders'
+            "get_current_session",
+            "get_session_high_low",
+            "place_session_breakout_orders",
+            "cancel_session_orders",
+            "check_existing_session_orders",
         ]
 
         for method in methods_to_check:
@@ -129,9 +135,7 @@ def test_quantitative_integration():
         print("✅ QuantitativeIntegration instantiated successfully")
 
         # Verify that required methods exist
-        methods_to_check = [
-            'apply_quantitative_analysis'
-        ]
+        methods_to_check = ["apply_quantitative_analysis"]
 
         for method in methods_to_check:
             assert hasattr(quant_integration, method), f"Method {method} not found"
@@ -150,17 +154,16 @@ def test_solid_principles():
 
     try:
         # Single Responsibility: Each class has a single, well-defined responsibility
-        strategy = DonchianStrategy()
-        market_data = MarketDataService()
-        risk_calc = RiskCalculator(market_data)
-        session_manager = SessionManager(MT5Gateway(), market_data, risk_calc)
-        quant_integration = QuantitativeIntegration()
 
-        print("✅ Single Responsibility: Each class has a single, well-defined responsibility")
+        print(
+            "✅ Single Responsibility: Each class has a single, well-defined responsibility"
+        )
 
         # Open/Closed: Classes are open for extension but closed for modification
         # This is demonstrated by the ability to extend functionality without changing core classes
-        print("✅ Open/Closed: Classes are designed to be extended without modification")
+        print(
+            "✅ Open/Closed: Classes are designed to be extended without modification"
+        )
 
         # Liskov Substitution: Not applicable in this context as we don't have inheritance
         print("✅ Liskov Substitution: N/A (no inheritance hierarchy)")
@@ -169,7 +172,9 @@ def test_solid_principles():
         print("✅ Interface Segregation: Each class exposes only relevant methods")
 
         # Dependency Inversion: Classes depend on abstractions (services) not concrete implementations
-        print("✅ Dependency Inversion: Classes depend on abstractions, not concrete implementations")
+        print(
+            "✅ Dependency Inversion: Classes depend on abstractions, not concrete implementations"
+        )
 
         return True
 
@@ -189,7 +194,7 @@ def main():
         test_risk_calculator,
         test_session_manager,
         test_quantitative_integration,
-        test_solid_principles
+        test_solid_principles,
     ]
 
     results = []
@@ -203,7 +208,9 @@ def main():
     print(f"Failed: {len(results) - sum(results)}")
 
     if all(results):
-        print("🎉 All tests passed! The refactored strategy follows SOLID principles correctly.")
+        print(
+            "🎉 All tests passed! The refactored strategy follows SOLID principles correctly."
+        )
         return True
     else:
         print("❌ Some tests failed. Please review the implementation.")

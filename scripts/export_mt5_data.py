@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
 
@@ -10,11 +11,12 @@ import logging
 from brokers.mt5_core import initialize_mt5, timeframe_to_string
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 # timeframe_to_string function removed - using consolidated version from mt5_core.py
 
 # initialize_mt5 function removed - using consolidated version from mt5_core.py
+
 
 def get_historical_data(symbol, timeframe, days_back=365):
     """Get historical data from MT5"""
@@ -32,10 +34,10 @@ def get_historical_data(symbol, timeframe, days_back=365):
 
         # Convert to DataFrame
         df = pd.DataFrame(rates)
-        df['time'] = pd.to_datetime(df['time'], unit='s')
+        df["time"] = pd.to_datetime(df["time"], unit="s")
 
         # Set time as index
-        df.set_index('time', inplace=True)
+        df.set_index("time", inplace=True)
 
         logging.info(f"Retrieved {len(df)} rows of data for {symbol}")
         return df
@@ -43,6 +45,7 @@ def get_historical_data(symbol, timeframe, days_back=365):
     except Exception as e:
         logging.error(f"Error getting historical data: {e}")
         return None
+
 
 def export_data(symbol="XAUUSD", timeframe=mt5.TIMEFRAME_H1, days_back=1825):
     """Export historical data to CSV"""
@@ -81,6 +84,7 @@ def export_data(symbol="XAUUSD", timeframe=mt5.TIMEFRAME_H1, days_back=1825):
         logging.error(f"Error exporting data: {e}")
         return False
 
+
 def main():
     """Main function"""
     # Initialize MT5
@@ -101,6 +105,7 @@ def main():
         # Shutdown MT5
         mt5.shutdown()  # type: ignore
         logging.info("MT5 connection closed")
+
 
 if __name__ == "__main__":
     main()

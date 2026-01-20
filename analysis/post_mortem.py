@@ -8,35 +8,57 @@ from typing import Dict, Any
 # Try to import MT5, but make it optional to avoid issues in environments without MT5
 try:
     import MetaTrader5 as mt5
+
     MT5_AVAILABLE = True
 except ImportError:
     mt5 = None
     MT5_AVAILABLE = False
 
 TRADE_COLUMNS = [
-    'timestamp_open', 'timestamp_close', 'ticket', 'symbol',
-    'side', 'volume', 'entry_price', 'exit_price',
-    'sl', 'tp', 'pnl', 'pnl_pct', 'duration_minutes',
-    'reason_closed',
-    'donchian_upper', 'donchian_lower', 'atr', 'momentum',
-    'spread_at_entry', 'hour_of_day', 'day_of_week',
-    'balance_before', 'balance_after', 'mae', 'mfe',
-    'expected_entry', 'actual_entry'
+    "timestamp_open",
+    "timestamp_close",
+    "ticket",
+    "symbol",
+    "side",
+    "volume",
+    "entry_price",
+    "exit_price",
+    "sl",
+    "tp",
+    "pnl",
+    "pnl_pct",
+    "duration_minutes",
+    "reason_closed",
+    "donchian_upper",
+    "donchian_lower",
+    "atr",
+    "momentum",
+    "spread_at_entry",
+    "hour_of_day",
+    "day_of_week",
+    "balance_before",
+    "balance_after",
+    "mae",
+    "mfe",
+    "expected_entry",
+    "actual_entry",
 ]
 
-TRADES_FILE = os.path.join(os.path.dirname(__file__), 'logs', 'trades.csv')
+TRADES_FILE = os.path.join(os.path.dirname(__file__), "logs", "trades.csv")
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
 
 def ensure_logs_dir():
     """Ensure the logs directory exists."""
-    os.makedirs(os.path.join(os.path.dirname(__file__), 'logs'), exist_ok=True)
+    os.makedirs(os.path.join(os.path.dirname(__file__), "logs"), exist_ok=True)
+
 
 def log_trade(trade_dict: Dict[str, Any]) -> None:
     """
     Log a trade to the trades CSV file.
-    
+
     Args:
         trade_dict: Dictionary containing trade information
     """
@@ -58,17 +80,18 @@ def log_trade(trade_dict: Dict[str, Any]) -> None:
         df.to_csv(TRADES_FILE, index=False)
     else:
         # If file exists, append without headers
-        df.to_csv(TRADES_FILE, mode='a', header=False, index=False)
+        df.to_csv(TRADES_FILE, mode="a", header=False, index=False)
 
-    logging.info("Trade %s registered in %s", trade_dict.get('ticket'), TRADES_FILE)
+    logging.info("Trade %s registered in %s", trade_dict.get("ticket"), TRADES_FILE)
+
 
 def analyze_recent_trades(n: int = 100) -> Dict[str, Any]:
     """
     Analyze recent trades and calculate performance metrics.
-    
+
     Args:
         n: Number of recent trades to analyze
-        
+
     Returns:
         Dictionary with performance metrics
     """
@@ -86,35 +109,35 @@ def analyze_recent_trades(n: int = 100) -> Dict[str, Any]:
         return {}
 
     # Check if required columns exist
-    if 'pnl' not in df.columns:
+    if "pnl" not in df.columns:
         logging.warning("PnL column not found in trades file")
         return {}
 
     # Filter for recent trades with PnL data
     recent = df.tail(n).copy()
-    recent = recent[recent['pnl'].notna()]
+    recent = recent[recent["pnl"].notna()]
 
     if len(recent) == 0:
         return {}
 
     # Separate winning and losing trades
-    winning = recent[recent['pnl'] > 0]
-    losing = recent[recent['pnl'] < 0]
+    winning = recent[recent["pnl"] > 0]
+    losing = recent[recent["pnl"] < 0]
 
     # Calculate basic metrics
     win_rate = len(winning) / len(recent) if len(recent) > 0 else 0
-    avg_win = winning['pnl'].mean() if len(winning) > 0 else 0
-    avg_loss = abs(losing['pnl'].mean()) if len(losing) > 0 else 0
+    avg_win = winning["pnl"].mean() if len(winning) > 0 else 0
+    avg_loss = abs(losing["pnl"].mean()) if len(losing) > 0 else 0
 
     # Calculate profit factor
-    total_wins = winning['pnl'].sum() if len(winning) > 0 else 0
-    total_losses = abs(losing['pnl'].sum()) if len(losing) > 0 else 0
-    profit_factor = total_wins / total_losses if total_losses > 0 else float('inf')
+    total_wins = winning["pnl"].sum() if len(winning) > 0 else 0
+    total_losses = abs(losing["pnl"].sum()) if len(losing) > 0 else 0
+    profit_factor = total_wins / total_losses if total_losses > 0 else float("inf")
 
     # Calculate maximum consecutive losses
     consecutive_losses = 0
     max_consecutive_losses = 0
-    for pnl in recent['pnl']:
+    for pnl in recent["pnl"]:
         if pnl < 0:
             consecutive_losses += 1
             max_consecutive_losses = max(max_consecutive_losses, consecutive_losses)
@@ -122,16 +145,16 @@ def analyze_recent_trades(n: int = 100) -> Dict[str, Any]:
             consecutive_losses = 0
 
     # Calculate additional metrics
-    total_pnl = recent['pnl'].sum()
-    avg_pnl = recent['pnl'].mean()
-    std_pnl = recent['pnl'].std()
+    total_pnl = recent["pnl"].sum()
+    avg_pnl = recent["pnl"].mean()
+    std_pnl = recent["pnl"].std()
 
     # Sharpe ratio (assuming risk-free rate of 0)
     sharpe_ratio = avg_pnl / std_pnl if std_pnl > 0 else 0
 
     # Maximum drawdown
-    if 'pnl' in recent.columns:
-        cumulative_pnl = recent['pnl'].cumsum()
+    if "pnl" in recent.columns:
+        cumulative_pnl = recent["pnl"].cumsum()
         # Convert to Series if it's not already
         if not isinstance(cumulative_pnl, pd.Series):
             cumulative_pnl = pd.Series(cumulative_pnl)
@@ -142,7 +165,7 @@ def analyze_recent_trades(n: int = 100) -> Dict[str, Any]:
         max_drawdown = 0
 
     # Sortino ratio (downside risk)
-    negative_returns = recent[recent['pnl'] < 0]['pnl']
+    negative_returns = recent[recent["pnl"] < 0]["pnl"]
     downside_deviation = negative_returns.std() if len(negative_returns) > 0 else 0
     sortino_ratio = avg_pnl / downside_deviation if downside_deviation > 0 else 0
 
@@ -150,49 +173,61 @@ def analyze_recent_trades(n: int = 100) -> Dict[str, Any]:
     calmar_ratio = abs(avg_pnl / max_drawdown) if max_drawdown < 0 else 0
 
     # Trade duration statistics
-    avg_duration = recent['duration_minutes'].mean() if 'duration_minutes' in recent.columns else 0
+    avg_duration = (
+        recent["duration_minutes"].mean() if "duration_minutes" in recent.columns else 0
+    )
 
     # Best and worst trades
-    best_trade = recent['pnl'].max() if len(recent) > 0 else 0
-    worst_trade = recent['pnl'].min() if len(recent) > 0 else 0
+    best_trade = recent["pnl"].max() if len(recent) > 0 else 0
+    worst_trade = recent["pnl"].min() if len(recent) > 0 else 0
 
     # Time-based performance
-    hourly_performance = recent.groupby('hour_of_day')['pnl'].mean() if 'hour_of_day' in recent.columns else pd.Series()
+    hourly_performance = (
+        recent.groupby("hour_of_day")["pnl"].mean()
+        if "hour_of_day" in recent.columns
+        else pd.Series()
+    )
     best_hour = hourly_performance.idxmax() if len(hourly_performance) > 0 else None
     worst_hour = hourly_performance.idxmin() if len(hourly_performance) > 0 else None
 
     metrics = {
-        'n_trades': len(recent),
-        'wins': len(winning),
-        'losses': len(losing),
-        'win_rate': win_rate,
-        'avg_win': avg_win,
-        'avg_loss': avg_loss,
-        'profit_factor': profit_factor,
-        'max_consecutive_losses': max_consecutive_losses,
-        'total_pnl': total_pnl,
-        'avg_pnl': avg_pnl,
-        'std_pnl': std_pnl,
-        'sharpe_ratio': sharpe_ratio,
-        'max_drawdown': max_drawdown,
-        'sortino_ratio': sortino_ratio,
-        'calmar_ratio': calmar_ratio,
-        'avg_duration_minutes': avg_duration,
-        'best_trade': best_trade,
-        'worst_trade': worst_trade,
-        'best_hour': best_hour,
-        'worst_hour': worst_hour
+        "n_trades": len(recent),
+        "wins": len(winning),
+        "losses": len(losing),
+        "win_rate": win_rate,
+        "avg_win": avg_win,
+        "avg_loss": avg_loss,
+        "profit_factor": profit_factor,
+        "max_consecutive_losses": max_consecutive_losses,
+        "total_pnl": total_pnl,
+        "avg_pnl": avg_pnl,
+        "std_pnl": std_pnl,
+        "sharpe_ratio": sharpe_ratio,
+        "max_drawdown": max_drawdown,
+        "sortino_ratio": sortino_ratio,
+        "calmar_ratio": calmar_ratio,
+        "avg_duration_minutes": avg_duration,
+        "best_trade": best_trade,
+        "worst_trade": worst_trade,
+        "best_hour": best_hour,
+        "worst_hour": worst_hour,
     }
 
-    logging.info("POST-MORTEM: %d trades, Win Rate: %.1f%%, PnL: $%.2f, Profit Factor: %.2f",
-                 metrics['n_trades'], metrics['win_rate'] * 100, metrics['total_pnl'], metrics['profit_factor'])
+    logging.info(
+        "POST-MORTEM: %d trades, Win Rate: %.1f%%, PnL: $%.2f, Profit Factor: %.2f",
+        metrics["n_trades"],
+        metrics["win_rate"] * 100,
+        metrics["total_pnl"],
+        metrics["profit_factor"],
+    )
 
     return metrics
+
 
 def generate_performance_report(output_file: str = "performance_report.txt") -> None:
     """
     Generate a detailed performance report.
-    
+
     Args:
         output_file: Path to output file
     """
@@ -203,7 +238,7 @@ def generate_performance_report(output_file: str = "performance_report.txt") -> 
         return
 
     try:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             f.write("ROBOQUANT PERFORMANCE REPORT\n")
             f.write("=" * 50 + "\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -230,16 +265,20 @@ def generate_performance_report(output_file: str = "performance_report.txt") -> 
             f.write(f"Sortino Ratio: {metrics['sortino_ratio']:.2f}\n")
             f.write(f"Calmar Ratio: {metrics['calmar_ratio']:.2f}\n")
             f.write(f"Maximum Drawdown: ${metrics['max_drawdown']:.2f}\n")
-            f.write(f"Maximum Consecutive Losses: {metrics['max_consecutive_losses']}\n\n")
+            f.write(
+                f"Maximum Consecutive Losses: {metrics['max_consecutive_losses']}\n\n"
+            )
 
             f.write("TRADE CHARACTERISTICS\n")
             f.write("-" * 20 + "\n")
             f.write(f"Best Trade: ${metrics['best_trade']:.2f}\n")
             f.write(f"Worst Trade: ${metrics['worst_trade']:.2f}\n")
-            f.write(f"Average Trade Duration: {metrics['avg_duration_minutes']:.1f} minutes\n")
-            if metrics['best_hour'] is not None:
+            f.write(
+                f"Average Trade Duration: {metrics['avg_duration_minutes']:.1f} minutes\n"
+            )
+            if metrics["best_hour"] is not None:
                 f.write(f"Best Performing Hour: {int(metrics['best_hour'])}:00\n")
-            if metrics['worst_hour'] is not None:
+            if metrics["worst_hour"] is not None:
                 f.write(f"Worst Performing Hour: {int(metrics['worst_hour'])}:00\n")
 
         logging.info("Performance report generated: %s", output_file)
@@ -247,15 +286,16 @@ def generate_performance_report(output_file: str = "performance_report.txt") -> 
     except Exception as e:
         logging.error("Error generating performance report: %s", e)
 
+
 def get_mt5_trade_history(days_back=30, magic_number=None, mt5_module=None):
     """
     Get closed trades from MT5 history
-    
+
     Args:
         days_back: Number of days to look back
         magic_number: Filter by magic number (optional)
         mt5_module: MT5 module (for testing)
-        
+
     Returns:
         List of trades with profit/loss
     """
@@ -282,53 +322,57 @@ def get_mt5_trade_history(days_back=30, magic_number=None, mt5_module=None):
     trades = []
     for deal in deals:
         # Filter by magic number if specified
-        if magic_number and getattr(deal, 'magic', None) != magic_number:
+        if magic_number and getattr(deal, "magic", None) != magic_number:
             continue
 
         # Only consider exit deals (not balance operations)
-        if getattr(deal, 'entry', None) == mt5_to_use.DEAL_ENTRY_OUT:
-            trades.append({
-                'time': datetime.fromtimestamp(deal.time),
-                'symbol': deal.symbol,
-                'profit': deal.profit,
-                'volume': deal.volume,
-                'type': 'BUY' if deal.type == mt5_to_use.DEAL_TYPE_BUY else 'SELL'
-            })
+        if getattr(deal, "entry", None) == mt5_to_use.DEAL_ENTRY_OUT:
+            trades.append(
+                {
+                    "time": datetime.fromtimestamp(deal.time),
+                    "symbol": deal.symbol,
+                    "profit": deal.profit,
+                    "volume": deal.volume,
+                    "type": "BUY" if deal.type == mt5_to_use.DEAL_TYPE_BUY else "SELL",
+                }
+            )
 
     return trades
+
 
 def calculate_profit_factor_from_trades(trades):
     """
     Calculate Profit Factor from trades
     Profit Factor = Gross Profit / Gross Loss
-    
+
     Args:
         trades: List of trades with profit field
-        
+
     Returns:
         float: Profit factor
     """
     if not trades:
         return 0.0
 
-    gross_profit = sum(t['profit'] for t in trades if t['profit'] > 0)
-    gross_loss = abs(sum(t['profit'] for t in trades if t['profit'] < 0))
+    gross_profit = sum(t["profit"] for t in trades if t["profit"] > 0)
+    gross_loss = abs(sum(t["profit"] for t in trades if t["profit"] < 0))
 
     if gross_loss == 0:
-        return float('inf') if gross_profit > 0 else 0.0
+        return float("inf") if gross_profit > 0 else 0.0
 
     profit_factor = gross_profit / gross_loss
     return profit_factor
+
 
 def calculate_sharpe_ratio_from_trades(trades, risk_free_rate=0.02):
     """
     Calculate Sharpe Ratio from trades
     Sharpe Ratio = (Mean Return - Risk Free Rate) / Standard Deviation of Returns
-    
+
     Args:
         trades: List of trades with profit field
         risk_free_rate: Annual risk-free rate (default 2%)
-        
+
     Returns:
         float: Sharpe ratio (annualized)
     """
@@ -336,7 +380,7 @@ def calculate_sharpe_ratio_from_trades(trades, risk_free_rate=0.02):
         return 0.0
 
     # Calculate returns
-    returns = [t['profit'] for t in trades]
+    returns = [t["profit"] for t in trades]
 
     # Calculate statistics
     mean_return = np.mean(returns)
@@ -354,25 +398,27 @@ def calculate_sharpe_ratio_from_trades(trades, risk_free_rate=0.02):
 
     return sharpe
 
+
 def calculate_win_rate_from_trades(trades):
     """Calculate win rate percentage from trades"""
     if not trades:
         return 0.0
 
-    winning_trades = sum(1 for t in trades if t['profit'] > 0)
+    winning_trades = sum(1 for t in trades if t["profit"] > 0)
     total_trades = len(trades)
 
     return (winning_trades / total_trades) * 100 if total_trades > 0 else 0.0
 
+
 def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None):
     """
     Generate comprehensive performance report from MT5 history
-    
+
     Args:
         days_back: Number of days to analyze
         magic_number: Filter by magic number (optional)
         mt5_module: MT5 module (for testing)
-        
+
     Returns:
         dict: Performance metrics
     """
@@ -380,8 +426,8 @@ def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None)
 
     if not trades:
         return {
-            'error': 'No trades found in the specified period',
-            'days_analyzed': days_back
+            "error": "No trades found in the specified period",
+            "days_analyzed": days_back,
         }
 
     # Calculate all metrics
@@ -390,21 +436,21 @@ def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None)
     win_rate = calculate_win_rate_from_trades(trades)
 
     # Calculate average win and loss
-    wins = [t['profit'] for t in trades if t['profit'] > 0]
-    losses = [t['profit'] for t in trades if t['profit'] < 0]
+    wins = [t["profit"] for t in trades if t["profit"] > 0]
+    losses = [t["profit"] for t in trades if t["profit"] < 0]
     avg_win = np.mean(wins) if wins else 0.0
     avg_loss = np.mean(losses) if losses else 0.0
 
     # Calculate maximum drawdown
     if trades:
         # Sort trades by time
-        sorted_trades = sorted(trades, key=lambda x: x['time'])
+        sorted_trades = sorted(trades, key=lambda x: x["time"])
 
         # Calculate cumulative profit
         cumulative = []
         total = 0
         for trade in sorted_trades:
-            total += trade['profit']
+            total += trade["profit"]
             cumulative.append(total)
 
         # Calculate drawdown
@@ -421,29 +467,30 @@ def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None)
         max_dd = 0
 
     # Total profit
-    total_profit = sum(t['profit'] for t in trades)
+    total_profit = sum(t["profit"] for t in trades)
 
     # Build report
     report = {
-        'period': f'Last {days_back} days',
-        'total_trades': len(trades),
-        'total_profit': round(total_profit, 2),
-        'profit_factor': round(profit_factor, 2),
-        'sharpe_ratio': round(sharpe_ratio, 2),
-        'win_rate': round(win_rate, 2),
-        'average_win': round(avg_win, 2),
-        'average_loss': round(avg_loss, 2),
-        'max_drawdown': round(max_dd, 2),
-        'trades': trades
+        "period": f"Last {days_back} days",
+        "total_trades": len(trades),
+        "total_profit": round(total_profit, 2),
+        "profit_factor": round(profit_factor, 2),
+        "sharpe_ratio": round(sharpe_ratio, 2),
+        "win_rate": round(win_rate, 2),
+        "average_win": round(avg_win, 2),
+        "average_loss": round(avg_loss, 2),
+        "max_drawdown": round(max_dd, 2),
+        "trades": trades,
     }
 
     return report
+
 
 def print_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None):
     """Print formatted performance report from MT5 history"""
     report = get_mt5_performance_report(days_back, magic_number, mt5_module)
 
-    if 'error' in report:
+    if "error" in report:
         print(f"\n{report['error']}")
         return
 
@@ -466,9 +513,9 @@ def print_mt5_performance_report(days_back=30, magic_number=None, mt5_module=Non
             return "GOOD"
         return "SUBOPTIMAL"
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"MT5 PERFORMANCE REPORT - {report['period']}")
-    print("="*60)
+    print("=" * 60)
 
     print("\nTRADING ACTIVITY:")
     print(f"  Total Trades: {report['total_trades']}")
@@ -476,10 +523,10 @@ def print_mt5_performance_report(days_back=30, magic_number=None, mt5_module=Non
     print(f"  Win Rate: {report['win_rate']:.2f}%")
 
     print("\nKEY METRICS:")
-    pf_rating = rate_pf(report['profit_factor'])
+    pf_rating = rate_pf(report["profit_factor"])
     print(f"  Profit Factor: {report['profit_factor']:.2f} ({pf_rating})")
 
-    sr_rating = rate_sharpe(report['sharpe_ratio'])
+    sr_rating = rate_sharpe(report["sharpe_ratio"])
     print(f"  Sharpe Ratio: {report['sharpe_ratio']:.2f} ({sr_rating})")
 
     print("\nRISK METRICS:")
@@ -487,8 +534,8 @@ def print_mt5_performance_report(days_back=30, magic_number=None, mt5_module=Non
     print(f"  Average Win: ${report['average_win']:.2f}")
     print(f"  Average Loss: ${report['average_loss']:.2f}")
 
-    if report['average_loss'] != 0:
-        rr_ratio = abs(report['average_win'] / report['average_loss'])
+    if report["average_loss"] != 0:
+        rr_ratio = abs(report["average_win"] / report["average_loss"])
         print(f"  Risk/Reward Ratio: 1:{rr_ratio:.2f}")
 
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
