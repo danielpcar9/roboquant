@@ -12,7 +12,7 @@ class QuantitativeAnalyzer:
     """Statistical analysis engine with mathematical formulas for trading decisions
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.weights: dict[str, Any] = {
             "momentum": [0.5, 0.3, 0.2],  # Short, medium, long term weights
             "probability": {
@@ -87,7 +87,9 @@ class QuantitativeAnalyzer:
         x = np.arange(len(y), dtype=np.float64)
 
         # Linear regression: y = ax + b
-        slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+        result = stats.linregress(x, y)
+        slope: float = float(result.slope)
+        r_value: float = float(result.rvalue)
 
         # Normalize by average price to get relative strength
         avg_price = np.mean(y)
@@ -104,7 +106,7 @@ class QuantitativeAnalyzer:
         adx_value: float,
         di_plus: float,
         di_minus: float,
-    ) -> dict[str, float]:
+    ) -> dict[str, float | dict[str, float]]:
         """Calculate entry probability using weighted statistical model
         Formula: Combined probability = w1*momentum + w2*volatility + w3*trend + w4*adx + w5*di_diff
         """
@@ -165,7 +167,8 @@ def calculate_hurst_exponent(prices: np.ndarray, max_lags: int = 20) -> float:
         return 0.5
 
     # Linear regression to find Hurst exponent
-    slope, _, _, _, _ = stats.linregress(log_lags, log_tau)
+    result = stats.linregress(log_lags, log_tau)
+    slope: float = float(result.slope)
     hurst = slope / 2.0
 
     return max(0.0, min(1.0, hurst))  # Clamp to [0,1]

@@ -10,7 +10,7 @@ class QuantitativeOptimizer:
     """Mathematical optimization for trading parameters
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.default_period = 20
         self.min_period = 10
         self.max_period = 30
@@ -92,7 +92,7 @@ class QuantitativeOptimizer:
         self,
         historical_returns: np.ndarray,
         target_win_rate: float = 0.55,
-    ) -> dict[str, float]:
+    ) -> dict[str, float | str | dict[str, float]]:
         """Optimize risk parameters based on historical performance
         """
         if len(historical_returns) < 20:
@@ -140,7 +140,7 @@ class QuantitativeOptimizer:
         self,
         trade_history: list[dict],
         market_conditions: str = "normal",
-    ) -> dict[str, float]:
+    ) -> dict[str, float | str | dict[str, float]]:
         """Optimize position sizing formula based on recent performance
         """
         if len(trade_history) < 15:

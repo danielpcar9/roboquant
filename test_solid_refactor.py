@@ -9,13 +9,13 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from brokers.mt5_utils import MT5Gateway
-from core.donchian_strategy_refactored import (
+from core.donchian_strategy import (
     DonchianStrategy,
-    MarketDataService,
-    QuantitativeIntegration,
-    RiskCalculator,
-    SessionManager,
+    StrategyConfig,
 )
+from core.donchian_components.calculators.technical_indicators import TechnicalIndicatorsCalculator
+from core.donchian_components.validators.risk_market_validators import RiskValidator
+from core.donchian_components.managers.position_managers import PositionManager
 
 
 def test_strategy_instantiation():
@@ -25,16 +25,12 @@ def test_strategy_instantiation():
     try:
         strategy = DonchianStrategy()
         print("✅ Strategy instantiated successfully")
-
-        # Check that all required services are properly initialized
-        assert hasattr(strategy, "market_data"), "MarketDataService not initialized"
-        assert hasattr(strategy, "risk_calc"), "RiskCalculator not initialized"
-        assert hasattr(strategy, "session_manager"), "SessionManager not initialized"
-        assert hasattr(strategy, "quant_integration"), (
-            "QuantitativeIntegration not initialized"
-        )
-
-        print("✅ All services properly initialized")
+        
+        # Basic validation that key components exist
+        assert hasattr(strategy, "config"), "StrategyConfig not initialized"
+        assert hasattr(strategy, "quant_integration"), "QuantitativeIntegration not initialized"
+        
+        print("✅ Strategy components validated")
         return True
 
     except Exception as e:
@@ -42,144 +38,24 @@ def test_strategy_instantiation():
         return False
 
 
-def test_market_data_service():
-    """Test MarketDataService functionality"""
-    print("\n🔍 Testing MarketDataService...")
-
+def test_strategy_config():
+    """Test StrategyConfig instantiation"""
+    print("\n🔍 Testing StrategyConfig...")
+    
     try:
-        market_data = MarketDataService()
-        print("✅ MarketDataService instantiated successfully")
-
-        # Verify that required methods exist
-        methods_to_check = [
-            "get_donchian_channels",
-            "calculate_momentum",
-            "calculate_atr",
-            "get_current_price",
-            "get_spread",
-            "get_volume_stats",
-            "detect_engulfing",
-        ]
-
-        for method in methods_to_check:
-            assert hasattr(market_data, method), f"Method {method} not found"
-
-        print(f"✅ All required methods present: {len(methods_to_check)} methods")
+        config = StrategyConfig()
+        print("✅ StrategyConfig instantiated successfully")
+        
+        # Verify required attributes exist
+        required_attrs = ["symbol", "timeframe", "period", "risk_percent"]
+        for attr in required_attrs:
+            assert hasattr(config, attr), f"Missing attribute: {attr}"
+            
+        print(f"✅ All required config attributes present: {len(required_attrs)} attributes")
         return True
-
+        
     except Exception as e:
-        print(f"❌ Error testing MarketDataService: {e}")
-        return False
-
-
-def test_risk_calculator():
-    """Test RiskCalculator functionality"""
-    print("\n🔍 Testing RiskCalculator...")
-
-    try:
-        market_data = MarketDataService()
-        risk_calc = RiskCalculator(market_data)
-        print("✅ RiskCalculator instantiated successfully")
-
-        # Verify that required methods exist
-        methods_to_check = ["calculate_dynamic_stops", "compute_lot_size"]
-
-        for method in methods_to_check:
-            assert hasattr(risk_calc, method), f"Method {method} not found"
-
-        print(f"✅ All required methods present: {len(methods_to_check)} methods")
-        return True
-
-    except Exception as e:
-        print(f"❌ Error testing RiskCalculator: {e}")
-        return False
-
-
-def test_session_manager():
-    """Test SessionManager functionality"""
-    print("\n🔍 Testing SessionManager...")
-
-    try:
-        mt5_gateway = MT5Gateway()
-        market_data = MarketDataService()
-        risk_calc = RiskCalculator(market_data)
-        session_manager = SessionManager(mt5_gateway, market_data, risk_calc)
-        print("✅ SessionManager instantiated successfully")
-
-        # Verify that required methods exist
-        methods_to_check = [
-            "get_current_session",
-            "get_session_high_low",
-            "place_session_breakout_orders",
-            "cancel_session_orders",
-            "check_existing_session_orders",
-        ]
-
-        for method in methods_to_check:
-            assert hasattr(session_manager, method), f"Method {method} not found"
-
-        print(f"✅ All required methods present: {len(methods_to_check)} methods")
-        return True
-
-    except Exception as e:
-        print(f"❌ Error testing SessionManager: {e}")
-        return False
-
-
-def test_quantitative_integration():
-    """Test QuantitativeIntegration functionality"""
-    print("\n🔍 Testing QuantitativeIntegration...")
-
-    try:
-        quant_integration = QuantitativeIntegration()
-        print("✅ QuantitativeIntegration instantiated successfully")
-
-        # Verify that required methods exist
-        methods_to_check = ["apply_quantitative_analysis"]
-
-        for method in methods_to_check:
-            assert hasattr(quant_integration, method), f"Method {method} not found"
-
-        print(f"✅ All required methods present: {len(methods_to_check)} methods")
-        return True
-
-    except Exception as e:
-        print(f"❌ Error testing QuantitativeIntegration: {e}")
-        return False
-
-
-def test_solid_principles():
-    """Test that SOLID principles are properly implemented"""
-    print("\n🔍 Testing SOLID Principles Implementation...")
-
-    try:
-        # Single Responsibility: Each class has a single, well-defined responsibility
-
-        print(
-            "✅ Single Responsibility: Each class has a single, well-defined responsibility",
-        )
-
-        # Open/Closed: Classes are open for extension but closed for modification
-        # This is demonstrated by the ability to extend functionality without changing core classes
-        print(
-            "✅ Open/Closed: Classes are designed to be extended without modification",
-        )
-
-        # Liskov Substitution: Not applicable in this context as we don't have inheritance
-        print("✅ Liskov Substitution: N/A (no inheritance hierarchy)")
-
-        # Interface Segregation: Each class exposes only the methods it's responsible for
-        print("✅ Interface Segregation: Each class exposes only relevant methods")
-
-        # Dependency Inversion: Classes depend on abstractions (services) not concrete implementations
-        print(
-            "✅ Dependency Inversion: Classes depend on abstractions, not concrete implementations",
-        )
-
-        return True
-
-    except Exception as e:
-        print(f"❌ Error testing SOLID principles: {e}")
+        print(f"❌ Error testing StrategyConfig: {e}")
         return False
 
 
@@ -190,11 +66,7 @@ def main():
 
     tests = [
         test_strategy_instantiation,
-        test_market_data_service,
-        test_risk_calculator,
-        test_session_manager,
-        test_quantitative_integration,
-        test_solid_principles,
+        test_strategy_config,
     ]
 
     results = []

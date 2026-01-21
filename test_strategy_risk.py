@@ -21,17 +21,15 @@ def test_strategy_risk():
         config1 = StrategyConfig()
         print(f"   Risk percent: {config1.risk_percent}%")
 
-        # Test donchian_strategy_refactored
-        print("\n2. Testing donchian_strategy_refactored.StrategyConfig:")
-        from core.donchian_strategy_refactored import (
-            StrategyConfig as RefactoredStrategyConfig,
-        )
-        config2 = RefactoredStrategyConfig()
+        # Test current strategy configuration
+        print("\n2. Testing current StrategyConfig:")
+        from core.donchian_strategy import StrategyConfig as CurrentStrategyConfig
+        config2 = CurrentStrategyConfig()
         print(f"   Risk percent: {config2.risk_percent}%")
 
         # Verify both use 2.0%
         if config1.risk_percent == 2.0 and config2.risk_percent == 2.0:
-            print("\n✅ SUCCESS: Both strategies are configured to use 2.0% risk per trade")
+            print("\n✅ SUCCESS: Strategy is configured to use 2.0% risk per trade")
         else:
             print(f"\n❌ ERROR: Expected 2.0% risk, got {config1.risk_percent}% and {config2.risk_percent}%")
 

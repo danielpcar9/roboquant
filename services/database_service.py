@@ -164,12 +164,12 @@ class DatabaseService:
                 .select("*")
                 .gte("timestamp_open", cutoff_date)
                 .limit(limit)
-            )  # type: ignore
+            )
 
             if symbol:
-                query = query.eq("symbol", symbol)  # type: ignore
+                query = query.eq("symbol", symbol)
 
-            result = query.execute()  # type: ignore
+            result = query.execute()
             logger.debug(f"Retrieved {len(result.data)} trades from database")
             return result.data
 
@@ -214,7 +214,7 @@ class DatabaseService:
 
             self.client.table("trades").update(update_data).eq(
                 "ticket", ticket,
-            ).execute()  # type: ignore
+            ).execute()
             logger.info(f"Trade {ticket} closed: P&L={pnl:.2f} ({pnl_pct:.2f}%)")
             return True
 

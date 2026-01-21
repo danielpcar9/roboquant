@@ -72,7 +72,7 @@ def test_log_trade():
         return False
     finally:
         # Restore original file path and clean up
-        post_mortem.TRADES_FILE = original_file
+        post_mortem.TRADES_FILE = str(original_file)
         try:
             os.unlink(temp_trades_file)
         except OSError:
@@ -94,7 +94,7 @@ def test_analyze_recent_trades():
 
     try:
         # Temporarily override the TRADES_FILE path
-        post_mortem.TRADES_FILE = temp_trades_file
+        post_mortem.TRADES_FILE = str(temp_trades_file)
 
         # Create test data with known characteristics
         test_data = []
@@ -186,7 +186,7 @@ def test_analyze_recent_trades():
         return False
     finally:
         # Restore original file path and clean up
-        post_mortem.TRADES_FILE = original_file
+        post_mortem.TRADES_FILE = str(original_file)
         try:
             os.unlink(temp_trades_file)
         except OSError:
@@ -213,7 +213,7 @@ def test_generate_performance_report():
 
     try:
         # Temporarily override the TRADES_FILE path
-        post_mortem.TRADES_FILE = temp_trades_file
+        post_mortem.TRADES_FILE = str(temp_trades_file)
 
         # Create simple test data
         trade_data = {
@@ -259,7 +259,7 @@ def test_generate_performance_report():
         return False
     finally:
         # Restore original file path and clean up
-        post_mortem.TRADES_FILE = original_file
+        post_mortem.TRADES_FILE = str(original_file)
         try:
             os.unlink(temp_trades_file)
             os.unlink(temp_report_file)

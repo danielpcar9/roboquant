@@ -10,7 +10,7 @@ class PositionSizer:
     """Mathematical position sizing using quantitative formulas
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.default_kelly_fraction = 0.5  # Conservative approach: use half Kelly
         self.max_kelly_percentage = 0.1  # Max 10% of account
         self.max_sharpe_percentage = 0.05  # Max 5% risk
@@ -95,7 +95,7 @@ class PositionSizer:
 
         # Adjust position size based on Sharpe ratio
         optimal_risk_pct = max_risk_pct * (1 + min(sharpe, 2.0))  # Cap at 3x risk
-        return min(optimal_risk_pct / 100.0, self.max_sharpe_percentage)  # Max 5% risk
+        return float(min(optimal_risk_pct / 100.0, self.max_sharpe_percentage))  # Max 5% risk
 
     def calculate_optimal_position_size(
         self,
@@ -150,11 +150,11 @@ def calculate_value_at_risk(returns: np.ndarray, confidence_level: float = 0.95)
         return 0.0
 
     # Sort returns
-    sorted_returns = np.sort(returns)
+    sorted_returns: np.ndarray = np.sort(returns)
 
     # Calculate VaR at specified confidence level
     var_index = int((1 - confidence_level) * len(sorted_returns))
-    return abs(sorted_returns[var_index])
+    return float(abs(sorted_returns[var_index]))
 
 
 def calculate_expected_shortfall(returns: np.ndarray, confidence_level: float = 0.95) -> float:
@@ -164,7 +164,7 @@ def calculate_expected_shortfall(returns: np.ndarray, confidence_level: float = 
         return 0.0
 
     # Sort returns
-    sorted_returns = np.sort(returns)
+    sorted_returns: np.ndarray = np.sort(returns)
 
     # Calculate ES at specified confidence level
     var_index = int((1 - confidence_level) * len(sorted_returns))
@@ -173,4 +173,4 @@ def calculate_expected_shortfall(returns: np.ndarray, confidence_level: float = 
     if len(tail_losses) == 0:
         return 0.0
 
-    return abs(np.mean(tail_losses))
+    return float(abs(np.mean(tail_losses)))

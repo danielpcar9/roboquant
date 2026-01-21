@@ -17,8 +17,8 @@ from .sizers.position_sizer import PositionSizer
 class RiskMetrics:
     """Track and calculate risk metrics for quantitative trading"""
 
-    def __init__(self):
-        self.daily_losses = []
+    def __init__(self) -> None:
+        self.daily_losses: list[float] = []
         self.max_daily_loss = 0.03  # 3% maximum daily loss
         self.drawdown_limit = 0.08   # 8% maximum drawdown
 
@@ -39,12 +39,12 @@ class QuantitativeEngine:
     """Main quantitative trading engine combining all mathematical components
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.analyzer = QuantitativeAnalyzer()
         self.sizer = PositionSizer()
         self.optimizer = QuantitativeOptimizer()
         self.risk_metrics = RiskMetrics()
-        self.historical_data = {}
+        self.historical_data: dict[str, Any] = {}
 
         # Initialize quant trades tracking
         self.quant_trades_file = Path("data/quant_trades.json")
@@ -77,11 +77,11 @@ class QuantitativeEngine:
 
         # Determine recommendation based on probability
         probability = probability_result["probability"]
-        if probability >= 0.7:
+        if probability >= 0.75:  # Aumentado de 0.7 a 0.75 para ser más selectivo
             recommendation = "STRONG_BUY" if di_plus > di_minus else "STRONG_SELL"
-        elif probability >= 0.6:
+        elif probability >= 0.65:  # Aumentado de 0.6 a 0.65
             recommendation = "BUY" if di_plus > di_minus else "SELL"
-        elif probability >= 0.4:
+        elif probability >= 0.45:  # Ajustado de 0.4 a 0.45
             recommendation = "HOLD"
         else:
             recommendation = "AVOID"
@@ -151,7 +151,7 @@ class QuantitativeEngine:
 
         # Ensure minimum and maximum limits
         min_lots = 0.01
-        max_lots = 1.0  # Conservative maximum
+        max_lots = 0.5  # Reducido de 1.0 a 0.5 para menor riesgo
 
         final_size = max(min_lots, min(optimal_lots, max_lots))
 
@@ -170,7 +170,7 @@ class QuantitativeEngine:
         """
         try:
             # Load existing trades
-            trades = self._load_quant_trades()
+            trades_list = self._load_quant_trades_dicts()
 
             # Add new trade
             new_trade = {
@@ -180,22 +180,34 @@ class QuantitativeEngine:
                 "investment": investment,
                 "pnl": return_pct * investment / 100,
             }
-            trades.append(new_trade)
+            trades_list.append(new_trade)
 
             # Keep only last 200 trades for performance
-            if len(trades) > 200:
-                trades = trades[-200:]
+            if len(trades_list) > 200:
+                trades_list = trades_list[-200:]
 
             # Save updated trades
             with Path(self.quant_trades_file).open("w") as f:
-                json.dump(trades, f)
+                json.dump(trades_list, f)
 
             logging.info(
                 f"📊 Quant trade recorded: {return_pct:.2f}%, "
-                f"score: {entry_score:.3f}, total: {len(trades)}",
+                f"score: {entry_score:.3f}, total: {len(trades_list)}",
             )
         except Exception as e:
             logging.exception("Error recording trade result: %s", e)
+
+    def _load_quant_trades_dicts(self) -> list[dict[str, Any]]:
+        """Load quant trades as dictionaries from persistence file"""
+        try:
+            if self.quant_trades_file.exists():
+                with Path(self.quant_trades_file).open("r") as f:
+                    return json.load(f)
+            else:
+                return []
+        except Exception as e:
+            logging.exception("Error loading quant trades: %s", e)
+            return []
 
     def _load_quant_trades(self) -> list[float]:
         """Load only quant trades from persistence file"""
@@ -204,7 +216,7 @@ class QuantitativeEngine:
                 with Path(self.quant_trades_file).open("r") as f:
                     trades = json.load(f)
                     # Return only the returns from the trades
-                    return [trade["return"] for trade in trades]
+                    return [float(trade["return"]) for trade in trades]
             else:
                 return []
         except Exception as e:

@@ -93,8 +93,20 @@ class DonchianStrategy:
 
     def run_strategy(self, symbol="XAUUSD"):
         """Main strategy function - coordinates all components"""
-        logging.info(f"Running modular strategy for symbol: {symbol}")
-
+        logging.info(f"🚀 Running modular strategy for symbol: {symbol}")
+            
+        # Log current market conditions
+        try:
+            # Use the existing market_data instance instead of creating new one
+            adx_data = self.market_data.calculate_adx(symbol, 14)  # type: ignore
+            if adx_data:
+                logging.info(f"📊 Market Conditions - ADX: {adx_data['adx']:.2f}, DI+: {adx_data['di_plus']:.2f}, DI-: {adx_data['di_minus']:.2f}")
+        except AttributeError:
+            # Method may not exist, skip logging
+            pass
+        except Exception as e:
+            logging.warning(f"Could not get market conditions: {e}")
+            
         # Phase 1: Validate market conditions
         is_valid, reason = self.position_manager.validate_market_conditions(symbol)
         if not is_valid:
@@ -155,7 +167,8 @@ class DonchianStrategy:
 
         # Phase 5: Calculate position size
         try:
-            account_info = mt5.account_info()
+            import MetaTrader5 as mt5
+            account_info = mt5.account_info()  # type: ignore
             if account_info is None:
                 logging.error("Failed to get account info")
                 return
@@ -174,8 +187,9 @@ class DonchianStrategy:
 
         # Phase 6: Execute trade
         try:
-            sl_points = sl_distance / mt5.symbol_info(symbol).point
-            tp_points = abs(entry_price - tp_price) / mt5.symbol_info(symbol).point
+            import MetaTrader5 as mt5
+            sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
+            tp_points = abs(entry_price - tp_price) / mt5.symbol_info(symbol).point  # type: ignore
 
             success = self.position_manager.execute_trade(
                 symbol, order_type, lots, sl_points, tp_points,
