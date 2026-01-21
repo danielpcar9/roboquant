@@ -1,9 +1,10 @@
-import os
 import logging
-import pandas as pd
-import numpy as np
+import os
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 # Try to import MT5, but make it optional to avoid issues in environments without MT5
 try:
@@ -55,12 +56,13 @@ def ensure_logs_dir():
     os.makedirs(os.path.join(os.path.dirname(__file__), "logs"), exist_ok=True)
 
 
-def log_trade(trade_dict: Dict[str, Any]) -> None:
+def log_trade(trade_dict: dict[str, Any]) -> None:
     """
     Log a trade to the trades CSV file.
 
     Args:
         trade_dict: Dictionary containing trade information
+
     """
     ensure_logs_dir()
 
@@ -85,7 +87,7 @@ def log_trade(trade_dict: Dict[str, Any]) -> None:
     logging.info("Trade %s registered in %s", trade_dict.get("ticket"), TRADES_FILE)
 
 
-def analyze_recent_trades(n: int = 100) -> Dict[str, Any]:
+def analyze_recent_trades(n: int = 100) -> dict[str, Any]:
     """
     Analyze recent trades and calculate performance metrics.
 
@@ -94,6 +96,7 @@ def analyze_recent_trades(n: int = 100) -> Dict[str, Any]:
 
     Returns:
         Dictionary with performance metrics
+
     """
     if not os.path.exists(TRADES_FILE):
         logging.warning("Trades file not found: %s", TRADES_FILE)
@@ -102,7 +105,7 @@ def analyze_recent_trades(n: int = 100) -> Dict[str, Any]:
     try:
         df = pd.read_csv(TRADES_FILE)
     except Exception as e:
-        logging.error("Error reading trades file: %s", e)
+        logging.exception("Error reading trades file: %s", e)
         return {}
 
     if len(df) == 0:
@@ -230,6 +233,7 @@ def generate_performance_report(output_file: str = "performance_report.txt") -> 
 
     Args:
         output_file: Path to output file
+
     """
     metrics = analyze_recent_trades()
 
@@ -266,7 +270,7 @@ def generate_performance_report(output_file: str = "performance_report.txt") -> 
             f.write(f"Calmar Ratio: {metrics['calmar_ratio']:.2f}\n")
             f.write(f"Maximum Drawdown: ${metrics['max_drawdown']:.2f}\n")
             f.write(
-                f"Maximum Consecutive Losses: {metrics['max_consecutive_losses']}\n\n"
+                f"Maximum Consecutive Losses: {metrics['max_consecutive_losses']}\n\n",
             )
 
             f.write("TRADE CHARACTERISTICS\n")
@@ -274,7 +278,7 @@ def generate_performance_report(output_file: str = "performance_report.txt") -> 
             f.write(f"Best Trade: ${metrics['best_trade']:.2f}\n")
             f.write(f"Worst Trade: ${metrics['worst_trade']:.2f}\n")
             f.write(
-                f"Average Trade Duration: {metrics['avg_duration_minutes']:.1f} minutes\n"
+                f"Average Trade Duration: {metrics['avg_duration_minutes']:.1f} minutes\n",
             )
             if metrics["best_hour"] is not None:
                 f.write(f"Best Performing Hour: {int(metrics['best_hour'])}:00\n")
@@ -284,7 +288,7 @@ def generate_performance_report(output_file: str = "performance_report.txt") -> 
         logging.info("Performance report generated: %s", output_file)
 
     except Exception as e:
-        logging.error("Error generating performance report: %s", e)
+        logging.exception("Error generating performance report: %s", e)
 
 
 def get_mt5_trade_history(days_back=30, magic_number=None, mt5_module=None):
@@ -298,6 +302,7 @@ def get_mt5_trade_history(days_back=30, magic_number=None, mt5_module=None):
 
     Returns:
         List of trades with profit/loss
+
     """
     # Use provided MT5 module or global one
     mt5_to_use = mt5_module if mt5_module else mt5
@@ -334,7 +339,7 @@ def get_mt5_trade_history(days_back=30, magic_number=None, mt5_module=None):
                     "profit": deal.profit,
                     "volume": deal.volume,
                     "type": "BUY" if deal.type == mt5_to_use.DEAL_TYPE_BUY else "SELL",
-                }
+                },
             )
 
     return trades
@@ -350,6 +355,7 @@ def calculate_profit_factor_from_trades(trades):
 
     Returns:
         float: Profit factor
+
     """
     if not trades:
         return 0.0
@@ -375,6 +381,7 @@ def calculate_sharpe_ratio_from_trades(trades, risk_free_rate=0.02):
 
     Returns:
         float: Sharpe ratio (annualized)
+
     """
     if not trades or len(trades) < 2:
         return 0.0
@@ -421,6 +428,7 @@ def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None)
 
     Returns:
         dict: Performance metrics
+
     """
     trades = get_mt5_trade_history(days_back, magic_number, mt5_module)
 

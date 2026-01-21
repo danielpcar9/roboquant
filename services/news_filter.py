@@ -1,6 +1,6 @@
+import calendar
 import logging
 from datetime import datetime, timedelta
-import calendar
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -25,7 +25,7 @@ class NewsFilter:
                 self.enabled = nf_config.get("enabled", True)
                 self.major_events_only = nf_config.get("major_events_only", True)
                 self.avoid_events = nf_config.get(
-                    "avoid_events", ["NFP", "CPI", "PPI", "FOMC"]
+                    "avoid_events", ["NFP", "CPI", "PPI", "FOMC"],
                 )
                 self.buffer_minutes = nf_config.get("buffer_minutes", 30)
                 logger.info("News filter configuration loaded successfully")

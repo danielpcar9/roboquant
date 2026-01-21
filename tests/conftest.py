@@ -5,9 +5,9 @@ Configuración de tests para la suite unitaria de RoboQuant
 import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
-import pytest
-import numpy as np
 
+import numpy as np
+import pytest
 
 # Añadir el directorio raíz al path para imports
 project_root = Path(__file__).parent.parent
@@ -27,7 +27,7 @@ def mock_mt5():
                 mt5,
                 "account_info",
                 return_value=Mock(
-                    balance=10000.0, equity=10000.0, margin=0.0, free_margin=10000.0
+                    balance=10000.0, equity=10000.0, margin=0.0, free_margin=10000.0,
                 ),
             ):
                 # Mock para datos de mercado
@@ -62,7 +62,7 @@ def mock_mt5():
                             volume_step=0.01,
                         )
                         with patch.object(
-                            mt5, "symbol_info", return_value=mock_symbol_info
+                            mt5, "symbol_info", return_value=mock_symbol_info,
                         ):
                             # Mock para positions_get
                             with patch.object(mt5, "positions_get", return_value=[]):
@@ -109,7 +109,7 @@ def sample_price_data():
                 "close": round(close, 2),
                 "tick_volume": np.random.randint(50, 200),
                 "spread": 2,
-            }
+            },
         )
 
     return ohlc_data

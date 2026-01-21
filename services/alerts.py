@@ -1,8 +1,9 @@
 # alerts.py
-import os
 import logging
+import os
+from datetime import UTC, datetime
+
 import requests
-from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,14 +33,13 @@ def telegram_alert(message, parse_mode="Markdown"):
         if response.status_code == 200:
             logging.info("Alerta enviada a Telegram")
             return True
-        else:
-            logging.error(
-                "Error API Telegram: %d %s", response.status_code, response.text
-            )
-            return False
+        logging.error(
+            "Error API Telegram: %d %s", response.status_code, response.text,
+        )
+        return False
 
     except Exception as e:
-        logging.error("Error enviando alerta a Telegram: %s", e)
+        logging.exception("Error enviando alerta a Telegram: %s", e)
         return False
 
 
@@ -65,7 +65,7 @@ Time: {}
         entry,
         sl,
         tp,
-        datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
     )
     return telegram_alert(msg)
 
@@ -88,7 +88,7 @@ Time: {}
         pnl,
         emoji,
         reason,
-        datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
     )
     return telegram_alert(msg)
 
@@ -102,7 +102,7 @@ Reason: {}
 Trading halted until issue is resolved.
 
 Time: {}
-""".format(reason, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
+""".format(reason, datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"))
     return telegram_alert(msg)
 
 
@@ -116,17 +116,17 @@ All trading stopped immediately.
 Remove config/kill_switch.flag to resume.
 
 Time: {}
-""".format(reason, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
+""".format(reason, datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"))
     return telegram_alert(msg)
 
 
 def alert_daily_summary():
     """Envía resumen diario automático al final del día"""
     try:
-        from analysis.post_mortem import analyze_recent_trades
-
         # Import MetaTrader5 (official package name)
         import MetaTrader5 as mt5  # type: ignore
+
+        from analysis.post_mortem import analyze_recent_trades
 
         # Inicializar MT5 para obtener balance
         if not mt5.initialize():  # type: ignore
@@ -160,7 +160,7 @@ Trades: {}
 
 💰 P&L: ${:.2f}
 📊 Profit Factor: {:.2f}
-  
+
 📉 Max Racha Perdedora: {}
 
 Balance: ${:.2f}
@@ -175,7 +175,7 @@ Fecha: {}
                 metrics.get("profit_factor", 0),
                 metrics.get("max_losing_streak", 0),
                 account_info.balance if account_info else 0,
-                datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                datetime.now(UTC).strftime("%Y-%m-%d"),
             )
 
         # Cerrar MT5
@@ -184,5 +184,5 @@ Fecha: {}
         return telegram_alert(msg)
 
     except Exception as e:
-        logging.error(f"Error generando resumen diario: {e}")
+        logging.exception(f"Error generando resumen diario: {e}")
         return False

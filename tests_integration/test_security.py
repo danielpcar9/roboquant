@@ -6,13 +6,14 @@ Test script for security components in RoboQuant trading system.
 import os
 import tempfile
 import time
+
 from services.security_manager import (
-    SecureCredentialManager,
     InputValidator,
     RateLimiter,
-    sanitize_error_message,
+    SecureCredentialManager,
     constant_time_compare,
     ip_whitelist,
+    sanitize_error_message,
 )
 
 
@@ -248,9 +249,8 @@ def main():
     if failed == 0:
         print("🎉 All security tests passed!")
         return True
-    else:
-        print("❌ Some security tests failed!")
-        return False
+    print("❌ Some security tests failed!")
+    return False
 
 
 if __name__ == "__main__":

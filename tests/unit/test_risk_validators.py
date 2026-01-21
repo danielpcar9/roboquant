@@ -2,8 +2,9 @@
 Tests unitarios para RiskValidator
 """
 
-import pytest
 from unittest.mock import Mock
+
+import pytest
 
 
 class TestRiskValidator:
@@ -17,7 +18,7 @@ class TestRiskValidator:
         )
 
         return RiskValidator(
-            market_data_service=technical_calculator, mt5_module=mock_mt5
+            market_data_service=technical_calculator, mt5_module=mock_mt5,
         )
 
     def test_init_with_custom_mt5(self, mock_mt5, technical_calculator):
@@ -27,7 +28,7 @@ class TestRiskValidator:
         )
 
         validator = RiskValidator(
-            market_data_service=technical_calculator, mt5_module=mock_mt5
+            market_data_service=technical_calculator, mt5_module=mock_mt5,
         )
 
         assert validator.mt5 == mock_mt5
@@ -41,7 +42,7 @@ class TestRiskValidator:
         atr = 2.5
 
         sl, tp = risk_validator.calculate_dynamic_stops(
-            symbol, entry_price, order_type, atr
+            symbol, entry_price, order_type, atr,
         )
 
         # Para BUY: SL debe ser menor que entry_price, TP mayor
@@ -58,7 +59,7 @@ class TestRiskValidator:
         atr = 2.5
 
         sl, tp = risk_validator.calculate_dynamic_stops(
-            symbol, entry_price, order_type, atr
+            symbol, entry_price, order_type, atr,
         )
 
         # Para SELL: SL debe ser mayor que entry_price, TP menor
@@ -75,7 +76,7 @@ class TestRiskValidator:
         atr = 0.0
 
         sl, tp = risk_validator.calculate_dynamic_stops(
-            symbol, entry_price, order_type, atr
+            symbol, entry_price, order_type, atr,
         )
 
         # Con ATR cero, debería usar valores mínimos por defecto
@@ -92,7 +93,7 @@ class TestRiskValidator:
         symbol = "XAUUSD"
 
         lot_size = risk_validator.compute_lot_size(
-            balance, risk_pct, sl_distance, symbol
+            balance, risk_pct, sl_distance, symbol,
         )
 
         # El tamaño debe ser positivo y razonable
@@ -108,7 +109,7 @@ class TestRiskValidator:
         symbol = "XAUUSD"
 
         lot_size = risk_validator.compute_lot_size(
-            balance, risk_pct, sl_distance, symbol
+            balance, risk_pct, sl_distance, symbol,
         )
 
         # Con balance cero, debería retornar tamaño mínimo
@@ -122,7 +123,7 @@ class TestRiskValidator:
         symbol = "XAUUSD"
 
         lot_size = risk_validator.compute_lot_size(
-            balance, risk_pct, sl_distance, symbol
+            balance, risk_pct, sl_distance, symbol,
         )
 
         # Con SL distance cero, debería manejarlo gracefulmente
@@ -137,7 +138,7 @@ class TestRiskValidator:
         symbol = "XAUUSD"
 
         lot_size = risk_validator.compute_lot_size(
-            balance, risk_pct, sl_distance, symbol
+            balance, risk_pct, sl_distance, symbol,
         )
 
         # El tamaño debería ser mayor con más riesgo
@@ -150,7 +151,7 @@ class TestRiskValidator:
         symbol = "XAUUSD"
 
         is_valid, message = risk_validator.validate_stop_loss_distance(
-            sl_points, symbol
+            sl_points, symbol,
         )
 
         assert is_valid is True
@@ -163,7 +164,7 @@ class TestRiskValidator:
         symbol = "XAUUSD"
 
         is_valid, message = risk_validator.validate_stop_loss_distance(
-            sl_points, symbol
+            sl_points, symbol,
         )
 
         # Podría ser válido o no dependiendo de la configuración
@@ -176,7 +177,7 @@ class TestRiskValidator:
         sl_points = 30.0
 
         is_valid, message = risk_validator.validate_take_profit_ratio(
-            tp_points, sl_points
+            tp_points, sl_points,
         )
 
         assert is_valid is True
@@ -188,7 +189,7 @@ class TestRiskValidator:
         sl_points = 30.0
 
         is_valid, message = risk_validator.validate_take_profit_ratio(
-            tp_points, sl_points
+            tp_points, sl_points,
         )
 
         # Dependiendo de configuración, podría ser válido o no
@@ -201,7 +202,7 @@ class TestRiskValidator:
         sl_points = 0.0
 
         is_valid, message = risk_validator.validate_take_profit_ratio(
-            tp_points, sl_points
+            tp_points, sl_points,
         )
 
         # Con SL cero, debería manejarlo
@@ -215,7 +216,7 @@ class TestRiskValidator:
         max_risk_percent = 2.0
 
         is_within_limits, message = risk_validator.check_account_risk_limits(
-            balance, risk_amount, max_risk_percent
+            balance, risk_amount, max_risk_percent,
         )
 
         assert is_within_limits is True
@@ -228,7 +229,7 @@ class TestRiskValidator:
         max_risk_percent = 2.0
 
         is_within_limits, message = risk_validator.check_account_risk_limits(
-            balance, risk_amount, max_risk_percent
+            balance, risk_amount, max_risk_percent,
         )
 
         assert is_within_limits is False
@@ -275,7 +276,7 @@ class TestRiskValidator:
         min_lot_size = 0.01
 
         is_valid, message = risk_validator.validate_position_sizing(
-            lot_size, max_lot_size, min_lot_size
+            lot_size, max_lot_size, min_lot_size,
         )
 
         assert is_valid is True
@@ -288,7 +289,7 @@ class TestRiskValidator:
         min_lot_size = 0.01
 
         is_valid, message = risk_validator.validate_position_sizing(
-            lot_size, max_lot_size, min_lot_size
+            lot_size, max_lot_size, min_lot_size,
         )
 
         assert is_valid is False
@@ -302,7 +303,7 @@ class TestRiskValidator:
         min_lot_size = 0.01
 
         is_valid, message = risk_validator.validate_position_sizing(
-            lot_size, max_lot_size, min_lot_size
+            lot_size, max_lot_size, min_lot_size,
         )
 
         assert is_valid is False

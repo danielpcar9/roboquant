@@ -5,14 +5,16 @@ This test verifies that the quantitative engine is properly integrated
 into the Donchian strategy and produces meaningful results.
 """
 
-import numpy as np
 import logging
-from core.quant_engine import QuantitativeEngine
+
+import numpy as np
+
 from brokers.mt5_connection_manager import MT5ConnectionManager
+from core.quant_engine import QuantitativeEngine
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -39,12 +41,12 @@ def test_quantitative_integration():
         # Generate sample price data (simulating what would come from MT5)
         np.random.seed(42)  # For reproducible results
         sample_prices = 100 + np.cumsum(
-            np.random.normal(0, 0.1, 200)
+            np.random.normal(0, 0.1, 200),
         )  # 200 price points
 
         logger.info(f"📊 Generated sample price data: {len(sample_prices)} points")
         logger.info(
-            f"📊 Price range: {sample_prices.min():.5f} - {sample_prices.max():.5f}"
+            f"📊 Price range: {sample_prices.min():.5f} - {sample_prices.max():.5f}",
         )
 
         # Test quantitative analysis
@@ -53,7 +55,7 @@ def test_quantitative_integration():
         di_minus = 15.0  # Simulated -DI value
 
         logger.info(
-            f"📈 Simulated indicators - ADX: {adx_value}, +DI: {di_plus}, -DI: {di_minus}"
+            f"📈 Simulated indicators - ADX: {adx_value}, +DI: {di_plus}, -DI: {di_minus}",
         )
 
         # Calculate entry score using quantitative engine
@@ -124,12 +126,12 @@ def test_edge_cases():
     )
 
     logger.info(
-        f"📉 Volatile market result - Score: {result['entry_score']:.3f}, Recommendation: {result['recommendation']}"
+        f"📉 Volatile market result - Score: {result['entry_score']:.3f}, Recommendation: {result['recommendation']}",
     )
 
     # Test with trending data
     trending_prices = np.linspace(100, 120, 100) + np.random.normal(
-        0, 0.2, 100
+        0, 0.2, 100,
     )  # Upward trend
 
     result = quant_engine.calculate_entry_score(
@@ -140,7 +142,7 @@ def test_edge_cases():
     )
 
     logger.info(
-        f"📈 Trending market result - Score: {result['entry_score']:.3f}, Recommendation: {result['recommendation']}"
+        f"📈 Trending market result - Score: {result['entry_score']:.3f}, Recommendation: {result['recommendation']}",
     )
 
     logger.info("✅ Edge case tests completed")

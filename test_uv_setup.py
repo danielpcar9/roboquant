@@ -3,12 +3,12 @@
 Script de prueba para verificar que el sistema funciona correctamente con uv
 """
 
-import sys
 import logging
+import sys
 
 # Configurar logging básico
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 
@@ -40,7 +40,7 @@ def test_quant_engine():
 
         # Prueba cálculo de tamaño de posición
         position_size = engine.calculate_optimal_position_size(
-            account_balance=10000.0, entry_score=0.75
+            account_balance=10000.0, entry_score=0.75,
         )
         print(f"✅ Cálculo de posición: {position_size:.4f}")
         return True
@@ -88,9 +88,8 @@ def main():
     if tests_passed == total_tests:
         print("🎉 ¡Todos los tests pasaron! El sistema está listo para usar con uv.")
         return 0
-    else:
-        print("⚠️  Algunos tests fallaron. Revisa los errores arriba.")
-        return 1
+    print("⚠️  Algunos tests fallaron. Revisa los errores arriba.")
+    return 1
 
 
 if __name__ == "__main__":

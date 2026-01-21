@@ -1,6 +1,7 @@
 """Quick ADX Filter Test"""
 
 import MetaTrader5 as mt5
+
 from core.market_regime import market_regime_detector
 
 # Initialize MT5
@@ -8,7 +9,7 @@ mt5.initialize()
 
 # Test current market regime
 regime, adx, slope = market_regime_detector.detect_regime(
-    "XAUUSD", adx_period=14, adx_threshold=18
+    "XAUUSD", adx_period=14, adx_threshold=18,
 )
 
 print("\n" + "=" * 50)

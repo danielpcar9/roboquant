@@ -1,6 +1,6 @@
 import logging
-from datetime import datetime, timezone
-from typing import Dict, Any
+from datetime import UTC, datetime
+from typing import Any
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
@@ -22,7 +22,7 @@ class TradeScorer:
         historical_momentum: float,
         atr: float | None = None,
         avg_atr: float | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Score a trade setup based on multiple heuristics
 
@@ -38,13 +38,14 @@ class TradeScorer:
 
         Returns:
             Dict with score, grade, and recommendation
+
         """
         score = 0
         details = {}
 
         # H1: Breakout strength (25pts)
         breakout_strength = self._calculate_breakout_strength(
-            price, upper_channel, lower_channel
+            price, upper_channel, lower_channel,
         )
         h1_score = self._score_breakout_strength(breakout_strength)
         score += h1_score
@@ -54,7 +55,7 @@ class TradeScorer:
             "max_points": 25,
         }
         logging.debug(
-            f"H1 Breakout Strength: {breakout_strength:.4f}, Score: {h1_score}/25"
+            f"H1 Breakout Strength: {breakout_strength:.4f}, Score: {h1_score}/25",
         )
 
         # H2: Momentum ratio (25pts)
@@ -108,12 +109,12 @@ class TradeScorer:
         }
 
         logging.info(
-            f"Trade Setup Score: {score}/100, Grade: {grade}, Recommended: {trade_recommended}"
+            f"Trade Setup Score: {score}/100, Grade: {grade}, Recommended: {trade_recommended}",
         )
         return result
 
     def _calculate_breakout_strength(
-        self, price: float, upper_channel: float, lower_channel: float
+        self, price: float, upper_channel: float, lower_channel: float,
     ) -> float:
         """Calculate breakout strength as percentage from channel"""
         channel_width = upper_channel - lower_channel
@@ -124,69 +125,64 @@ class TradeScorer:
         if price > upper_channel:
             return (price - upper_channel) / channel_width
         # For sell breakout (price below lower channel)
-        elif price < lower_channel:
+        if price < lower_channel:
             return (lower_channel - price) / channel_width
-        else:
-            return 0
+        return 0
 
     def _score_breakout_strength(self, breakout_strength: float) -> int:
         """Score breakout strength (0-25 points)"""
         if breakout_strength > 0.15:  # >15% breakout
             return 25
-        elif breakout_strength > 0.10:  # 10-15% breakout
+        if breakout_strength > 0.10:  # 10-15% breakout
             return 20
-        elif breakout_strength > 0.05:  # 5-10% breakout
+        if breakout_strength > 0.05:  # 5-10% breakout
             return 15
-        elif breakout_strength > 0.02:  # 2-5% breakout
+        if breakout_strength > 0.02:  # 2-5% breakout
             return 10
-        else:
-            return 0
+        return 0
 
     def _score_momentum_ratio(self, momentum_ratio: float) -> int:
         """Score momentum ratio (0-25 points) - refined for better quality"""
         # Require positive momentum (current > historical) for full points
         if momentum_ratio >= 1.5:
             return 25
-        elif momentum_ratio >= 1.2:
+        if momentum_ratio >= 1.2:
             return 20
-        elif momentum_ratio >= 1.0:
+        if momentum_ratio >= 1.0:
             return 15  # Still allow trades at breakeven momentum
-        elif momentum_ratio >= 0.9:  # Slightly below historical
+        if momentum_ratio >= 0.9:  # Slightly below historical
             return 12  # Reduced but still tradeable
-        elif momentum_ratio >= 0.8:
+        if momentum_ratio >= 0.8:
             return 8
-        else:
-            return 5  # Very low score for weak momentum
+        return 5  # Very low score for weak momentum
 
     def _score_time_session(self) -> int:
         """Score based on trading session (0-20 points) - enhanced for overlap periods"""
-        current_hour_utc = datetime.now(timezone.utc).hour
+        current_hour_utc = datetime.now(UTC).hour
 
         # Best sessions: London/NY overlap 13-16h UTC (highest liquidity)
         if 13 <= current_hour_utc <= 16:
             return 20
         # Good: London open 7-10h UTC
-        elif 7 <= current_hour_utc <= 10:
+        if 7 <= current_hour_utc <= 10:
             return 18
         # Acceptable: Late London/Early NY 10-13h, 16-17h UTC
-        elif (10 <= current_hour_utc <= 12) or (16 <= current_hour_utc <= 17):
+        if (10 <= current_hour_utc <= 12) or (16 <= current_hour_utc <= 17):
             return 12
         # Moderate: Extended hours 6-7h, 17-20h UTC
-        elif (6 <= current_hour_utc <= 6) or (17 <= current_hour_utc <= 20):
+        if (6 <= current_hour_utc <= 6) or (17 <= current_hour_utc <= 20):
             return 8
-        else:
-            return 0  # Low liquidity periods
+        return 0  # Low liquidity periods
 
     def _score_atr_volatility(self, atr_ratio: float) -> int:
         """Score ATR volatility (0-15 points)"""
         if 1.0 < atr_ratio < 1.5:  # Optimal volatility
             return 15
-        elif 0.8 < atr_ratio < 2.0:  # Acceptable volatility
+        if 0.8 < atr_ratio < 2.0:  # Acceptable volatility
             return 10
-        elif 0.5 < atr_ratio < 2.5:  # Moderate volatility
+        if 0.5 < atr_ratio < 2.5:  # Moderate volatility
             return 5
-        else:
-            return 0
+        return 0
 
     def _score_spread(self, symbol: str) -> int:
         """Score based on spread (0-15 points)"""
@@ -200,14 +196,14 @@ class TradeScorer:
 
                     if spread_points < 20:  # Excellent spread
                         return 15
-                    elif spread_points < 30:  # Good spread
+                    if spread_points < 30:  # Good spread
                         return 12
-                    elif spread_points < 50:  # Acceptable spread
+                    if spread_points < 50:  # Acceptable spread
                         return 8
-                    elif spread_points < 100:  # High spread
+                    if spread_points < 100:  # High spread
                         return 4
-                    else:  # Very high spread
-                        return 0
+                    # Very high spread
+                    return 0
         except Exception as e:
             logging.debug(f"Error calculating spread score: {e}")
 
@@ -218,11 +214,10 @@ class TradeScorer:
         """Convert score to letter grade"""
         if score >= 90:
             return "A"
-        elif score >= 80:
+        if score >= 80:
             return "B"
-        elif score >= 70:
+        if score >= 70:
             return "C"
-        elif score >= 60:
+        if score >= 60:
             return "D"
-        else:
-            return "F"
+        return "F"

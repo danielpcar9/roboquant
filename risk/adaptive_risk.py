@@ -1,5 +1,4 @@
 import logging
-from typing import Tuple, Optional
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
@@ -16,10 +15,10 @@ class AdaptiveRiskManager:
         symbol: str,
         entry_price: float,
         order_type: str,
-        atr: Optional[float] = None,
+        atr: float | None = None,
         atr_period: int = 14,
         risk_reward_ratio: float = 2.0,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """
         Calculate dynamic stop loss and take profit levels based on ATR
 
@@ -33,6 +32,7 @@ class AdaptiveRiskManager:
 
         Returns:
             Tuple of (stop_loss_price, take_profit_price)
+
         """
         try:
             # Get ATR if not provided
@@ -40,7 +40,7 @@ class AdaptiveRiskManager:
                 atr = self.calculate_atr(symbol, atr_period)
                 if atr is None:
                     logging.warning(
-                        f"Failed to calculate ATR for {symbol}, using default values"
+                        f"Failed to calculate ATR for {symbol}, using default values",
                     )
                     atr = 5.0  # Default fallback value
 
@@ -70,21 +70,20 @@ class AdaptiveRiskManager:
             logging.info(
                 f"Dynamic stops for {symbol} {order_type}: "
                 f"SL={stop_loss_price:.5f}, TP={take_profit_price:.5f} "
-                f"(ATR={atr:.5f}, RR={risk_reward_ratio})"
+                f"(ATR={atr:.5f}, RR={risk_reward_ratio})",
             )
 
             return stop_loss_price, take_profit_price
         except Exception as e:
-            logging.error(f"Error calculating dynamic stops for {symbol}: {e}")
+            logging.exception(f"Error calculating dynamic stops for {symbol}: {e}")
             # Return default values
             default_sl = entry_price * 0.01  # 1% stop loss
             default_tp = entry_price * 0.02  # 2% take profit
             if order_type == "BUY":
                 return entry_price - default_sl, entry_price + default_tp
-            else:
-                return entry_price + default_sl, entry_price - default_tp
+            return entry_price + default_sl, entry_price - default_tp
 
-    def calculate_atr(self, symbol: str, period: int = 14) -> Optional[float]:
+    def calculate_atr(self, symbol: str, period: int = 14) -> float | None:
         """
         Calculate Average True Range
 
@@ -94,10 +93,11 @@ class AdaptiveRiskManager:
 
         Returns:
             ATR value or None if calculation fails
+
         """
         try:
             rates = self.mt5.copy_rates_from_pos(
-                symbol, self.mt5.TIMEFRAME_H1, 1, period + 1
+                symbol, self.mt5.TIMEFRAME_H1, 1, period + 1,
             )  # type: ignore
             if rates is None or len(rates) < period + 1:
                 logging.warning(f"Insufficient data to calculate ATR for {symbol}")
@@ -114,11 +114,11 @@ class AdaptiveRiskManager:
             atr = sum(atr_values) / len(atr_values) if atr_values else 0
             return atr
         except Exception as e:
-            logging.error(f"Error calculating ATR for {symbol}: {e}")
+            logging.exception(f"Error calculating ATR for {symbol}: {e}")
             return None
 
     def adjust_position_size_by_volatility(
-        self, base_lots: float, atr: float, avg_atr: float
+        self, base_lots: float, atr: float, avg_atr: float,
     ) -> float:
         """
         Adjust position size based on current volatility relative to average
@@ -130,6 +130,7 @@ class AdaptiveRiskManager:
 
         Returns:
             Adjusted position size
+
         """
         if avg_atr is None or avg_atr == 0:
             logging.warning("Invalid average ATR, returning base lots")
@@ -151,7 +152,7 @@ class AdaptiveRiskManager:
 
         logging.info(
             f"Position size adjustment: {base_lots:.2f} -> {adjusted_lots:.2f} "
-            f"(volatility ratio: {volatility_ratio:.2f})"
+            f"(volatility ratio: {volatility_ratio:.2f})",
         )
 
         return adjusted_lots
@@ -163,7 +164,7 @@ adaptive_risk_manager = AdaptiveRiskManager()
 if __name__ == "__main__":
     # Example usage
     logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s"
+        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s",
     )
 
     # Test calculations (would require MT5 to be running)

@@ -25,6 +25,7 @@ class LoggerSetup:
 
         Returns:
             Configured logger instance
+
         """
         logger = logging.getLogger(name)
 
@@ -55,7 +56,7 @@ class LoggerSetup:
 
         # File handler with rotation
         log_file = os.path.join(
-            log_dir, f"roboquant_{datetime.now().strftime('%Y%m%d')}.log"
+            log_dir, f"roboquant_{datetime.now().strftime('%Y%m%d')}.log",
         )
         file_handler = logging.handlers.RotatingFileHandler(
             log_file,
@@ -68,7 +69,7 @@ class LoggerSetup:
 
         # Error file handler
         error_log_file = os.path.join(
-            log_dir, f"roboquant_errors_{datetime.now().strftime('%Y%m%d')}.log"
+            log_dir, f"roboquant_errors_{datetime.now().strftime('%Y%m%d')}.log",
         )
         error_handler = logging.FileHandler(error_log_file)
         error_handler.setLevel(logging.ERROR)

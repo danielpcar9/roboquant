@@ -4,7 +4,8 @@ Centralized configuration management for RoboQuant trading system.
 """
 
 import os
-from typing import Any, Optional
+from typing import Any
+
 from services.security_manager import SecureCredentialManager
 
 
@@ -35,7 +36,7 @@ class ConfigManager:
                 "MOMENTUM_PERIOD": int(os.getenv("MOMENTUM_PERIOD", "40")),
                 "SAMPLE_PERIOD": int(os.getenv("SAMPLE_PERIOD", "1000")),
                 "RISK_PERCENT": float(
-                    os.getenv("RISK_PERCENT", "1.0")
+                    os.getenv("RISK_PERCENT", "1.0"),
                 ),  # FTMO 1.0% por trade
                 "USE_RISK_MANAGEMENT": os.getenv("USE_RISK_MANAGEMENT", "True").lower()
                 == "true",
@@ -46,42 +47,42 @@ class ConfigManager:
                 "SL_ATR_MULTIPLIER": float(os.getenv("SL_ATR_MULTIPLIER", "3.0")),
                 "TP_ATR_MULTIPLIER": float(os.getenv("TP_ATR_MULTIPLIER", "6.0")),
                 "TRADING_HOUR_START": int(
-                    os.getenv("TRADING_HOUR_START", "0")
+                    os.getenv("TRADING_HOUR_START", "0"),
                 ),  # Extended hours 0-23
                 "TRADING_HOUR_END": int(os.getenv("TRADING_HOUR_END", "23")),
                 "MAGIC_NUMBER": int(os.getenv("MAGIC_NUMBER", "123456")),
                 "TIMEFRAME": os.getenv("TIMEFRAME", "M5"),
                 "BREAKOUT_THRESHOLD": float(
-                    os.getenv("BREAKOUT_THRESHOLD", "0.0")
+                    os.getenv("BREAKOUT_THRESHOLD", "0.0"),
                 ),  # Additional threshold for breakout confirmation
                 # Trailing stop and exit management
                 "TRAILING_ENABLED": os.getenv("TRAILING_ENABLED", "True").lower()
                 == "true",
                 "TRAILING_START_PIPS": int(os.getenv("TRAILING_START_PIPS", "10")),
                 "TRAILING_DISTANCE_PIPS": int(
-                    os.getenv("TRAILING_DISTANCE_PIPS", "15")
+                    os.getenv("TRAILING_DISTANCE_PIPS", "15"),
                 ),
                 "BREAK_EVEN_ENABLED": os.getenv("BREAK_EVEN_ENABLED", "True").lower()
                 == "true",
                 "PARTIAL_TP_ENABLED": os.getenv("PARTIAL_TP_ENABLED", "False").lower()
                 == "true",
                 "PARTIAL_TP_PERCENT": float(
-                    os.getenv("PARTIAL_TP_PERCENT", "50.0")
+                    os.getenv("PARTIAL_TP_PERCENT", "50.0"),
                 ),  # Close 50% at 1R
                 "PARTIAL_TP_AT_R": float(
-                    os.getenv("PARTIAL_TP_AT_R", "1.0")
+                    os.getenv("PARTIAL_TP_AT_R", "1.0"),
                 ),  # At 1:1 risk/reward
                 # Event-driven trading parameters
                 "EVENT_WAIT_CANDLES": int(os.getenv("EVENT_WAIT_CANDLES", "3")),
                 "EVENT_SIZE_FACTOR": float(os.getenv("EVENT_SIZE_FACTOR", "0.25")),
                 "EVENT_SL_ATR_MULTIPLIER": float(
-                    os.getenv("EVENT_SL_ATR_MULTIPLIER", "2.5")
+                    os.getenv("EVENT_SL_ATR_MULTIPLIER", "2.5"),
                 ),
                 "EVENT_BREAKOUT_ATR_THRESHOLD": float(
-                    os.getenv("EVENT_BREAKOUT_ATR_THRESHOLD", "0.3")
+                    os.getenv("EVENT_BREAKOUT_ATR_THRESHOLD", "0.3"),
                 ),
                 "EVENT_VOLUME_SPIKE_FACTOR": float(
-                    os.getenv("EVENT_VOLUME_SPIKE_FACTOR", "1.7")
+                    os.getenv("EVENT_VOLUME_SPIKE_FACTOR", "1.7"),
                 ),
                 # Webhook parameters
                 "WEBHOOK_PORT": int(os.getenv("WEBHOOK_PORT", "5000")),
@@ -89,26 +90,26 @@ class ConfigManager:
                 # ML Engine parameters
                 "ML_ENABLED": os.getenv("ML_ENABLED", "False").lower() == "true",
                 "ML_MODEL_PATH": os.getenv(
-                    "ML_MODEL_PATH", "models/trading_model.json"
+                    "ML_MODEL_PATH", "models/trading_model.json",
                 ),
                 "ML_TRAINING_DATA_PATH": os.getenv(
-                    "ML_TRAINING_DATA_PATH", "data/training_data.csv"
+                    "ML_TRAINING_DATA_PATH", "data/training_data.csv",
                 ),
                 # Backtesting parameters
                 "BACKTEST_INITIAL_CAPITAL": float(
-                    os.getenv("BACKTEST_INITIAL_CAPITAL", "10000.0")
+                    os.getenv("BACKTEST_INITIAL_CAPITAL", "10000.0"),
                 ),
                 "BACKTEST_DAYS_BACK": int(
-                    os.getenv("BACKTEST_DAYS_BACK", "1825")
+                    os.getenv("BACKTEST_DAYS_BACK", "1825"),
                 ),  # ~5 years
                 # Performance dashboard parameters
                 "DASHBOARD_OUTPUT_FILE": os.getenv(
-                    "DASHBOARD_OUTPUT_FILE", "dashboard.html"
+                    "DASHBOARD_OUTPUT_FILE", "dashboard.html",
                 ),
                 # API Cache parameters
                 "CACHE_TTL": int(os.getenv("CACHE_TTL", "1800")),  # 30 minutes
                 "CACHE_FILE_PATH": os.getenv("CACHE_FILE_PATH", "data/api_cache.json"),
-            }
+            },
         )
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -121,6 +122,7 @@ class ConfigManager:
 
         Returns:
             Configuration value or default
+
         """
         return self._config.get(key, default)
 
@@ -131,10 +133,11 @@ class ConfigManager:
         Args:
             key: Configuration key
             value: Configuration value
+
         """
         self._config[key] = value
 
-    def get_credential(self, key: str) -> Optional[str]:
+    def get_credential(self, key: str) -> str | None:
         """
         Get a credential value.
 
@@ -143,6 +146,7 @@ class ConfigManager:
 
         Returns:
             Credential value or None if not found
+
         """
         return self._credential_manager.get_credential(key)
 
@@ -156,6 +160,7 @@ class ConfigManager:
 
         Returns:
             True if successful, False otherwise
+
         """
         return self._credential_manager.set_credential(key, value)
 
@@ -165,6 +170,7 @@ class ConfigManager:
 
         Returns:
             True if valid, False otherwise
+
         """
         return self._credential_manager.validate_webhook_secret()
 

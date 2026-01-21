@@ -3,12 +3,13 @@ Simple Overfitting Test - Using actual strategy logic
 Simplified to work with the real Donchian strategy
 """
 
-import pandas as pd
 import logging
 from datetime import timedelta
 
+import pandas as pd
+
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
 
@@ -28,7 +29,7 @@ def load_data():
         logging.info(f"Loaded {len(df):,} bars from {df.index[0]} to {df.index[-1]}")
         return df
     except Exception as e:
-        logging.error(f"Failed to load data: {e}")
+        logging.exception(f"Failed to load data: {e}")
         return None
 
 
@@ -77,7 +78,7 @@ def simple_backtest(df, donchian_period=20, initial_capital=10000):
                         "exit": exit_price,
                         "pnl": pnl,
                         "capital": capital,
-                    }
+                    },
                 )
                 position = -1  # Flip to short
                 entry_price = exit_price
@@ -95,7 +96,7 @@ def simple_backtest(df, donchian_period=20, initial_capital=10000):
                         "exit": exit_price,
                         "pnl": pnl,
                         "capital": capital,
-                    }
+                    },
                 )
                 position = 1  # Flip to long
                 entry_price = exit_price
@@ -150,7 +151,7 @@ def walk_forward_test(df, n_windows=5):
         oos_df = window_df.iloc[split_idx:]
 
         logging.info(
-            f"\nWindow {i + 1}/{n_windows}: {window_df.index[0].strftime('%Y-%m')} to {window_df.index[-1].strftime('%Y-%m')}"
+            f"\nWindow {i + 1}/{n_windows}: {window_df.index[0].strftime('%Y-%m')} to {window_df.index[-1].strftime('%Y-%m')}",
         )
 
         is_result = simple_backtest(is_df)
@@ -166,14 +167,14 @@ def walk_forward_test(df, n_windows=5):
                 "OOS_Trades": oos_result["total_trades"],
                 "IS_WinRate": round(is_result["win_rate"], 1),
                 "OOS_WinRate": round(oos_result["win_rate"], 1),
-            }
+            },
         )
 
         logging.info(
-            f"  IS:  Return={is_result['total_return']:.1f}%, Trades={is_result['total_trades']}, WinRate={is_result['win_rate']:.1f}%"
+            f"  IS:  Return={is_result['total_return']:.1f}%, Trades={is_result['total_trades']}, WinRate={is_result['win_rate']:.1f}%",
         )
         logging.info(
-            f"  OOS: Return={oos_result['total_return']:.1f}%, Trades={oos_result['total_trades']}, WinRate={oos_result['win_rate']:.1f}%"
+            f"  OOS: Return={oos_result['total_return']:.1f}%, Trades={oos_result['total_trades']}, WinRate={oos_result['win_rate']:.1f}%",
         )
 
     results_df = pd.DataFrame(results)
@@ -228,11 +229,11 @@ def parameter_robustness_test(df):
                 "Trades": result["total_trades"],
                 "Win_Rate_%": round(result["win_rate"], 1),
                 "Profit_Factor": round(result["profit_factor"], 2),
-            }
+            },
         )
 
         logging.info(
-            f"  Return={result['total_return']:.1f}%, Trades={result['total_trades']}, WinRate={result['win_rate']:.1f}%"
+            f"  Return={result['total_return']:.1f}%, Trades={result['total_trades']}, WinRate={result['win_rate']:.1f}%",
         )
 
     results_df = pd.DataFrame(results)
@@ -284,11 +285,11 @@ def yearly_consistency_test(df):
                 "Trades": result["total_trades"],
                 "Win_Rate_%": round(result["win_rate"], 1),
                 "Profit_Factor": round(result["profit_factor"], 2),
-            }
+            },
         )
 
         logging.info(
-            f"  Return={result['total_return']:.1f}%, Trades={result['total_trades']}, WinRate={result['win_rate']:.1f}%"
+            f"  Return={result['total_return']:.1f}%, Trades={result['total_trades']}, WinRate={result['win_rate']:.1f}%",
         )
 
     results_df = pd.DataFrame(results)

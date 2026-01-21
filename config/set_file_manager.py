@@ -1,7 +1,7 @@
-import os
 import json
-from typing import Any, Dict, List
 import logging
+import os
+from typing import Any
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -17,6 +17,7 @@ class SetFileManager:
 
         Args:
             config_dir: Directory where configuration files are stored
+
         """
         self.config_dir = config_dir
         self.current_config = {}
@@ -27,7 +28,7 @@ class SetFileManager:
             os.makedirs(self.config_dir)
             logger.info(f"Created config directory: {self.config_dir}")
 
-    def load_set_file(self, filename: str) -> Dict[str, Any]:
+    def load_set_file(self, filename: str) -> dict[str, Any]:
         """
         Load a configuration set from a JSON file.
 
@@ -41,6 +42,7 @@ class SetFileManager:
             FileNotFoundError: If the file doesn't exist
             json.JSONDecodeError: If the file is not valid JSON
             ValueError: If the configuration structure is invalid
+
         """
         filepath = os.path.join(self.config_dir, filename)
 
@@ -48,11 +50,11 @@ class SetFileManager:
             raise FileNotFoundError(f"Configuration file not found: {filepath}")
 
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, encoding="utf-8") as f:
                 config = json.load(f)
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(
-                f"Invalid JSON in {filepath}: {str(e)}", e.doc, e.pos
+                f"Invalid JSON in {filepath}: {e!s}", e.doc, e.pos,
             )
 
         # Validate configuration structure
@@ -74,6 +76,7 @@ class SetFileManager:
 
         Returns:
             Configuration value or default if not found
+
         """
         keys = key_path.split(".")
         value = self.current_config
@@ -84,16 +87,17 @@ class SetFileManager:
             return value
         except (KeyError, TypeError):
             logger.debug(
-                f"Configuration key '{key_path}' not found, returning default: {default}"
+                f"Configuration key '{key_path}' not found, returning default: {default}",
             )
             return default
 
-    def list_available_sets(self) -> List[str]:
+    def list_available_sets(self) -> list[str]:
         """
         List all available configuration set files.
 
         Returns:
             List of JSON filenames in the config directory
+
         """
         if not os.path.exists(self.config_dir):
             return []
@@ -106,7 +110,7 @@ class SetFileManager:
             logger.error(f"Error listing configuration files: {e}")
             return []
 
-    def _validate_config(self, config: Dict[str, Any]) -> bool:
+    def _validate_config(self, config: dict[str, Any]) -> bool:
         """
         Validate the configuration structure.
 
@@ -118,6 +122,7 @@ class SetFileManager:
 
         Raises:
             ValueError: If the configuration structure is invalid
+
         """
         if not isinstance(config, dict):
             raise ValueError("Configuration must be a dictionary")
@@ -143,6 +148,7 @@ def get_set_manager() -> SetFileManager:
 
     Returns:
         SetFileManager instance
+
     """
     global _set_manager_instance
     if _set_manager_instance is None:

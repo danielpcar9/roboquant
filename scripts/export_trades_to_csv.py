@@ -6,24 +6,24 @@ This script connects to MT5, retrieves trade history, groups deals by position,
 and exports them to CSV with performance statistics.
 """
 
-import MetaTrader5 as mt5
-import pandas as pd
-from datetime import datetime, timedelta
 import logging
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, List, Dict
+
+import MetaTrader5 as mt5
+import pandas as pd
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 DAYS_BACK = 90  # Number of days to look back for trade history
-MAGIC_NUMBER: Optional[int] = None  # Filter by magic number (None = all trades)
+MAGIC_NUMBER: int | None = None  # Filter by magic number (None = all trades)
 
 # Save to user's home directory for easy access
 HOME_PATH = Path.home()
@@ -56,13 +56,13 @@ class TradeExporter:
 
         return True
 
-    def get_deals_history(self) -> Optional[List]:
+    def get_deals_history(self) -> list | None:
         """Retrieve deals history from MT5"""
         from_date = datetime.now() - timedelta(days=self.days_back)
         to_date = datetime.now()
 
         logging.info(
-            f"Fetching deals from {from_date.strftime('%Y-%m-%d')} to {to_date.strftime('%Y-%m-%d')}"
+            f"Fetching deals from {from_date.strftime('%Y-%m-%d')} to {to_date.strftime('%Y-%m-%d')}",
         )
 
         deals = mt5.history_deals_get(from_date, to_date)
@@ -80,12 +80,12 @@ class TradeExporter:
         if self.magic_number is not None:
             deals = [d for d in deals if d.magic == self.magic_number]
             logging.info(
-                f"Filtered to {len(deals)} deals with magic number {self.magic_number}"
+                f"Filtered to {len(deals)} deals with magic number {self.magic_number}",
             )
 
         return deals
 
-    def group_deals_by_position(self, deals: List) -> Dict[int, Dict]:
+    def group_deals_by_position(self, deals: list) -> dict[int, dict]:
         """Group deals by position_id to identify complete trades"""
         positions = {}
 
@@ -118,11 +118,11 @@ class TradeExporter:
         }
 
         logging.info(
-            f"Found {len(complete_positions)} complete trades (with entry and exit)"
+            f"Found {len(complete_positions)} complete trades (with entry and exit)",
         )
         return complete_positions
 
-    def create_trade_dataframe(self, positions: Dict[int, Dict]) -> pd.DataFrame:
+    def create_trade_dataframe(self, positions: dict[int, dict]) -> pd.DataFrame:
         """Create DataFrame from grouped positions in MT4 statement format"""
         trades = []
 
@@ -136,7 +136,7 @@ class TradeExporter:
             trade = {
                 "Ticket": position_id,
                 "Open Time": datetime.fromtimestamp(entry.time).strftime(
-                    "%Y.%m.%d %H:%M"
+                    "%Y.%m.%d %H:%M",
                 ),
                 "Type": trade_type,
                 "Size": entry.volume,
@@ -145,7 +145,7 @@ class TradeExporter:
                 "S / L": 0.0,
                 "T / P": 0.0,
                 "Close Time": datetime.fromtimestamp(exit_deal.time).strftime(
-                    "%Y.%m.%d %H:%M"
+                    "%Y.%m.%d %H:%M",
                 ),
                 "Exit Price": round(exit_deal.price, 5),
                 "Commission": round(data["commission"], 2),
@@ -160,7 +160,7 @@ class TradeExporter:
         df = df.sort_values("Open Time")
         return df
 
-    def calculate_statistics(self, df: pd.DataFrame) -> Dict:
+    def calculate_statistics(self, df: pd.DataFrame) -> dict:
         """Calculate trading statistics"""
         total_trades = len(df)
 
@@ -202,7 +202,7 @@ class TradeExporter:
             "avg_loss": avg_loss,
         }
 
-    def generate_html_statement(self, df: pd.DataFrame, stats: Dict) -> str:
+    def generate_html_statement(self, df: pd.DataFrame, stats: dict) -> str:
         """Generate HTML statement in MT4/MT5 format"""
         html = """<!DOCTYPE html>
 <html>
@@ -289,7 +289,7 @@ class TradeExporter:
         print("Configuration:")
         print(f"  Days back: {self.days_back}")
         print(
-            f"  Magic number filter: {self.magic_number if self.magic_number else 'None (all trades)'}"
+            f"  Magic number filter: {self.magic_number if self.magic_number else 'None (all trades)'}",
         )
         print(f"  Output file: {self.output_file}")
         print("=" * 70 + "\n")
@@ -310,7 +310,7 @@ class TradeExporter:
 
             if len(positions) == 0:
                 logging.warning(
-                    "No complete trades found (trades with both entry and exit)."
+                    "No complete trades found (trades with both entry and exit).",
                 )
                 return False
 
@@ -321,7 +321,7 @@ class TradeExporter:
             with open(self.output_file, "w", encoding="utf-8") as f:
                 f.write(html_content)
             logging.info(
-                f"Successfully exported {len(df)} trades to {self.output_file}"
+                f"Successfully exported {len(df)} trades to {self.output_file}",
             )
 
             print_statistics(stats)
@@ -330,7 +330,7 @@ class TradeExporter:
             return True
 
         except Exception as e:
-            logging.error(f"Error during export: {e}")
+            logging.exception(f"Error during export: {e}")
             import traceback
 
             traceback.print_exc()
@@ -348,26 +348,26 @@ def initialize_mt5() -> bool:
 
 
 def get_deals_history(
-    days_back: int, magic_number: Optional[int] = None
-) -> Optional[List]:
+    days_back: int, magic_number: int | None = None,
+) -> list | None:
     """Legacy function for backward compatibility"""
     exporter = TradeExporter(days_back, magic_number)
     return exporter.get_deals_history()
 
 
-def group_deals_by_position(deals: List) -> Dict[int, Dict]:
+def group_deals_by_position(deals: list) -> dict[int, dict]:
     """Legacy function for backward compatibility"""
     exporter = TradeExporter()
     return exporter.group_deals_by_position(deals)
 
 
-def create_trade_dataframe(positions: Dict[int, Dict]) -> pd.DataFrame:
+def create_trade_dataframe(positions: dict[int, dict]) -> pd.DataFrame:
     """Legacy function for backward compatibility"""
     exporter = TradeExporter()
     return exporter.create_trade_dataframe(positions)
 
 
-def calculate_statistics(df: pd.DataFrame) -> Dict:
+def calculate_statistics(df: pd.DataFrame) -> dict:
     """Legacy function for backward compatibility"""
     exporter = TradeExporter()
     return exporter.calculate_statistics(df)
@@ -416,7 +416,7 @@ def calculate_statistics(df: pd.DataFrame) -> Dict:
     }
 
 
-def print_statistics(stats: Dict):
+def print_statistics(stats: dict):
     """Print trading statistics summary."""
     print("\n" + "=" * 70)
     print("TRADE HISTORY SUMMARY")
@@ -459,7 +459,7 @@ def print_import_instructions(output_file: str):
     print("=" * 70 + "\n")
 
 
-def generate_html_statement(df: pd.DataFrame, stats: Dict) -> str:
+def generate_html_statement(df: pd.DataFrame, stats: dict) -> str:
     """Legacy function for backward compatibility"""
     exporter = TradeExporter()
     return exporter.generate_html_statement(df, stats)

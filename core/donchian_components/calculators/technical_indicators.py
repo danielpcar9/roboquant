@@ -8,8 +8,9 @@ Extraído de MarketDataService de donchian_strategy.py
 """
 
 import logging
-from typing import Optional, Tuple
+
 import MetaTrader5 as mt5
+
 from config.config_manager import config_manager
 from utils.decorators import handle_exception, performance_monitor
 
@@ -40,16 +41,16 @@ class TechnicalIndicatorsCalculator:
     @handle_exception
     @performance_monitor
     def get_donchian_channels(
-        self, symbol: str, period: int
-    ) -> Tuple[Optional[float], Optional[float]]:
+        self, symbol: str, period: int,
+    ) -> tuple[float | None, float | None]:
         """Calculate Donchian channels"""
         logging.debug(
-            f"Calculating Donchian channels for {symbol} with period {period}"
+            f"Calculating Donchian channels for {symbol} with period {period}",
         )
         rates = self.mt5.copy_rates_from_pos(symbol, self.timeframe, 1, period)
         if rates is None or len(rates) < period:
             logging.error(
-                f"Failed to get rate data for Donchian calculation. Rates: {rates}, Length: {len(rates) if rates else 0}"
+                f"Failed to get rate data for Donchian calculation. Rates: {rates}, Length: {len(rates) if rates else 0}",
             )
             return None, None
 
@@ -60,7 +61,7 @@ class TechnicalIndicatorsCalculator:
         lower_channel = min(lows)
 
         logging.debug(
-            f"Calculated channels - Upper: {upper_channel}, Lower: {lower_channel}"
+            f"Calculated channels - Upper: {upper_channel}, Lower: {lower_channel}",
         )
         return upper_channel, lower_channel
 
@@ -72,7 +73,7 @@ class TechnicalIndicatorsCalculator:
         rates = self.mt5.copy_rates_from_pos(symbol, self.timeframe, 1, lookback)
         if rates is None or len(rates) < lookback:
             logging.error(
-                f"Failed to get rate data for momentum calculation. Rates: {rates}, Length: {len(rates) if rates else 0}"
+                f"Failed to get rate data for momentum calculation. Rates: {rates}, Length: {len(rates) if rates else 0}",
             )
             return 0
 
@@ -87,13 +88,13 @@ class TechnicalIndicatorsCalculator:
 
     @handle_exception
     @performance_monitor
-    def calculate_atr(self, symbol: str, period: int = 14) -> Optional[float]:
+    def calculate_atr(self, symbol: str, period: int = 14) -> float | None:
         """Calculate Average True Range"""
         logging.debug(f"Calculating ATR for {symbol} with period {period}")
         rates = self.mt5.copy_rates_from_pos(symbol, self.timeframe, 1, period + 1)
         if rates is None or len(rates) < period + 1:
             logging.error(
-                f"Failed to get rate data for ATR calculation. Rates: {rates}, Length: {len(rates) if rates else 0}"
+                f"Failed to get rate data for ATR calculation. Rates: {rates}, Length: {len(rates) if rates else 0}",
             )
             return None
 
@@ -111,7 +112,7 @@ class TechnicalIndicatorsCalculator:
 
     @handle_exception
     @performance_monitor
-    def get_current_price(self, symbol: str, order_type: str) -> Optional[float]:
+    def get_current_price(self, symbol: str, order_type: str) -> float | None:
         """Get current price based on order type"""
         logging.debug(f"Getting current price for {symbol}, order type: {order_type}")
         tick = self.mt5.symbol_info_tick(symbol)
@@ -125,7 +126,7 @@ class TechnicalIndicatorsCalculator:
 
     @handle_exception
     @performance_monitor
-    def get_spread(self, symbol: str) -> Optional[float]:
+    def get_spread(self, symbol: str) -> float | None:
         """Get current spread"""
         logging.debug(f"Calculating spread for {symbol}")
         tick = self.mt5.symbol_info_tick(symbol)
@@ -149,14 +150,14 @@ class TechnicalIndicatorsCalculator:
     @handle_exception
     @performance_monitor
     def get_volume_stats(
-        self, symbol: str, lookback: int = 20
-    ) -> Tuple[Optional[float], Optional[float]]:
+        self, symbol: str, lookback: int = 20,
+    ) -> tuple[float | None, float | None]:
         """Get volume statistics"""
         logging.debug(f"Calculating volume stats for {symbol} with lookback {lookback}")
         rates = self.mt5.copy_rates_from_pos(symbol, self.timeframe, 1, lookback)
         if rates is None or len(rates) < lookback:
             logging.error(
-                f"Failed to get rate data for volume calculation. Rates: {rates}, Length: {len(rates) if rates else 0}"
+                f"Failed to get rate data for volume calculation. Rates: {rates}, Length: {len(rates) if rates else 0}",
             )
             return None, None
 
@@ -165,18 +166,18 @@ class TechnicalIndicatorsCalculator:
         avg_volume = sum(volumes) / len(volumes) if volumes else 0
 
         logging.debug(
-            f"Volume stats for {symbol} - Current: {current_volume}, Average: {avg_volume:.2f}"
+            f"Volume stats for {symbol} - Current: {current_volume}, Average: {avg_volume:.2f}",
         )
         return current_volume, avg_volume
 
     @handle_exception
     @performance_monitor
-    def detect_engulfing(self, symbol: str) -> Tuple[bool, bool]:
+    def detect_engulfing(self, symbol: str) -> tuple[bool, bool]:
         """Detect bullish and bearish engulfing patterns"""
         rates = self.mt5.copy_rates_from_pos(symbol, self.timeframe, 1, 3)
         if rates is None or len(rates) < 2:
             logging.error(
-                f"Failed to get rate data for engulfing pattern detection. Rates: {rates}, Length: {len(rates) if rates else 0}"
+                f"Failed to get rate data for engulfing pattern detection. Rates: {rates}, Length: {len(rates) if rates else 0}",
             )
             return False, False
 

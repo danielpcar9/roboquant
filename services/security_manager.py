@@ -4,15 +4,16 @@ Security manager for RoboQuant trading system with credential management,
 input validation, rate limiting, and error sanitization.
 """
 
-import os
-import time
-import logging
-import re
-from typing import Any, Optional, Union
-from dotenv import load_dotenv
 import hmac
 import ipaddress
+import logging
+import os
+import re
+import time
 from functools import wraps
+from typing import Any
+
+from dotenv import load_dotenv
 
 # Try to import keyring for encrypted credential storage
 KEYRING_AVAILABLE = False
@@ -25,7 +26,7 @@ try:
     KEYRING_AVAILABLE = True
 except ImportError:
     logging.warning(
-        "Keyring not available. Credentials will be stored in environment variables."
+        "Keyring not available. Credentials will be stored in environment variables.",
     )
 
 # Configure logging for security module
@@ -34,7 +35,7 @@ security_logger.setLevel(logging.INFO)
 if not security_logger.handlers:
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
-        "%(asctime)s - SECURITY - %(levelname)s - %(message)s"
+        "%(asctime)s - SECURITY - %(levelname)s - %(message)s",
     )
     handler.setFormatter(formatter)
     security_logger.addHandler(handler)
@@ -44,7 +45,7 @@ class SecureCredentialManager:
     """Securely loads and manages credentials with encryption support."""
 
     def __init__(
-        self, env_file_path: Optional[str] = None, use_encryption: bool = True
+        self, env_file_path: str | None = None, use_encryption: bool = True,
     ):
         """
         Initialize the credential manager.
@@ -52,12 +53,13 @@ class SecureCredentialManager:
         Args:
             env_file_path: Path to the .env file. If None, uses default loading behavior.
             use_encryption: Whether to use encrypted storage for credentials
+
         """
         self._credentials = {}
         self._use_encryption = use_encryption and KEYRING_AVAILABLE
         self._load_credentials(env_file_path)
 
-    def _load_credentials(self, env_file_path: Optional[str] = None) -> None:
+    def _load_credentials(self, env_file_path: str | None = None) -> None:
         """Load credentials from environment variables or encrypted storage."""
         try:
             # Load environment variables without logging their values
@@ -113,7 +115,7 @@ class SecureCredentialManager:
             security_logger.error("Failed to load credentials: %s", str(e))
             raise
 
-    def get_credential(self, key: str) -> Optional[str]:
+    def get_credential(self, key: str) -> str | None:
         """
         Get a credential value by key.
 
@@ -122,6 +124,7 @@ class SecureCredentialManager:
 
         Returns:
             The credential value or None if not found
+
         """
         if self._use_encryption and keyring:
             # Try to get from encrypted storage first
@@ -145,6 +148,7 @@ class SecureCredentialManager:
 
         Returns:
             True if successful, False otherwise
+
         """
         if self._use_encryption and keyring:
             try:
@@ -152,14 +156,14 @@ class SecureCredentialManager:
                 return True
             except Exception as e:
                 security_logger.error(
-                    "Failed to store credential in keyring: %s", str(e)
+                    "Failed to store credential in keyring: %s", str(e),
                 )
                 return False
         else:
             # For non-encrypted storage, we can't actually set environment variables
             # This is just for compatibility
             security_logger.warning(
-                "Non-encrypted credential storage requested or keyring not available - not setting environment variable"
+                "Non-encrypted credential storage requested or keyring not available - not setting environment variable",
             )
             return False
 
@@ -172,6 +176,7 @@ class SecureCredentialManager:
 
         Returns:
             True if the credential exists, False otherwise
+
         """
         return self._credentials.get(key, {}).get("exists", False)
 
@@ -181,6 +186,7 @@ class SecureCredentialManager:
 
         Returns:
             True if valid, False otherwise
+
         """
         secret = self.get_credential("WEBHOOK_SECRET_KEY")
         if not secret:
@@ -213,6 +219,7 @@ class InputValidator:
 
         Returns:
             True if valid, False otherwise
+
         """
         if not symbol or not isinstance(symbol, str):
             return False
@@ -223,7 +230,7 @@ class InputValidator:
         return bool(cls.SYMBOL_PATTERN.match(symbol))
 
     @classmethod
-    def validate_volume(cls, volume: Union[float, int, str]) -> bool:
+    def validate_volume(cls, volume: float | int | str) -> bool:
         """
         Validate a trading volume.
 
@@ -232,6 +239,7 @@ class InputValidator:
 
         Returns:
             True if valid, False otherwise
+
         """
         try:
             vol = float(volume)
@@ -240,7 +248,7 @@ class InputValidator:
             return False
 
     @classmethod
-    def validate_price(cls, price: Union[float, int, str]) -> bool:
+    def validate_price(cls, price: float | int | str) -> bool:
         """
         Validate a price value.
 
@@ -249,6 +257,7 @@ class InputValidator:
 
         Returns:
             True if valid, False otherwise
+
         """
         try:
             prc = float(price)
@@ -266,6 +275,7 @@ class InputValidator:
 
         Returns:
             True if valid, False otherwise
+
         """
         if not order_type or not isinstance(order_type, str):
             return False
@@ -281,20 +291,20 @@ class InputValidator:
 
         Returns:
             Sanitized data
+
         """
         if isinstance(data, str):
             # Remove potentially dangerous characters
             sanitized = re.sub(r'[<>"\']', "", data)
             # Limit length
             return sanitized[:1000]
-        elif isinstance(data, (int, float)):
+        if isinstance(data, (int, float)):
             return data
-        elif isinstance(data, dict):
+        if isinstance(data, dict):
             return {k: cls.sanitize_input(v) for k, v in data.items()}
-        elif isinstance(data, list):
+        if isinstance(data, list):
             return [cls.sanitize_input(item) for item in data]
-        else:
-            return str(data)[:1000] if data is not None else None
+        return str(data)[:1000] if data is not None else None
 
 
 class RateLimiter:
@@ -307,13 +317,14 @@ class RateLimiter:
         Args:
             max_requests: Maximum number of requests allowed
             time_window: Time window in seconds
+
         """
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests = {}  # Dictionary of IP -> list of timestamps
         self.global_requests = []  # List of all request timestamps for global limiting
 
-    def is_allowed(self, ip_address: Optional[str] = None) -> bool:
+    def is_allowed(self, ip_address: str | None = None) -> bool:
         """
         Check if a request is allowed based on rate limiting rules.
 
@@ -322,6 +333,7 @@ class RateLimiter:
 
         Returns:
             True if allowed, False if rate limited
+
         """
         now = time.time()
 
@@ -364,6 +376,7 @@ class RateLimiter:
 
         Returns:
             Seconds to wait
+
         """
         now = time.time()
         all_requests = self.global_requests[:]
@@ -384,17 +397,18 @@ def sanitize_error_message(error_msg: str) -> str:
 
     Returns:
         Sanitized error message
+
     """
     if not error_msg or not isinstance(error_msg, str):
         return "An error occurred"
 
     # Remove sensitive information
     sanitized = re.sub(
-        r"[A-Za-z0-9]{10,}", "***", error_msg
+        r"[A-Za-z0-9]{10,}", "***", error_msg,
     )  # Remove long alphanumeric strings
     sanitized = re.sub(r"\d{5,}", "*****", sanitized)  # Remove long number sequences
     sanitized = re.sub(
-        r"password|secret|key|token|login", "***", sanitized, flags=re.IGNORECASE
+        r"password|secret|key|token|login", "***", sanitized, flags=re.IGNORECASE,
     )
 
     # Limit length
@@ -411,6 +425,7 @@ def constant_time_compare(a: str, b: str) -> bool:
 
     Returns:
         True if strings are equal, False otherwise
+
     """
     return (
         hmac.compare_digest(a, b)
@@ -428,6 +443,7 @@ def ip_whitelist(allowed_ips: list):
 
     Returns:
         Decorator function
+
     """
 
     def decorator(func):
@@ -441,7 +457,7 @@ def ip_whitelist(allowed_ips: list):
                 if client_ip is None:
                     security_logger.warning("Unable to determine client IP address")
                     return flask.jsonify(
-                        {"error": "Unable to determine client IP"}
+                        {"error": "Unable to determine client IP"},
                     ), 403
 
                 try:
@@ -449,7 +465,7 @@ def ip_whitelist(allowed_ips: list):
                     for allowed_ip in allowed_ips:
                         try:
                             allowed_network = ipaddress.ip_network(
-                                allowed_ip, strict=False
+                                allowed_ip, strict=False,
                             )
                             if client_ip_obj in allowed_network:
                                 return func(*args, **kwargs)

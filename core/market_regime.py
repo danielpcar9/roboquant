@@ -1,10 +1,9 @@
 import logging
-from typing import Tuple, Optional
-import pandas as pd
-import numpy as np
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
+import numpy as np
+import pandas as pd
 
 
 class MarketRegimeDetector:
@@ -37,7 +36,7 @@ class MarketRegimeDetector:
         }
         return timeframe_map.get(timeframe_name.upper(), self.mt5.TIMEFRAME_H1)
 
-    def calculate_adx(self, symbol: str, period: int = 14) -> Optional[float]:
+    def calculate_adx(self, symbol: str, period: int = 14) -> float | None:
         """
         Calculate ADX (Average Directional Index) - IMPROVED VERSION
 
@@ -47,12 +46,13 @@ class MarketRegimeDetector:
 
         Returns:
             ADX value or None if calculation fails
+
         """
         try:
             # Get historical data (need more bars for accurate ADX)
             bars_needed = period * 3  # Ensure enough data
             rates = self.mt5.copy_rates_from_pos(
-                symbol, self._get_timeframe_from_config(), 1, bars_needed
+                symbol, self._get_timeframe_from_config(), 1, bars_needed,
             )  # type: ignore
             if rates is None or len(rates) < bars_needed:
                 logging.warning(f"Insufficient data to calculate ADX for {symbol}")
@@ -112,10 +112,10 @@ class MarketRegimeDetector:
             return float(adx_value)
 
         except Exception as e:
-            logging.error(f"Error calculating ADX for {symbol}: {e}")
+            logging.exception(f"Error calculating ADX for {symbol}: {e}")
             return None
 
-    def calculate_slope(self, symbol: str, period: int = 30) -> Optional[float]:
+    def calculate_slope(self, symbol: str, period: int = 30) -> float | None:
         """
         Calculate price slope over a given period
 
@@ -125,11 +125,12 @@ class MarketRegimeDetector:
 
         Returns:
             Slope value or None if calculation fails
+
         """
         try:
             # Get historical data
             rates = self.mt5.copy_rates_from_pos(
-                symbol, self._get_timeframe_from_config(), 1, period
+                symbol, self._get_timeframe_from_config(), 1, period,
             )  # type: ignore
             if rates is None or len(rates) < period:
                 logging.warning(f"Insufficient data to calculate slope for {symbol}")
@@ -155,7 +156,7 @@ class MarketRegimeDetector:
 
             return slope
         except Exception as e:
-            logging.error(f"Error calculating slope for {symbol}: {e}")
+            logging.exception(f"Error calculating slope for {symbol}: {e}")
             return None
 
     def detect_regime(
@@ -165,7 +166,7 @@ class MarketRegimeDetector:
         slope_period: int = 30,
         adx_threshold: int = 20,
         di_threshold: int = 26,
-    ) -> Tuple[str, float, float]:
+    ) -> tuple[str, float, float]:
         """
         Detect market regime (trending/ranging) - IMPROVED VERSION with DI filter
 
@@ -181,6 +182,7 @@ class MarketRegimeDetector:
             - regime: "TRENDING" or "RANGING"
             - adx_value: ADX value
             - slope_value: Slope value
+
         """
         adx = self.calculate_adx(symbol, adx_period)
         slope = self.calculate_slope(symbol, slope_period)
@@ -193,7 +195,7 @@ class MarketRegimeDetector:
             # Get historical data for DI calculation
             bars_needed = adx_period * 3
             rates = self.mt5.copy_rates_from_pos(
-                symbol, self._get_timeframe_from_config(), 1, bars_needed
+                symbol, self._get_timeframe_from_config(), 1, bars_needed,
             )  # type: ignore
             if rates is None or len(rates) < bars_needed:
                 # Fallback to basic ADX check if can't get DI
@@ -202,7 +204,7 @@ class MarketRegimeDetector:
                 else:
                     regime = "RANGING"
                 logging.info(
-                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})"
+                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})",
                 )
                 return regime, adx, slope
 
@@ -251,7 +253,7 @@ class MarketRegimeDetector:
                 else:
                     regime = "RANGING"
                 logging.info(
-                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})"
+                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})",
                 )
                 return regime, adx, slope
 
@@ -260,25 +262,25 @@ class MarketRegimeDetector:
             if adx <= adx_threshold:
                 regime = "RANGING"
                 logging.info(
-                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f} <= {adx_threshold})"
+                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f} <= {adx_threshold})",
                 )
             # Rule 2: ADX high BUT no dominant DI -> disguised ranging market
             elif max(plus_di, minus_di) < di_threshold:
                 regime = "RANGING"
                 logging.info(
-                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f} > {adx_threshold}, but max DI: {max(plus_di, minus_di):.2f} < {di_threshold}) - Choppy market"
+                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f} > {adx_threshold}, but max DI: {max(plus_di, minus_di):.2f} < {di_threshold}) - Choppy market",
                 )
             # Rule 3: ADX high AND strong DI -> true trending market
             else:
                 regime = "TRENDING"
                 dominant_di = "Bullish" if plus_di > minus_di else "Bearish"
                 logging.info(
-                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, +DI: {plus_di:.2f}, -DI: {minus_di:.2f}, {dominant_di})"
+                    f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, +DI: {plus_di:.2f}, -DI: {minus_di:.2f}, {dominant_di})",
                 )
 
         except Exception as e:
             logging.warning(
-                f"Error calculating DI for {symbol}: {e}. Falling back to basic ADX check."
+                f"Error calculating DI for {symbol}: {e}. Falling back to basic ADX check.",
             )
             # Fallback to basic ADX-only check
             if adx > adx_threshold:
@@ -286,12 +288,12 @@ class MarketRegimeDetector:
             else:
                 regime = "RANGING"
             logging.info(
-                f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})"
+                f"Market regime for {symbol}: {regime} (ADX: {adx:.2f}, Slope: {slope:.4f}, Threshold: {adx_threshold})",
             )
 
         return regime, adx, slope
 
-    def get_di_values(self, symbol: str, adx_period: int = 14) -> Tuple[float, float]:
+    def get_di_values(self, symbol: str, adx_period: int = 14) -> tuple[float, float]:
         """
         Get +DI and -DI values for quantitative analysis
 
@@ -301,12 +303,13 @@ class MarketRegimeDetector:
 
         Returns:
             Tuple of (plus_di, minus_di) or (0, 0) if calculation fails
+
         """
         try:
             # Get historical data for DI calculation
             bars_needed = adx_period * 3
             rates = self.mt5.copy_rates_from_pos(
-                symbol, self._get_timeframe_from_config(), 1, bars_needed
+                symbol, self._get_timeframe_from_config(), 1, bars_needed,
             )  # type: ignore
             if rates is None or len(rates) < bars_needed:
                 logging.warning(f"Insufficient data to calculate DI for {symbol}")
@@ -357,7 +360,7 @@ class MarketRegimeDetector:
             return float(plus_di), float(minus_di)
 
         except Exception as e:
-            logging.error(f"Error calculating DI for {symbol}: {e}")
+            logging.exception(f"Error calculating DI for {symbol}: {e}")
             return 0.0, 0.0
 
 
@@ -367,7 +370,7 @@ market_regime_detector = MarketRegimeDetector()
 if __name__ == "__main__":
     # Example usage
     logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s"
+        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s",
     )
 
     # Test with a symbol (this would require MT5 to be running)

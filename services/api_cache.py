@@ -1,8 +1,8 @@
-import os
 import json
-import time
 import logging
-from typing import Any, Optional, Dict
+import os
+import time
+from typing import Any
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -14,19 +14,19 @@ class APICache:
     def __init__(self, cache_file_path: str = "data/api_cache.json"):
         """Initialize the cache with a file path."""
         self.cache_file_path = cache_file_path
-        self.cache: Dict[str, Dict[str, Any]] = {}
+        self.cache: dict[str, dict[str, Any]] = {}
         self._load_cache()
 
     def _load_cache(self) -> None:
         """Load cache from JSON file."""
         try:
             if os.path.exists(self.cache_file_path):
-                with open(self.cache_file_path, "r") as f:
+                with open(self.cache_file_path) as f:
                     self.cache = json.load(f)
                 logging.debug(f"Cache loaded from {self.cache_file_path}")
             else:
                 logging.debug(
-                    f"Cache file {self.cache_file_path} not found, starting with empty cache"
+                    f"Cache file {self.cache_file_path} not found, starting with empty cache",
                 )
         except Exception as e:
             logging.warning(f"Failed to load cache from {self.cache_file_path}: {e}")
@@ -42,7 +42,7 @@ class APICache:
             if len(self.cache) > 100:
                 # Sort by timestamp and remove oldest entries
                 sorted_entries = sorted(
-                    self.cache.items(), key=lambda x: x[1].get("timestamp", 0)
+                    self.cache.items(), key=lambda x: x[1].get("timestamp", 0),
                 )
                 # Keep only the most recent 90 entries
                 self.cache = dict(sorted_entries[-90:])
@@ -51,7 +51,7 @@ class APICache:
                 json.dump(self.cache, f, indent=2)
             logging.debug(f"Cache saved to {self.cache_file_path}")
         except Exception as e:
-            logging.error(f"Failed to save cache to {self.cache_file_path}: {e}")
+            logging.exception(f"Failed to save cache to {self.cache_file_path}: {e}")
 
     def _get_cache_key(self, *args, **kwargs) -> str:
         """Generate a unique cache key from function arguments."""
@@ -71,7 +71,7 @@ class APICache:
 
         return time.time() > (timestamp + ttl)
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get cached data if it exists and hasn't expired."""
         if key not in self.cache:
             return None
@@ -111,6 +111,7 @@ def test_cache() -> bool:
 
     Returns:
         bool: True if cache is working correctly
+
     """
     logging.info("Testing cache functionality...")
 

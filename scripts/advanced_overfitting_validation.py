@@ -7,14 +7,15 @@ Implements:
 4. Regime-Based Performance Analysis
 """
 
-import pandas as pd
-import numpy as np
 import logging
-from datetime import timedelta
 import random
+from datetime import timedelta
+
+import numpy as np
+import pandas as pd
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
 
@@ -34,7 +35,7 @@ def load_data():
         logging.info(f"Loaded {len(df):,} bars from {df.index[0]} to {df.index[-1]}")
         return df
     except Exception as e:
-        logging.error(f"Failed to load data: {e}")
+        logging.exception(f"Failed to load data: {e}")
         return None
 
 
@@ -100,8 +101,7 @@ def detect_regime(df, adx_threshold=18, di_threshold=26):
     current_max_di = max(plus_di.iloc[-1], minus_di.iloc[-1]) if len(plus_di) > 0 else 0
     if (current_adx > adx_threshold) and (current_max_di >= di_threshold):
         return "TRENDING"
-    else:
-        return "RANGING"
+    return "RANGING"
 
 
 def backtest_with_regime_filter(
@@ -194,7 +194,7 @@ def backtest_with_regime_filter(
                         "exit": exit_price,
                         "pnl": pnl,
                         "capital": capital,
-                    }
+                    },
                 )
                 position = -1  # Flip to short
                 entry_price = exit_price
@@ -212,7 +212,7 @@ def backtest_with_regime_filter(
                         "exit": exit_price,
                         "pnl": pnl,
                         "capital": capital,
-                    }
+                    },
                 )
                 position = 1  # Flip to long
                 entry_price = exit_price
@@ -295,7 +295,7 @@ def anchored_walk_forward(df, initial_train_years=2, test_months=6):
             break
 
         logging.info(
-            f"\nWindow {window_num}: Train {train_start.strftime('%Y-%m')} to {train_end.strftime('%Y-%m')}, Test {test_start.strftime('%Y-%m')} to {test_end.strftime('%Y-%m')}"
+            f"\nWindow {window_num}: Train {train_start.strftime('%Y-%m')} to {train_end.strftime('%Y-%m')}, Test {test_start.strftime('%Y-%m')} to {test_end.strftime('%Y-%m')}",
         )
 
         # Run backtest with and without ADX filter
@@ -317,20 +317,20 @@ def anchored_walk_forward(df, initial_train_years=2, test_months=6):
                 "Test_Sharpe_ADX": round(test_result_adx["sharpe_ratio"], 2),
                 "Trades_NoFilter": test_result["total_trades"],
                 "Trades_ADX": test_result_adx["total_trades"],
-            }
+            },
         )
 
         logging.info(
-            f"  Train (No Filter): Return={train_result['total_return']:.1f}%, Sharpe={train_result['sharpe_ratio']:.2f}"
+            f"  Train (No Filter): Return={train_result['total_return']:.1f}%, Sharpe={train_result['sharpe_ratio']:.2f}",
         )
         logging.info(
-            f"  Test (No Filter):  Return={test_result['total_return']:.1f}%, Sharpe={test_result['sharpe_ratio']:.2f}"
+            f"  Test (No Filter):  Return={test_result['total_return']:.1f}%, Sharpe={test_result['sharpe_ratio']:.2f}",
         )
         logging.info(
-            f"  Train (ADX+DI):    Return={train_result_adx['total_return']:.1f}%, Sharpe={train_result_adx['sharpe_ratio']:.2f}"
+            f"  Train (ADX+DI):    Return={train_result_adx['total_return']:.1f}%, Sharpe={train_result_adx['sharpe_ratio']:.2f}",
         )
         logging.info(
-            f"  Test (ADX+DI):     Return={test_result_adx['total_return']:.1f}%, Sharpe={test_result_adx['sharpe_ratio']:.2f}"
+            f"  Test (ADX+DI):     Return={test_result_adx['total_return']:.1f}%, Sharpe={test_result_adx['sharpe_ratio']:.2f}",
         )
 
         # Move to next window (expand train by test period)
@@ -391,7 +391,7 @@ def rolling_walk_forward(df, train_years=3, test_months=6):
             break
 
         logging.info(
-            f"\nWindow {window_num}: Train {current_start.strftime('%Y-%m')} to {train_end.strftime('%Y-%m')}, Test {test_start.strftime('%Y-%m')} to {test_end.strftime('%Y-%m')}"
+            f"\nWindow {window_num}: Train {current_start.strftime('%Y-%m')} to {train_end.strftime('%Y-%m')}, Test {test_start.strftime('%Y-%m')} to {test_end.strftime('%Y-%m')}",
         )
 
         # Run backtest with and without ADX filter
@@ -413,15 +413,15 @@ def rolling_walk_forward(df, train_years=3, test_months=6):
                 "Test_MaxDD_ADX": round(test_result_adx["max_drawdown"], 2),
                 "Trades_NoFilter": test_result["total_trades"],
                 "Trades_ADX": test_result_adx["total_trades"],
-            }
+            },
         )
 
         logging.info(f"  Regime: {test_regime}")
         logging.info(
-            f"  Test (No Filter): Return={test_result['total_return']:.1f}%, Sharpe={test_result['sharpe_ratio']:.2f}, Trades={test_result['total_trades']}"
+            f"  Test (No Filter): Return={test_result['total_return']:.1f}%, Sharpe={test_result['sharpe_ratio']:.2f}, Trades={test_result['total_trades']}",
         )
         logging.info(
-            f"  Test (ADX+DI):    Return={test_result_adx['total_return']:.1f}%, Sharpe={test_result_adx['sharpe_ratio']:.2f}, Trades={test_result_adx['total_trades']}"
+            f"  Test (ADX+DI):    Return={test_result_adx['total_return']:.1f}%, Sharpe={test_result_adx['sharpe_ratio']:.2f}, Trades={test_result_adx['total_trades']}",
         )
 
         # Slide window forward by test period
@@ -444,22 +444,22 @@ def rolling_walk_forward(df, train_years=3, test_months=6):
     print(f"\nTRENDING Markets ({len(trending_results)} windows):")
     if len(trending_results) > 0:
         print(
-            f"  Avg Return (No Filter): {trending_results['Test_Return_NoFilter'].mean():.2f}%"
+            f"  Avg Return (No Filter): {trending_results['Test_Return_NoFilter'].mean():.2f}%",
         )
         print(
-            f"  Avg Return (ADX+DI): {trending_results['Test_Return_ADX'].mean():.2f}%"
+            f"  Avg Return (ADX+DI): {trending_results['Test_Return_ADX'].mean():.2f}%",
         )
         print(
-            f"  Avg Sharpe (ADX+DI): {trending_results['Test_Sharpe_ADX'].mean():.2f}"
+            f"  Avg Sharpe (ADX+DI): {trending_results['Test_Sharpe_ADX'].mean():.2f}",
         )
 
     print(f"\nRANGING Markets ({len(ranging_results)} windows):")
     if len(ranging_results) > 0:
         print(
-            f"  Avg Return (No Filter): {ranging_results['Test_Return_NoFilter'].mean():.2f}%"
+            f"  Avg Return (No Filter): {ranging_results['Test_Return_NoFilter'].mean():.2f}%",
         )
         print(
-            f"  Avg Return (ADX+DI): {ranging_results['Test_Return_ADX'].mean():.2f}%"
+            f"  Avg Return (ADX+DI): {ranging_results['Test_Return_ADX'].mean():.2f}%",
         )
         print(f"  Avg Sharpe (ADX+DI): {ranging_results['Test_Sharpe_ADX'].mean():.2f}")
 
@@ -470,7 +470,7 @@ def rolling_walk_forward(df, train_years=3, test_months=6):
 
     print("\nOVERALL STATISTICS (ADX+DI Filter):")
     print(
-        f"  Positive Windows: {positive_windows}/{total_windows} ({positive_windows / total_windows * 100:.0f}%)"
+        f"  Positive Windows: {positive_windows}/{total_windows} ({positive_windows / total_windows * 100:.0f}%)",
     )
     print(f"  Average Sharpe: {avg_sharpe_adx:.2f}")
     print(f"  Average Return: {results_df['Test_Return_ADX'].mean():.2f}%")
@@ -496,7 +496,7 @@ def random_seed_stress_test(df, n_iterations=20):
         logging.info(f"\nIteration {i + 1}/{n_iterations} - Seed: {seed}")
 
         result = backtest_with_regime_filter(
-            df, use_adx_filter=True, random_seed=seed, adx_threshold=18, di_threshold=26
+            df, use_adx_filter=True, random_seed=seed, adx_threshold=18, di_threshold=26,
         )
 
         results.append(
@@ -508,11 +508,11 @@ def random_seed_stress_test(df, n_iterations=20):
                 "MaxDD_%": round(result["max_drawdown"], 2),
                 "Trades": result["total_trades"],
                 "Win_Rate_%": round(result["win_rate"], 1),
-            }
+            },
         )
 
         logging.info(
-            f"  Return: {result['total_return']:.2f}%, Sharpe: {result['sharpe_ratio']:.2f}, Trades: {result['total_trades']}"
+            f"  Return: {result['total_return']:.2f}%, Sharpe: {result['sharpe_ratio']:.2f}, Trades: {result['total_trades']}",
         )
 
     results_df = pd.DataFrame(results)
@@ -591,13 +591,13 @@ def main():
         rolling_results[
             (rolling_results["Regime"] == "TRENDING")
             & (rolling_results["Test_Return_ADX"] > 0)
-        ]
+        ],
     )
     ranging_positive = len(
         rolling_results[
             (rolling_results["Regime"] == "RANGING")
             & (rolling_results["Test_Return_ADX"] > 0)
-        ]
+        ],
     )
 
     trending_success_rate = (
@@ -611,10 +611,10 @@ def main():
 
     print("\n1. REGIME PERFORMANCE:")
     print(
-        f"   Trending Markets: {trending_positive}/{trending_count} positive ({trending_success_rate:.0f}%)"
+        f"   Trending Markets: {trending_positive}/{trending_count} positive ({trending_success_rate:.0f}%)",
     )
     print(
-        f"   Ranging Markets: {ranging_positive}/{ranging_count} positive ({ranging_success_rate:.0f}%)"
+        f"   Ranging Markets: {ranging_positive}/{ranging_count} positive ({ranging_success_rate:.0f}%)",
     )
 
     print("\n2. ROBUSTNESS:")
@@ -645,7 +645,7 @@ def main():
     if trending_success_rate < 60:
         ready_for_live = False
         issues.append(
-            f"Low trending market success rate ({trending_success_rate:.0f}%)"
+            f"Low trending market success rate ({trending_success_rate:.0f}%)",
         )
 
     if ranging_success_rate < 40:
@@ -659,7 +659,7 @@ def main():
         print("\n  READY FOR LIVE TRADING")
         print(f"  - Sharpe Std: {sharpe_std:.3f} (ROBUST)")
         print(
-            f"  - Regime Success: {trending_positive + ranging_positive}/{total_regimes} ({(trending_positive + ranging_positive) / total_regimes * 100:.0f}%)"
+            f"  - Regime Success: {trending_positive + ranging_positive}/{total_regimes} ({(trending_positive + ranging_positive) / total_regimes * 100:.0f}%)",
         )
         print(f"  - Average Sharpe: {avg_sharpe:.2f}")
         print("\n  Strategy shows:")

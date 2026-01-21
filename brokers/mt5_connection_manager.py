@@ -5,11 +5,12 @@ Eliminates duplication across the codebase and provides consistent error handlin
 
 import logging
 from typing import Optional
-from services.security_manager import SecureCredentialManager, sanitize_error_message
-from services.error_handler import handle_exception, MT5ConnectionError
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
+
+from services.error_handler import MT5ConnectionError, handle_exception
+from services.security_manager import SecureCredentialManager, sanitize_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class MT5ConnectionManager:
 
         Returns:
             bool: True if connection successful, False otherwise
+
         """
         if self._is_connected:
             logger.debug("MT5 already connected, skipping initialization")
@@ -53,11 +55,11 @@ class MT5ConnectionManager:
             try:
                 login_int = int(login)
                 logger.info(
-                    f"Initializing MT5 with credentials for account {login_int} on server {server}"
+                    f"Initializing MT5 with credentials for account {login_int} on server {server}",
                 )
 
                 if not mt5.initialize(
-                    login=login_int, password=password, server=server
+                    login=login_int, password=password, server=server,
                 ):  # type: ignore
                     error = mt5.last_error()  # type: ignore
                     logger.error(f"MT5 initialization failed: {error}")
@@ -73,7 +75,7 @@ class MT5ConnectionManager:
                 raise MT5ConnectionError(f"Invalid credentials: {error_msg}")
         else:
             logger.info(
-                "No credentials provided, attempting to initialize without authentication"
+                "No credentials provided, attempting to initialize without authentication",
             )
             if not mt5.initialize():  # type: ignore
                 error = mt5.last_error()  # type: ignore
@@ -93,7 +95,7 @@ class MT5ConnectionManager:
                 logger.info("MT5 connection closed")
             except Exception as e:
                 logger.error(
-                    f"Error closing MT5 connection: {sanitize_error_message(str(e))}"
+                    f"Error closing MT5 connection: {sanitize_error_message(str(e))}",
                 )
 
     def is_connected(self) -> bool:
@@ -109,6 +111,7 @@ class MT5ConnectionManager:
 
         Returns:
             bool: True if successful
+
         """
         if not self._is_connected:
             logger.error("MT5 not connected, cannot select symbol")
@@ -122,7 +125,7 @@ class MT5ConnectionManager:
             return True
         except Exception as e:
             logger.error(
-                f"Error selecting symbol {symbol}: {sanitize_error_message(str(e))}"
+                f"Error selecting symbol {symbol}: {sanitize_error_message(str(e))}",
             )
             return False
 

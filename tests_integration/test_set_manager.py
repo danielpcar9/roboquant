@@ -3,9 +3,9 @@
 Test script for SetFileManager functionality.
 """
 
+import logging
 import os
 import sys
-import logging
 
 # Add the current directory to the path so we can import our modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -69,7 +69,7 @@ def test_set_manager():
 if __name__ == "__main__":
     # Set up logging
     logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
     )
 
     test_set_manager()

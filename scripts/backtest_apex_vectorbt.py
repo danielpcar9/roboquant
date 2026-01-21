@@ -3,16 +3,17 @@ Backtest Optimizado para Estrategia Donchian
 Versión FINAL con todas las mejoras aplicadas
 """
 
-import vectorbt as vbt
-import pandas as pd
-import numpy as np
-from datetime import timedelta
 import logging
 import os
+from datetime import timedelta
+
+import numpy as np
+import pandas as pd
+import vectorbt as vbt
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
 
@@ -27,6 +28,7 @@ def load_data(symbol="XAUUSD", timeframe="H1", days_back=1825):
 
     Returns:
         DataFrame con datos filtrados o None si error
+
     """
     try:
         filename = f"data/{symbol}_{timeframe}.csv"
@@ -104,15 +106,16 @@ def generate_signals(
 
     Returns:
         DataFrame con señales y stops
+
     """
     df = df.copy()
 
     logging.info("📊 Generando señales con parámetros:")
     logging.info(
-        f"   Donchian: {donchian_period} | ADX: {adx_period} (thr={adx_threshold}, DI≥{di_threshold})"
+        f"   Donchian: {donchian_period} | ADX: {adx_period} (thr={adx_threshold}, DI≥{di_threshold})",
     )
     logging.info(
-        f"   SL: {sl_points} pts | TP: {tp_points} pts | Breakout Threshold: {breakout_threshold}"
+        f"   SL: {sl_points} pts | TP: {tp_points} pts | Breakout Threshold: {breakout_threshold}",
     )
 
     # 1. DONCHIAN CHANNELS - Using rolling operations
@@ -128,10 +131,10 @@ def generate_signals(
     df["up_move"] = df["high"] - df["high"].shift()
     df["down_move"] = df["low"].shift() - df["low"]
     df["plus_dm"] = np.where(
-        (df["up_move"] > df["down_move"]) & (df["up_move"] > 0), df["up_move"], 0
+        (df["up_move"] > df["down_move"]) & (df["up_move"] > 0), df["up_move"], 0,
     )
     df["minus_dm"] = np.where(
-        (df["down_move"] > df["up_move"]) & (df["down_move"] > 0), df["down_move"], 0
+        (df["down_move"] > df["up_move"]) & (df["down_move"] > 0), df["down_move"], 0,
     )
 
     alpha = 1 / adx_period
@@ -170,7 +173,7 @@ def generate_signals(
     # 5. ESTADÍSTICAS
     total_signals = df["long_entry"].sum() + df["short_entry"].sum()
     logging.info(
-        f"🎯 Señales generadas: {total_signals} ({df['long_entry'].sum()} longs, {df['short_entry'].sum()} shorts)"
+        f"🎯 Señales generadas: {total_signals} ({df['long_entry'].sum()} longs, {df['short_entry'].sum()} shorts)",
     )
 
     return df
@@ -203,6 +206,7 @@ def run_backtest(
 
     Returns:
         Portfolio object de vectorbt o None si error
+
     """
     try:
         # Generar señales
@@ -289,7 +293,7 @@ def print_results(portfolio, initial_capital):
             print(
                 f"   Ratio G/P:          {avg_win / avg_loss:.2f}"
                 if avg_loss > 0
-                else "   Ratio G/P:          N/A"
+                else "   Ratio G/P:          N/A",
             )
 
         # EVALUACIÓN
@@ -322,7 +326,7 @@ def print_results(portfolio, initial_capital):
         print("=" * 70 + "\n")
 
     except Exception as e:
-        logging.error(f"Error imprimiendo resultados: {e}")
+        logging.exception(f"Error imprimiendo resultados: {e}")
 
 
 def save_results(portfolio):
@@ -343,17 +347,17 @@ def save_results(portfolio):
             output_html = os.path.expanduser(r"C:\Users\edgar\MT5_backtest.html")
             with open(output_html, "w", encoding="utf-8") as f:
                 f.write(
-                    """<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Account History Report</title></head><body>"""
+                    """<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Account History Report</title></head><body>""",
                 )
                 f.write("<h2>Account History Report</h2>")
                 f.write(
                     "<table><tr><th>From</th><td>{}</td></tr><tr><th>To</th><td>{}</td></tr><tr><th>Symbol</th><td>XAUUSD</td></tr></table>".format(
-                        trades["Entry Time"].min(), trades["Exit Time"].max()
-                    )
+                        trades["Entry Time"].min(), trades["Exit Time"].max(),
+                    ),
                 )
                 f.write("<h3>Deals</h3>")
                 f.write(
-                    "<table><thead><tr><th>Ticket</th><th>Open Time</th><th>Type</th><th>Size</th><th>Symbol</th><th>Price</th><th>S/L</th><th>T/P</th><th>Close Time</th><th>Close Price</th><th>Commission</th><th>Taxes</th><th>Swap</th><th>Profit</th></tr></thead><tbody>"
+                    "<table><thead><tr><th>Ticket</th><th>Open Time</th><th>Type</th><th>Size</th><th>Symbol</th><th>Price</th><th>S/L</th><th>T/P</th><th>Close Time</th><th>Close Price</th><th>Commission</th><th>Taxes</th><th>Swap</th><th>Profit</th></tr></thead><tbody>",
                 )
                 for i, row in trades.iterrows():
                     open_time = row.get("Entry Time", "")
@@ -365,7 +369,7 @@ def save_results(portfolio):
                     type_str = "Buy" if direction.lower().startswith("l") else "Sell"
                     size = 0.01
                     f.write(
-                        f"<tr><td>{i}</td><td>{open_time}</td><td>{type_str}</td><td class='right'>{size:.2f}</td><td>XAUUSD</td><td class='right'>{entry_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td>{close_time}</td><td class='right'>{exit_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{pnl:.2f}</td></tr>"
+                        f"<tr><td>{i}</td><td>{open_time}</td><td>{type_str}</td><td class='right'>{size:.2f}</td><td>XAUUSD</td><td class='right'>{entry_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td>{close_time}</td><td class='right'>{exit_price:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{0.00:.2f}</td><td class='right'>{pnl:.2f}</td></tr>",
                     )
                 f.write("</tbody></table></body></html>")
             logging.info(f"📁 HTML para QA guardado: {output_html}")
@@ -379,7 +383,7 @@ def save_results(portfolio):
         logging.info("📁 Estadísticas guardadas: backtest_stats.csv")
 
     except Exception as e:
-        logging.error(f"Error guardando resultados: {e}")
+        logging.exception(f"Error guardando resultados: {e}")
 
 
 def optimize_parameters(df, initial_capital=10000):
@@ -420,13 +424,13 @@ def optimize_parameters(df, initial_capital=10000):
                         try:
                             # Safely extract trade count
                             trade_count = getattr(
-                                portfolio.trades, "count", lambda: 0
+                                portfolio.trades, "count", lambda: 0,
                             )()
                             if trade_count >= 10:
                                 # Safely extract metrics
                                 sharpe = getattr(portfolio, "sharpe_ratio", lambda: 0)()
                                 pf = getattr(
-                                    portfolio.trades, "profit_factor", lambda: 0
+                                    portfolio.trades, "profit_factor", lambda: 0,
                                 )()
                                 wr = getattr(portfolio.trades, "win_rate", lambda: 0)()
 
@@ -439,7 +443,7 @@ def optimize_parameters(df, initial_capital=10000):
                                         "profit_factor": pf,
                                         "win_rate": wr,
                                         "trades": trade_count,
-                                    }
+                                    },
                                 )
                         except Exception:
                             # Skip this combination if there are issues
@@ -452,7 +456,7 @@ def optimize_parameters(df, initial_capital=10000):
                             best_params = (donchian, sl, tp)
 
                     logging.info(
-                        f"[{current}/{total_combinations}] Donchian={donchian}, SL={sl}, TP={tp}"
+                        f"[{current}/{total_combinations}] Donchian={donchian}, SL={sl}, TP={tp}",
                     )
 
                 except Exception as e:

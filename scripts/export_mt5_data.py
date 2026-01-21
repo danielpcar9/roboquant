@@ -1,11 +1,10 @@
+import logging
 import os
-import pandas as pd
+from datetime import datetime, timedelta
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
-
-from datetime import datetime, timedelta
-import logging
+import pandas as pd
 
 # Import consolidated MT5 functions
 from brokers.mt5_core import initialize_mt5, timeframe_to_string
@@ -43,7 +42,7 @@ def get_historical_data(symbol, timeframe, days_back=365):
         return df
 
     except Exception as e:
-        logging.error(f"Error getting historical data: {e}")
+        logging.exception(f"Error getting historical data: {e}")
         return None
 
 
@@ -81,7 +80,7 @@ def export_data(symbol="XAUUSD", timeframe=mt5.TIMEFRAME_H1, days_back=1825):
         return True
 
     except Exception as e:
-        logging.error(f"Error exporting data: {e}")
+        logging.exception(f"Error exporting data: {e}")
         return False
 
 
@@ -100,7 +99,7 @@ def main():
         # export_data("XAUUSD", mt5.TIMEFRAME_M15, 365)  # 1 year of 15-minute data
 
     except Exception as e:
-        logging.error(f"Error in main: {e}")
+        logging.exception(f"Error in main: {e}")
     finally:
         # Shutdown MT5
         mt5.shutdown()  # type: ignore

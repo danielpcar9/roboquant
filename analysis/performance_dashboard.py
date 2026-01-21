@@ -2,11 +2,12 @@
 Dashboard HTML interactivo con métricas de performance
 """
 
+import logging
+import os
+
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import os
-import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -52,7 +53,7 @@ def generate_dashboard(trades_csv="logs/trades.csv", output_html="dashboard.html
                 y=df["cumulative_pnl"],
                 mode="lines",
                 name="Equity",
-                line=dict(color="cyan", width=2),
+                line={"color": "cyan", "width": 2},
             ),
             row=1,
             col=1,
@@ -67,7 +68,7 @@ def generate_dashboard(trades_csv="logs/trades.csv", output_html="dashboard.html
                 y=drawdown,
                 fill="tozeroy",
                 name="Drawdown",
-                line=dict(color="red"),
+                line={"color": "red"},
             ),
             row=1,
             col=2,
@@ -79,7 +80,7 @@ def generate_dashboard(trades_csv="logs/trades.csv", output_html="dashboard.html
                 x=df["pnl"],
                 nbinsx=50,
                 name="P&L Distribution",
-                marker=dict(color=df["pnl"], colorscale="RdYlGn", showscale=True),
+                marker={"color": df["pnl"], "colorscale": "RdYlGn", "showscale": True},
             ),
             row=2,
             col=1,
@@ -93,7 +94,7 @@ def generate_dashboard(trades_csv="logs/trades.csv", output_html="dashboard.html
                     x=trades_by_hour.index,
                     y=trades_by_hour.values,
                     name="Trades/Hour",
-                    marker=dict(color="lightblue"),
+                    marker={"color": "lightblue"},
                 ),
                 row=2,
                 col=2,
@@ -107,9 +108,9 @@ def generate_dashboard(trades_csv="logs/trades.csv", output_html="dashboard.html
                 x=monthly_pnl.index,
                 y=monthly_pnl.values,
                 name="Monthly P&L",
-                marker=dict(
-                    color=monthly_pnl.values, colorscale="RdYlGn", showscale=False
-                ),
+                marker={
+                    "color": monthly_pnl.values, "colorscale": "RdYlGn", "showscale": False,
+                },
             ),
             row=3,
             col=1,
@@ -136,7 +137,7 @@ def generate_dashboard(trades_csv="logs/trades.csv", output_html="dashboard.html
                     y=pf,
                     mode="lines",
                     name="Profit Factor (20 trades)",
-                    line=dict(color="purple", width=2),
+                    line={"color": "purple", "width": 2},
                 ),
                 row=3,
                 col=2,
@@ -144,7 +145,7 @@ def generate_dashboard(trades_csv="logs/trades.csv", output_html="dashboard.html
 
         # Update layout
         fig.update_layout(
-            title="Trading Performance Dashboard", height=900, showlegend=False
+            title="Trading Performance Dashboard", height=900, showlegend=False,
         )
 
         # Save to HTML
@@ -152,7 +153,7 @@ def generate_dashboard(trades_csv="logs/trades.csv", output_html="dashboard.html
         print(f"Dashboard saved to {output_html}")
 
     except Exception as e:
-        logging.error(f"Error generating dashboard: {e}")
+        logging.exception(f"Error generating dashboard: {e}")
 
 
 def main():

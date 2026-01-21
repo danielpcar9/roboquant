@@ -1,6 +1,7 @@
-import MetaTrader5 as mt5
 import os
 from datetime import datetime, timedelta
+
+import MetaTrader5 as mt5
 import pytz
 
 OUTPUT_PATH = os.path.expanduser(r"C:\Users\edgar\MT5_statement.html")
@@ -154,7 +155,7 @@ def main():
             f"<td class='right'>{0.00:.2f}</td>"  # Taxes not available
             f"<td class='right'>{swap:.2f}</td>"
             f"<td class='right'>{profit:.2f}</td>"
-            f"</tr>"
+            f"</tr>",
         )
 
     # Write HTML
@@ -164,7 +165,7 @@ def main():
                 start=start.strftime("%Y.%m.%d %H:%M"),
                 end=end.strftime("%Y.%m.%d %H:%M"),
                 symbol=(SYMBOL_FILTER or "ALL"),
-            )
+            ),
         )
         for row in html_rows:
             f.write(row + "\n")

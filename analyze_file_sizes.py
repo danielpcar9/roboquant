@@ -20,7 +20,7 @@ def analyze_python_files():
 
         try:
             # Contar líneas ignorando líneas vacías y comentarios
-            with open(py_file, "r", encoding="utf-8") as f:
+            with open(py_file, encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Filtrar líneas vacías y comentarios
@@ -36,7 +36,7 @@ def analyze_python_files():
                     "total_lines": len(lines),
                     "code_lines": len(code_lines),
                     "blank_lines": len([line for line in lines if not line.strip()]),
-                }
+                },
             )
         except Exception as e:
             print(f"❌ Error leyendo {py_file}: {e}")
@@ -55,7 +55,7 @@ def analyze_python_files():
         print(
             f"    Total: {file_info['total_lines']:4d} líneas | "
             f"Código: {file_info['code_lines']:4d} líneas | "
-            f"Vacías: {file_info['blank_lines']:3d}"
+            f"Vacías: {file_info['blank_lines']:3d}",
         )
 
         # Alertas según tamaño
@@ -77,7 +77,7 @@ def analyze_python_files():
     print(f"Total archivos Python: {total_files}")
     print(f"Archivos >500 líneas: {long_count} ({long_count / total_files * 100:.1f}%)")
     print(
-        f"Archivos >1000 líneas: {very_long_count} ({very_long_count / total_files * 100:.1f}%)"
+        f"Archivos >1000 líneas: {very_long_count} ({very_long_count / total_files * 100:.1f}%)",
     )
 
     if long_files:

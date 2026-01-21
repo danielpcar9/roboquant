@@ -2,13 +2,14 @@
 Funciones genéricas de despacho único para reemplazar if-else masivos
 """
 
-from typing import Dict, Any, Callable, Union
+from collections.abc import Callable
 from functools import singledispatch
+from typing import Any
 
 
 @singledispatch
 def calculate_stop_loss(
-    order_type: str, price: float, sl_points: float, point: float
+    order_type: str, price: float, sl_points: float, point: float,
 ) -> float:
     """
     Calcula el precio de stop loss basado en el tipo de orden
@@ -21,6 +22,7 @@ def calculate_stop_loss(
 
     Returns:
         float: Precio del stop loss
+
     """
     raise NotImplementedError(f"No implementation for order type: {order_type}")
 
@@ -30,15 +32,14 @@ def _(order_type: str, price: float, sl_points: float, point: float) -> float:
     """Implementación para órdenes BUY"""
     if order_type.upper() == "BUY":
         return price - sl_points * point
-    elif order_type.upper() == "SELL":
+    if order_type.upper() == "SELL":
         return price + sl_points * point
-    else:
-        raise ValueError(f"Invalid order type: {order_type}")
+    raise ValueError(f"Invalid order type: {order_type}")
 
 
 @singledispatch
 def calculate_take_profit(
-    order_type: str, price: float, tp_points: float, point: float
+    order_type: str, price: float, tp_points: float, point: float,
 ) -> float:
     """
     Calcula el precio de take profit basado en el tipo de orden
@@ -51,6 +52,7 @@ def calculate_take_profit(
 
     Returns:
         float: Precio del take profit
+
     """
     raise NotImplementedError(f"No implementation for order type: {order_type}")
 
@@ -60,15 +62,14 @@ def _(order_type: str, price: float, tp_points: float, point: float) -> float:
     """Implementación para órdenes BUY"""
     if order_type.upper() == "BUY":
         return price + tp_points * point
-    elif order_type.upper() == "SELL":
+    if order_type.upper() == "SELL":
         return price - tp_points * point
-    else:
-        raise ValueError(f"Invalid order type: {order_type}")
+    raise ValueError(f"Invalid order type: {order_type}")
 
 
 def market_regime_dispatcher(
     regime: str,
-) -> Callable[[Dict[str, Any]], tuple[bool, str]]:
+) -> Callable[[dict[str, Any]], tuple[bool, str]]:
     """
     Dispatcher para diferentes regímenes de mercado
 
@@ -77,6 +78,7 @@ def market_regime_dispatcher(
 
     Returns:
         Callable: Función que maneja el régimen específico
+
     """
     regime_handlers = {
         "TRENDING": lambda data: (
@@ -96,7 +98,7 @@ def market_regime_dispatcher(
 
 def risk_management_dispatcher(
     condition: str,
-) -> Callable[[Dict[str, Any]], tuple[bool, str]]:
+) -> Callable[[dict[str, Any]], tuple[bool, str]]:
     """
     Dispatcher para diferentes condiciones de gestión de riesgo
 
@@ -105,6 +107,7 @@ def risk_management_dispatcher(
 
     Returns:
         Callable: Función que maneja la condición específica
+
     """
     risk_handlers = {
         "SPREAD_HIGH": lambda data: (
@@ -126,7 +129,7 @@ def risk_management_dispatcher(
 
 def signal_generation_dispatcher(
     signal_type: str,
-) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """
     Dispatcher para diferentes tipos de señales de trading
 
@@ -135,6 +138,7 @@ def signal_generation_dispatcher(
 
     Returns:
         Callable: Función que genera la respuesta de señal específica
+
     """
     signal_handlers = {
         "BUY": lambda data: {
@@ -161,7 +165,7 @@ def signal_generation_dispatcher(
     return signal_handlers.get(signal_type.upper(), signal_handlers["default"])
 
 
-def trade_execution_dispatcher(result: Union[bool, None]) -> tuple[bool, str]:
+def trade_execution_dispatcher(result: bool | None) -> tuple[bool, str]:
     """
     Dispatcher para resultados de ejecución de trades
 
@@ -170,15 +174,15 @@ def trade_execution_dispatcher(result: Union[bool, None]) -> tuple[bool, str]:
 
     Returns:
         tuple: (success, message)
+
     """
     if result is True:
         return (True, "Trade executed successfully")
-    elif result is False:
+    if result is False:
         return (False, "Trade execution failed")
-    elif result is None:
+    if result is None:
         return (False, "Failed to execute trade - build_and_send_order returned None")
-    else:
-        return (False, f"Unexpected execution result: {result}")
+    return (False, f"Unexpected execution result: {result}")
 
 
 def account_validation_dispatcher(account_info) -> tuple[bool, str]:
@@ -190,20 +194,20 @@ def account_validation_dispatcher(account_info) -> tuple[bool, str]:
 
     Returns:
         tuple: (is_valid, message)
+
     """
     if account_info is None:
         return (False, "Failed to get account info")
-    elif not hasattr(account_info, "balance"):
+    if not hasattr(account_info, "balance"):
         return (False, "Account info missing balance attribute")
-    elif account_info.balance <= 0:
+    if account_info.balance <= 0:
         return (False, "Account balance is zero or negative")
-    else:
-        return (True, f"Account validated - Balance: ${account_info.balance:.2f}")
+    return (True, f"Account validated - Balance: ${account_info.balance:.2f}")
 
 
 # Funciones auxiliares para uso común
 def handle_market_regime(
-    regime: str, adx_value: float = 0, adx_threshold: float = 20
+    regime: str, adx_value: float = 0, adx_threshold: float = 20,
 ) -> tuple[bool, str]:
     """
     Handler completo para regímenes de mercado
@@ -215,6 +219,7 @@ def handle_market_regime(
 
     Returns:
         tuple: (should_trade, reason)
+
     """
     handler = market_regime_dispatcher(regime)
     return handler({"adx_value": adx_value, "adx_threshold": adx_threshold})
@@ -230,12 +235,13 @@ def handle_risk_condition(condition: str, **kwargs) -> tuple[bool, str]:
 
     Returns:
         tuple: (is_valid, reason)
+
     """
     handler = risk_management_dispatcher(condition)
     return handler(kwargs)
 
 
-def handle_signal_generation(signal_type: str, **kwargs) -> Dict[str, Any]:
+def handle_signal_generation(signal_type: str, **kwargs) -> dict[str, Any]:
     """
     Handler completo para generación de señales
 
@@ -245,6 +251,7 @@ def handle_signal_generation(signal_type: str, **kwargs) -> Dict[str, Any]:
 
     Returns:
         Dict: Respuesta de señal
+
     """
     handler = signal_generation_dispatcher(signal_type)
     return handler(kwargs)
@@ -259,6 +266,7 @@ def handle_trade_execution(result) -> tuple[bool, str]:
 
     Returns:
         tuple: (success, message)
+
     """
     return trade_execution_dispatcher(result)
 
@@ -272,5 +280,6 @@ def handle_account_validation(account_info) -> tuple[bool, str]:
 
     Returns:
         tuple: (is_valid, message)
+
     """
     return account_validation_dispatcher(account_info)

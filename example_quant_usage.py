@@ -5,13 +5,15 @@ Este script demuestra cómo integrar y usar el motor cuantitativo
 en un entorno de trading real
 """
 
-import numpy as np
 import logging
+
+import numpy as np
+
 from core.quant_engine import QuantitativeEngine
 
 # Configurar logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,7 @@ def example_basic_quant_analysis():
 
     # Calcular puntaje de entrada cuantitativo
     result = quant_engine.calculate_entry_score(
-        prices=prices, adx_value=adx_value, di_plus=di_plus, di_minus=di_minus
+        prices=prices, adx_value=adx_value, di_plus=di_plus, di_minus=di_minus,
     )
 
     logger.info(f"🎯 Puntaje de Entrada Cuantitativo: {result['entry_score']:.3f}")
@@ -79,7 +81,7 @@ def example_strategy_integration():
     quant_engine = QuantitativeEngine()
 
     entry_result = quant_engine.calculate_entry_score(
-        prices=mock_prices, adx_value=adx_value, di_plus=di_plus, di_minus=di_minus
+        prices=mock_prices, adx_value=adx_value, di_plus=di_plus, di_minus=di_minus,
     )
 
     logger.info(f"🎯 Puntaje de entrada: {entry_result['entry_score']:.3f}")
@@ -112,7 +114,7 @@ def example_parameter_optimization():
 
     # Optimizar el período Donchian
     optimal_period = quant_engine.optimizer.optimize_donchian_period(
-        prices=historical_prices, periods_range=(10, 30)
+        prices=historical_prices, periods_range=(10, 30),
     )
 
     logger.info(f"🎯 Período Donchian óptimo: {optimal_period}")
@@ -163,7 +165,7 @@ def example_risk_management():
         )
 
         position_size = quant_engine.calculate_optimal_position_size(
-            entry_score=result["entry_score"], account_balance=15000
+            entry_score=result["entry_score"], account_balance=15000,
         )
 
         logger.info(f"  Puntaje: {result['entry_score']:.3f}")

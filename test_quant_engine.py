@@ -3,10 +3,11 @@ Test script for the quantitative trading engine
 """
 
 import numpy as np
+
 from core.quant_engine import (
-    QuantitativeEngine,
-    QuantitativeAnalyzer,
     PositionSizer,
+    QuantitativeAnalyzer,
+    QuantitativeEngine,
     QuantitativeOptimizer,
 )
 
@@ -59,7 +60,7 @@ def test_position_sizer():
 
     # Test Kelly Criterion
     kelly_size = sizer.kelly_criterion(
-        win_rate=0.55, avg_win_ratio=2.0, avg_loss_ratio=1.0
+        win_rate=0.55, avg_win_ratio=2.0, avg_loss_ratio=1.0,
     )
     print(f"Kelly Criterion Size: {kelly_size:.3f}")
 
@@ -106,7 +107,7 @@ def test_full_engine():
 
     # Test entry score calculation
     entry_result = engine.calculate_entry_score(
-        prices=prices, adx_value=28.0, di_plus=25.0, di_minus=12.0
+        prices=prices, adx_value=28.0, di_plus=25.0, di_minus=12.0,
     )
 
     print(f"Entry Score: {entry_result['entry_score']:.3f}")
@@ -115,7 +116,7 @@ def test_full_engine():
 
     # Test position sizing
     position_size = engine.calculate_optimal_position_size(
-        account_balance=10000, entry_score=entry_result["entry_score"]
+        account_balance=10000, entry_score=entry_result["entry_score"],
     )
     print(f"Optimal Position Size: {position_size:.3f} lots")
 

@@ -17,9 +17,10 @@ def update_imports_in_file(file_path: Path) -> bool:
 
     Returns:
         bool: True si se realizaron cambios, False si no
+
     """
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         original_content = content
@@ -95,6 +96,7 @@ def find_python_files(root_dir: str) -> list:
 
     Returns:
         list: Lista de rutas a archivos Python
+
     """
     python_files = []
     root_path = Path(root_dir)

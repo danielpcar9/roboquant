@@ -4,15 +4,16 @@ Error handling framework for RoboQuant trading system with custom exceptions,
 circuit breaker pattern, and retry logic.
 """
 
-import time
+import json
 import logging
 import os
-from enum import Enum
-from typing import Optional, Callable, Any, Type, Tuple, Union
-from functools import wraps
 import random
+import time
 import traceback
-import json
+from collections.abc import Callable
+from enum import Enum
+from functools import wraps
+from typing import Any
 
 # Configure logging for error handling
 error_logger = logging.getLogger("error_handling")
@@ -20,7 +21,7 @@ error_logger.setLevel(logging.INFO)
 if not error_logger.handlers:
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
-        "%(asctime)s - ERROR_HANDLING - %(levelname)s - %(message)s"
+        "%(asctime)s - ERROR_HANDLING - %(levelname)s - %(message)s",
     )
     handler.setFormatter(formatter)
     error_logger.addHandler(handler)
@@ -42,7 +43,7 @@ class MT5ConnectionError(RoboQuantError):
 class OrderExecutionError(RoboQuantError):
     """Exception raised when order execution fails."""
 
-    def __init__(self, message: str, retcode: Optional[int] = None):
+    def __init__(self, message: str, retcode: int | None = None):
         super().__init__(message)
         self.retcode = retcode
 
@@ -101,9 +102,7 @@ class CircuitBreaker:
         self,
         failure_threshold: int = 3,
         timeout: int = 60,
-        expected_exception: Union[
-            Type[Exception], Tuple[Type[Exception], ...]
-        ] = Exception,
+        expected_exception: type[Exception] | tuple[type[Exception], ...] = Exception,
     ):
         """
         Initialize the circuit breaker.
@@ -112,6 +111,7 @@ class CircuitBreaker:
             failure_threshold: Number of failures before opening circuit
             timeout: Time in seconds before attempting to close circuit
             expected_exception: Exception type(s) that trigger circuit breaker
+
         """
         self.failure_threshold = failure_threshold
         self.timeout = timeout
@@ -135,6 +135,7 @@ class CircuitBreaker:
         Raises:
             CircuitBreakerError: If circuit is open
             Exception: Any exception raised by the function (if circuit allows it)
+
         """
         if self.state == CircuitState.OPEN:
             if self._should_attempt_reset():
@@ -180,7 +181,7 @@ class CircuitBreaker:
         if self.failure_count >= self.failure_threshold:
             self.state = CircuitState.OPEN
             error_logger.warning(
-                f"Circuit breaker opened after {self.failure_count} failures"
+                f"Circuit breaker opened after {self.failure_count} failures",
             )
 
     def is_closed(self) -> bool:
@@ -204,7 +205,7 @@ def retry_with_exponential_backoff(
     max_retries: int = 3,
     base_delay: float = 1.0,
     max_delay: float = 60.0,
-    exceptions: Tuple[Type[Exception], ...] = (Exception,),
+    exceptions: tuple[type[Exception], ...] = (Exception,),
 ):
     """
     Decorator for retrying function calls with exponential backoff.
@@ -214,12 +215,13 @@ def retry_with_exponential_backoff(
         base_delay: Base delay in seconds (will be multiplied by 2^attempt)
         max_delay: Maximum delay between retries
         exceptions: Tuple of exceptions that trigger retry
+
     """
 
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            last_exception: Optional[Exception] = None
+            last_exception: Exception | None = None
 
             for attempt in range(max_retries + 1):
                 try:
@@ -234,14 +236,14 @@ def retry_with_exponential_backoff(
                         total_delay = delay + jitter
 
                         error_logger.warning(
-                            f"Attempt {attempt + 1} failed for {func.__name__}: {str(e)}. "
-                            f"Retrying in {total_delay:.2f} seconds..."
+                            f"Attempt {attempt + 1} failed for {func.__name__}: {e!s}. "
+                            f"Retrying in {total_delay:.2f} seconds...",
                         )
 
                         time.sleep(total_delay)
                     else:
                         error_logger.error(
-                            f"All {max_retries + 1} attempts failed for {func.__name__}: {str(e)}"
+                            f"All {max_retries + 1} attempts failed for {func.__name__}: {e!s}",
                         )
                         error_logger.debug(f"Full traceback:\n{traceback.format_exc()}")
 
@@ -250,7 +252,7 @@ def retry_with_exponential_backoff(
                 raise last_exception
             else:
                 raise RuntimeError(
-                    "All retry attempts failed but no exception was captured"
+                    "All retry attempts failed but no exception was captured",
                 )
 
         return wrapper
@@ -260,15 +262,15 @@ def retry_with_exponential_backoff(
 
 # Predefined circuit breakers for common MT5 operations
 mt5_connection_circuit = CircuitBreaker(
-    failure_threshold=3, timeout=60, expected_exception=MT5ConnectionError
+    failure_threshold=3, timeout=60, expected_exception=MT5ConnectionError,
 )
 
 order_execution_circuit = CircuitBreaker(
-    failure_threshold=5, timeout=30, expected_exception=OrderExecutionError
+    failure_threshold=5, timeout=30, expected_exception=OrderExecutionError,
 )
 
 market_data_circuit = CircuitBreaker(
-    failure_threshold=3, timeout=30, expected_exception=(ConnectionError, TimeoutError)
+    failure_threshold=3, timeout=30, expected_exception=(ConnectionError, TimeoutError),
 )
 
 webhook_circuit = CircuitBreaker(
@@ -284,6 +286,7 @@ def safe_mt5_call(func: Callable):
 
     Args:
         func: MT5 function to wrap
+
     """
 
     @wraps(func)
@@ -323,6 +326,7 @@ def handle_exception(func: Callable):
 
     Args:
         func: Function to wrap with exception handling
+
     """
 
     @wraps(func)
@@ -331,35 +335,35 @@ def handle_exception(func: Callable):
             return func(*args, **kwargs)
         except ConfigurationError as e:
             func_name = getattr(func, "__name__", "unknown")
-            error_logger.error(f"Configuration error in {func_name}: {str(e)}")
+            error_logger.error(f"Configuration error in {func_name}: {e!s}")
             raise
         except SafetyViolationError as e:
             func_name = getattr(func, "__name__", "unknown")
-            error_logger.error(f"Safe violation in {func_name}: {str(e)}")
+            error_logger.error(f"Safe violation in {func_name}: {e!s}")
             raise
         except MT5ConnectionError as e:
             func_name = getattr(func, "__name__", "unknown")
-            error_logger.error(f"MT5 connection error in {func_name}: {str(e)}")
+            error_logger.error(f"MT5 connection error in {func_name}: {e!s}")
             raise
         except OrderExecutionError as e:
             func_name = getattr(func, "__name__", "unknown")
-            error_logger.error(f"Order execution error in {func_name}: {str(e)}")
+            error_logger.error(f"Order execution error in {func_name}: {e!s}")
             raise
         except CircuitBreakerError as e:
             func_name = getattr(func, "__name__", "unknown")
-            error_logger.error(f"Circuit breaker error in {func_name}: {str(e)}")
+            error_logger.error(f"Circuit breaker error in {func_name}: {e!s}")
             raise
         except DataError as e:
             func_name = getattr(func, "__name__", "unknown")
-            error_logger.error(f"Data error in {func_name}: {str(e)}")
+            error_logger.error(f"Data error in {func_name}: {e!s}")
             raise
         except NetworkError as e:
             func_name = getattr(func, "__name__", "unknown")
-            error_logger.error(f"Network error in {func_name}: {str(e)}")
+            error_logger.error(f"Network error in {func_name}: {e!s}")
             raise
         except Exception as e:
             func_name = getattr(func, "__name__", "unknown")
-            error_logger.error(f"Unexpected error in {func_name}: {str(e)}")
+            error_logger.error(f"Unexpected error in {func_name}: {e!s}")
             error_logger.debug(f"Full traceback:\n{traceback.format_exc()}")
             raise
 
@@ -454,12 +458,13 @@ def log_error_to_file(error_info: dict, log_file: str = "error_log.json"):
     Args:
         error_info: Dictionary containing error information
         log_file: Path to the log file
+
     """
     try:
         # Read existing log file if it exists
         existing_logs = []
         if os.path.exists(log_file):
-            with open(log_file, "r") as f:
+            with open(log_file) as f:
                 try:
                     existing_logs = json.load(f)
                 except json.JSONDecodeError:

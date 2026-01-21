@@ -4,11 +4,12 @@ Machine Learning engine for RoboQuant trading system with feature engineering
 and XGBoost-based trading model.
 """
 
-import pandas as pd
-import numpy as np
 import logging
-from typing import Dict, Any, Optional
 import os
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 # Try to import XGBoost
 try:
@@ -26,7 +27,7 @@ ml_logger.setLevel(logging.INFO)
 if not ml_logger.handlers:
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
-        "%(asctime)s - ML_ENGINE - %(levelname)s - %(message)s"
+        "%(asctime)s - ML_ENGINE - %(levelname)s - %(message)s",
     )
     handler.setFormatter(formatter)
     ml_logger.addHandler(handler)
@@ -49,6 +50,7 @@ class FeatureEngineer:
 
         Returns:
             RSI series
+
         """
         delta = prices.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
@@ -75,6 +77,7 @@ class FeatureEngineer:
 
         Returns:
             Tuple of (MACD line, Signal line)
+
         """
         ema_fast = prices.ewm(span=fast_period).mean()
         ema_slow = prices.ewm(span=slow_period).mean()
@@ -92,6 +95,7 @@ class FeatureEngineer:
 
         Returns:
             ATR series
+
         """
         high_low = df["high"] - df["low"]
         high_close = abs(df["high"] - df["close"].shift())
@@ -111,6 +115,7 @@ class FeatureEngineer:
 
         Returns:
             Tuple of (upper channel, lower channel)
+
         """
         upper_channel = df["high"].rolling(period).max()
         lower_channel = df["low"].rolling(period).min()
@@ -125,6 +130,7 @@ class FeatureEngineer:
 
         Returns:
             DataFrame with engineered features
+
         """
         if df.empty:
             return df
@@ -135,7 +141,7 @@ class FeatureEngineer:
         # Price-based features
         features_df["returns"] = features_df["close"].pct_change()
         features_df["log_returns"] = np.log(
-            features_df["close"] / features_df["close"].shift(1)
+            features_df["close"] / features_df["close"].shift(1),
         )
 
         # Technical indicators
@@ -188,7 +194,7 @@ class FeatureEngineer:
 
         # Difference features
         features_df["price_change"] = features_df["close"] - features_df["close"].shift(
-            1
+            1,
         )
         features_df["price_change_pct"] = features_df["price_change"] / features_df[
             "close"
@@ -208,16 +214,17 @@ class FeatureEngineer:
 class TradingMLModel:
     """XGBoost-based trading model."""
 
-    def __init__(self, model_path: Optional[str] = None):
+    def __init__(self, model_path: str | None = None):
         """
         Initialize the trading ML model.
 
         Args:
             model_path: Path to load pre-trained model (optional)
+
         """
         if not XGBOOST_AVAILABLE:
             raise RuntimeError(
-                "XGBoost is not available. Please install xgboost package."
+                "XGBoost is not available. Please install xgboost package.",
             )
 
         self.model = None
@@ -237,6 +244,7 @@ class TradingMLModel:
 
         Returns:
             DataFrame with prepared features
+
         """
         # Engineer features
         features_df = self.feature_engineer.engineer_features(df)
@@ -264,6 +272,7 @@ class TradingMLModel:
 
         Returns:
             Series with target values (1 for buy signal, -1 for sell signal, 0 for hold)
+
         """
         # Calculate future returns
         future_returns = df["close"].shift(-lookahead) / df["close"] - 1
@@ -279,8 +288,8 @@ class TradingMLModel:
         return signals
 
     def train(
-        self, df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42
-    ) -> Dict[str, Any]:
+        self, df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42,
+    ) -> dict[str, Any]:
         """
         Train the ML model.
 
@@ -291,10 +300,11 @@ class TradingMLModel:
 
         Returns:
             Dictionary with training results
+
         """
         if not XGBOOST_AVAILABLE:
             raise RuntimeError(
-                "XGBoost is not available. Please install xgboost package."
+                "XGBoost is not available. Please install xgboost package.",
             )
 
         # Prepare features and targets
@@ -359,7 +369,7 @@ class TradingMLModel:
                 {
                     "feature": X_train.columns,
                     "importance": self.model.feature_importances_,
-                }
+                },
             ).sort_values("importance", ascending=False)
         else:
             feature_importance = pd.DataFrame()
@@ -391,6 +401,7 @@ class TradingMLModel:
 
         Returns:
             Series with predictions (-1 for sell, 0 for hold, 1 for buy)
+
         """
         if not self.is_trained or self.model is None:
             raise RuntimeError("Model is not trained. Please train the model first.")
@@ -417,6 +428,7 @@ class TradingMLModel:
 
         Returns:
             DataFrame with prediction probabilities for each class
+
         """
         if not self.is_trained or self.model is None:
             raise RuntimeError("Model is not trained. Please train the model first.")
@@ -444,6 +456,7 @@ class TradingMLModel:
 
         Args:
             path: Path to save the model
+
         """
         if not self.is_trained or self.model is None:
             raise RuntimeError("Model is not trained. Please train the model first.")
@@ -461,15 +474,16 @@ class TradingMLModel:
 
         Args:
             path: Path to load the model from
+
         """
         if not XGBOOST_AVAILABLE:
             raise RuntimeError(
-                "XGBoost is not available. Please install xgboost package."
+                "XGBoost is not available. Please install xgboost package.",
             )
 
         # Check if file exists
         if not os.path.exists(path):
-            raise FileNotFoundError("Model file not found: %s" % path)
+            raise FileNotFoundError(f"Model file not found: {path}")
 
         if xgb is not None:
             self.model = xgb.XGBClassifier()
@@ -482,12 +496,13 @@ class TradingMLModel:
 class MLTradingSystem:
     """Integration of ML model with technical trading signals."""
 
-    def __init__(self, model_path: Optional[str] = None):
+    def __init__(self, model_path: str | None = None):
         """
         Initialize the ML trading system.
 
         Args:
             model_path: Path to load pre-trained model (optional)
+
         """
         self.ml_model = TradingMLModel(model_path) if XGBOOST_AVAILABLE else None
         self.feature_engineer = FeatureEngineer()
@@ -495,7 +510,7 @@ class MLTradingSystem:
         self.model_path = model_path
 
     def generate_hybrid_signals(
-        self, df: pd.DataFrame, technical_weight: float = 0.7, ml_weight: float = 0.3
+        self, df: pd.DataFrame, technical_weight: float = 0.7, ml_weight: float = 0.3,
     ):
         """
         Generate hybrid trading signals combining technical and ML signals.
@@ -507,6 +522,7 @@ class MLTradingSystem:
 
         Returns:
             DataFrame with hybrid signals
+
         """
         if not XGBOOST_AVAILABLE or self.ml_model is None:
             ml_logger.warning("ML model not available, using only technical signals")
@@ -557,6 +573,7 @@ class MLTradingSystem:
 
         Returns:
             Series with technical signals
+
         """
         signals = pd.Series(0, index=df.index)
 
@@ -575,7 +592,7 @@ class MLTradingSystem:
             signals[condition2] = -1  # Sell breakout
         except (KeyError, ValueError) as e:
             ml_logger.warning(
-                f"Error in shifted Donchian signals: {e}, using simple signals instead"
+                f"Error in shifted Donchian signals: {e}, using simple signals instead",
             )
             condition1 = df["close"] > upper_dc
             condition2 = df["close"] < lower_dc
@@ -592,7 +609,7 @@ class MLTradingSystem:
             signals[condition4] = -1  # RSI overbought sell
         except (KeyError, ValueError) as e:
             ml_logger.warning(
-                f"Error in shifted RSI signals: {e}, using simple signals instead"
+                f"Error in shifted RSI signals: {e}, using simple signals instead",
             )
             condition3 = rsi < 30
             condition4 = rsi > 70
@@ -610,7 +627,7 @@ class MLTradingSystem:
             signals[condition6] = -1  # MACD bearish crossover
         except (KeyError, ValueError) as e:
             ml_logger.warning(
-                f"Error in shifted MACD signals: {e}, using simple signals instead"
+                f"Error in shifted MACD signals: {e}, using simple signals instead",
             )
             condition5 = macd_histogram > 0
             condition6 = macd_histogram < 0
@@ -625,6 +642,7 @@ class MLTradingSystem:
 
         Args:
             df: Input DataFrame with price data
+
         """
         if not XGBOOST_AVAILABLE or self.ml_model is None:
             return
@@ -642,7 +660,7 @@ class MLTradingSystem:
                         if idx in probabilities.index:
                             prob = probabilities.loc[idx]
                             signal_text = {1: "BUY", -1: "SELL", 0: "HOLD"}.get(
-                                pred, "UNKNOWN"
+                                pred, "UNKNOWN",
                             )
                             ml_logger.info("ML Prediction for %s: %s", idx, signal_text)
                             ml_logger.info(
@@ -667,6 +685,7 @@ class MLTradingSystem:
 
         Returns:
             True if ready for live trading, False otherwise
+
         """
         if not XGBOOST_AVAILABLE or self.ml_model is None:
             return False

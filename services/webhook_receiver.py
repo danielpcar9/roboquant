@@ -1,31 +1,31 @@
-import logging
-from datetime import datetime
-from flask import Flask, request, jsonify
-import hmac
 import hashlib
+import hmac
+import logging
 import os
+from datetime import datetime
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
-from brokers.mt5_utils import build_and_send_order, normalize_volume, MT5Gateway
-from services.security_manager import (
-    SecureCredentialManager,
-    InputValidator,
-    RateLimiter,
-    constant_time_compare,
-    sanitize_error_message,
-    ip_whitelist,
-)
+from flask import Flask, jsonify, request
+
+# Import consolidated MT5 functions
+from brokers.mt5_core import initialize_mt5
+from brokers.mt5_utils import MT5Gateway, build_and_send_order, normalize_volume
 
 # Import config manager
 from config.config_manager import config_manager
 
-# Import consolidated MT5 functions
-from brokers.mt5_core import initialize_mt5
-
 # Import ATR calculation function
 from core.donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator as MarketDataService,
+)
+from services.security_manager import (
+    InputValidator,
+    RateLimiter,
+    SecureCredentialManager,
+    constant_time_compare,
+    ip_whitelist,
+    sanitize_error_message,
 )
 
 # Initialize market data service for ATR calculation
@@ -71,7 +71,7 @@ class WebhookHandler:
             return False, "Server not configured securely"
 
         expected_signature = hmac.new(
-            self.secret_key.encode(), body, hashlib.sha256
+            self.secret_key.encode(), body, hashlib.sha256,
         ).hexdigest()
 
         if not constant_time_compare(signature, expected_signature):
@@ -167,7 +167,7 @@ class WebhookHandler:
 
             # Validate calculated prices
             if not InputValidator.validate_price(
-                sl
+                sl,
             ) or not InputValidator.validate_price(tp):
                 logging.error(f"Invalid calculated SL/TP prices: SL={sl}, TP={tp}")
                 return False
@@ -177,21 +177,20 @@ class WebhookHandler:
 
             # Execute trade
             result = build_and_send_order(
-                symbol=symbol, side=order_type, volume=volume, sl=sl, tp=tp, magic=magic
+                symbol=symbol, side=order_type, volume=volume, sl=sl, tp=tp, magic=magic,
             )
 
             if result:
                 logging.info(
-                    f"Trade executed successfully: {order_type} {symbol} @ {price}"
+                    f"Trade executed successfully: {order_type} {symbol} @ {price}",
                 )
                 return True
-            else:
-                logging.error("Failed to execute trade")
-                return False
+            logging.error("Failed to execute trade")
+            return False
 
         except Exception as e:
-            logging.error(
-                f"Error processing trade signal: {sanitize_error_message(str(e))}"
+            logging.exception(
+                f"Error processing trade signal: {sanitize_error_message(str(e))}",
             )
             return False
 
@@ -215,7 +214,7 @@ def webhook():
             retry_after = webhook_handler.rate_limiter.get_retry_after()
             logging.warning("Rate limit exceeded from %s", request.remote_addr)
             return jsonify(
-                {"error": "Rate limit exceeded", "retry_after": retry_after}
+                {"error": "Rate limit exceeded", "retry_after": retry_after},
             ), 429
 
         # Verify HMAC signature
@@ -225,10 +224,10 @@ def webhook():
 
         if not is_valid:
             logging.warning(
-                f"Signature verification failed from {request.remote_addr}: {error_msg}"
+                f"Signature verification failed from {request.remote_addr}: {error_msg}",
             )
             return jsonify(
-                {"error": error_msg}
+                {"error": error_msg},
             ), 401 if error_msg != "Server not configured securely" else 500
 
         # Get JSON data from request
@@ -239,7 +238,7 @@ def webhook():
             return jsonify({"error": "No data received"}), 400
 
         logging.info(
-            f"Authenticated webhook received: {data.get('symbol', 'N/A')} {data.get('order_type', 'N/A')}"
+            f"Authenticated webhook received: {data.get('symbol', 'N/A')} {data.get('order_type', 'N/A')}",
         )
 
         # Process the trade signal
@@ -247,15 +246,14 @@ def webhook():
 
         if success:
             return jsonify(
-                {"status": "success", "message": "Trade executed successfully"}
+                {"status": "success", "message": "Trade executed successfully"},
             )
-        else:
-            return jsonify(
-                {"status": "error", "message": "Failed to execute trade"}
-            ), 500
+        return jsonify(
+            {"status": "error", "message": "Failed to execute trade"},
+        ), 500
 
     except Exception as e:
-        logging.error(f"Error in webhook: {sanitize_error_message(str(e))}")
+        logging.exception(f"Error in webhook: {sanitize_error_message(str(e))}")
         return jsonify({"error": "Internal server error"}), 500
 
 
@@ -267,7 +265,7 @@ def health_check():
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "mt5_connected": webhook_handler.mt5_connected,
-        }
+        },
     )
 
 
@@ -278,7 +276,7 @@ def index():
         {
             "message": "Webhook Receiver for Trading Signals",
             "endpoints": {"webhook": "/webhook (POST)", "health": "/health (GET)"},
-        }
+        },
     )
 
 

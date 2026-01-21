@@ -29,7 +29,7 @@ def count_lines_simple():
     file_stats = []
     for file_path in py_files:
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             rel_path = os.path.relpath(file_path, ".")

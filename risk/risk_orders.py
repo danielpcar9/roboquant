@@ -1,25 +1,26 @@
 # risk_orders.py
 import logging
 from datetime import datetime
-from dotenv import load_dotenv
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
-from risk.safety import Safety
-from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
-from analysis.post_mortem import log_trade
-from services.alerts import alert_trade_opened, alert_safety_violation
+from dotenv import load_dotenv
 
-# Import error handler
-from services.error_handler import handle_exception, retry_with_exponential_backoff
+from analysis.post_mortem import log_trade
 
 # Import consolidated MT5 functions
 from brokers.mt5_core import initialize_mt5
+from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
 
 # Import ATR calculation function
 from core.donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator as MarketDataService,
 )
+from risk.safety import Safety
+from services.alerts import alert_safety_violation, alert_trade_opened
+
+# Import error handler
+from services.error_handler import handle_exception, retry_with_exponential_backoff
 
 # Initialize market data service for ATR calculation
 market_data_service = MarketDataService()
@@ -89,7 +90,7 @@ def execute_risk_order():
     # Log the calculated prices for debugging
     logging.info(f"Current price: {price}, SL: {sl_price}, TP: {tp_price}")
     logging.info(
-        f"Price difference - SL: {abs(price - sl_price) / point} points, TP: {abs(price - tp_price) / point} points"
+        f"Price difference - SL: {abs(price - sl_price) / point} points, TP: {abs(price - tp_price) / point} points",
     )
 
     # Ensure SL/TP are not too close to current price (minimum distance)
@@ -117,7 +118,7 @@ def execute_risk_order():
     )
 
     logging.info(
-        "Volumen calculado: %s lotes para %s porciento de riesgo", volume, risk_pct
+        "Volumen calculado: %s lotes para %s porciento de riesgo", volume, risk_pct,
     )
 
     # Enviar orden
@@ -145,12 +146,12 @@ def execute_risk_order():
                 "balance_before": mt5.account_info().balance,  # type: ignore
                 "hour_of_day": datetime.utcnow().hour,
                 "day_of_week": datetime.utcnow().weekday(),
-            }
+            },
         )
 
         # Enviar alerta
         alert_trade_opened(
-            result.order, symbol, side, volume, result.price, sl_price, tp_price
+            result.order, symbol, side, volume, result.price, sl_price, tp_price,
         )
 
         logging.info("Orden ejecutada exitosamente. Ticket: %s", result.order)

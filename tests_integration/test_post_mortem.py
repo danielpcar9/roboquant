@@ -5,12 +5,14 @@ Test script for post_mortem module in RoboQuant trading system.
 
 import os
 import tempfile
-import pandas as pd
 from datetime import datetime, timedelta
+
+import pandas as pd
+
 from analysis.post_mortem import (
-    log_trade,
     analyze_recent_trades,
     generate_performance_report,
+    log_trade,
 )
 
 
@@ -119,7 +121,7 @@ def test_analyze_recent_trades():
                     "duration_minutes": 30,
                     "reason_closed": "TP reached",
                     "hour_of_day": 14,
-                }
+                },
             )
 
         # Add losing trades
@@ -143,7 +145,7 @@ def test_analyze_recent_trades():
                     "duration_minutes": 45,
                     "reason_closed": "SL hit",
                     "hour_of_day": 15,
-                }
+                },
             )
 
         # Log all test trades
@@ -240,7 +242,7 @@ def test_generate_performance_report():
         assert os.path.exists(temp_report_file)
 
         # Read and verify content
-        with open(temp_report_file, "r") as f:
+        with open(temp_report_file) as f:
             content = f.read()
 
         assert "ROBOQUANT PERFORMANCE REPORT" in content
@@ -349,9 +351,8 @@ def main():
     if failed == 0:
         print("🎉 All post-mortem tests passed!")
         return True
-    else:
-        print("❌ Some post-mortem tests failed!")
-        return False
+    print("❌ Some post-mortem tests failed!")
+    return False
 
 
 if __name__ == "__main__":

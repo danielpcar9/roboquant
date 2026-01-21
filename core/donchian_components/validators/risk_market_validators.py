@@ -8,32 +8,31 @@ Extraído de RiskCalculator y partes de SessionManager de donchian_strategy.py
 """
 
 import logging
-from typing import Tuple
+
 import MetaTrader5 as mt5
+
 from config.config_manager import config_manager
-from utils.decorators import handle_exception
+
+# from core.brokers.mt5_gateway import MT5Gateway  # Comentado temporalmente
 from core.donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator,
 )
-
-# from core.brokers.mt5_gateway import MT5Gateway  # Comentado temporalmente
-from config.set_file_manager import get_set_manager
-import os
+from utils.decorators import handle_exception
 
 
 class RiskValidator:
     """Validador especializado en cálculos de riesgo y gestión de capital"""
 
     def __init__(
-        self, market_data_service: TechnicalIndicatorsCalculator, mt5_module: mt5 = None
+        self, market_data_service: TechnicalIndicatorsCalculator, mt5_module: mt5 = None,
     ):
         self.market_data = market_data_service
         self.mt5 = mt5_module or mt5  # Usar el pasado o el global
 
     @handle_exception
     def calculate_dynamic_stops(
-        self, symbol: str, entry_price: float, order_type: str, atr: float
-    ) -> Tuple[float, float]:
+        self, symbol: str, entry_price: float, order_type: str, atr: float,
+    ) -> tuple[float, float]:
         """
         Calculate dynamic SL/TP based on ATR and risk profile.
 
@@ -45,6 +44,7 @@ class RiskValidator:
 
         Returns:
             tuple: (sl_price, tp_price)
+
         """
         # Get symbol info
         symbol_info = mt5.symbol_info(symbol)
@@ -95,7 +95,7 @@ class RiskValidator:
                 tp_multiplier = config_manager.get("TP_ATR_MULTIPLIER", 1.5)
         except Exception as e:
             logging.warning(
-                f"Failed to load ATR multipliers from config, using defaults: {e}"
+                f"Failed to load ATR multipliers from config, using defaults: {e}",
             )
             # Fallback to configuration-based defaults
             if risk_profile == "LOW":
@@ -129,13 +129,13 @@ class RiskValidator:
         )
 
         logging.info(
-            f"Dynamic stops calculated - Profile: {risk_profile}, SL: {sl_price:.5f}, TP: {tp_price:.5f}"
+            f"Dynamic stops calculated - Profile: {risk_profile}, SL: {sl_price:.5f}, TP: {tp_price:.5f}",
         )
         return sl_price, tp_price
 
     @handle_exception
     def compute_lot_size(
-        self, balance: float, risk_pct: float, sl_distance: float, symbol: str
+        self, balance: float, risk_pct: float, sl_distance: float, symbol: str,
     ) -> float:
         """Calculate lot size based on risk percentage and stop loss distance"""
 
@@ -166,7 +166,7 @@ class RiskValidator:
                 normalized_lots = min(normalized_lots, max_allowed_lots)
 
                 logging.info(
-                    f"Quantitative lot size after validation: {normalized_lots:.3f}"
+                    f"Quantitative lot size after validation: {normalized_lots:.3f}",
                 )
                 return normalized_lots
         except ImportError:
@@ -187,7 +187,7 @@ class RiskValidator:
 
         if point == 0 or sl_distance == 0:
             logging.warning(
-                f"Invalid point or SL distance for {symbol}, using minimum lot size"
+                f"Invalid point or SL distance for {symbol}, using minimum lot size",
             )
             return 0.01
 
@@ -220,7 +220,7 @@ class RiskValidator:
         max_allowed_lots = 0.60
         if lots > max_allowed_lots:
             logging.warning(
-                f"⚠️ SEGURIDAD: Lotaje {lots:.2f} excede límite {max_allowed_lots:.2f}, FORZANDO a límite"
+                f"⚠️ SEGURIDAD: Lotaje {lots:.2f} excede límite {max_allowed_lots:.2f}, FORZANDO a límite",
             )
             lots = max_allowed_lots
 
@@ -239,7 +239,7 @@ class RiskValidator:
         # VALIDACIÓN FINAL CRÍTICA
         if normalized_lots > max_allowed_lots:
             logging.error(
-                f"🚨 CRÍTICO: normalize_volume retornó {normalized_lots:.2f} que excede límite {max_allowed_lots:.2f}. FORZANDO a límite."
+                f"🚨 CRÍTICO: normalize_volume retornó {normalized_lots:.2f} que excede límite {max_allowed_lots:.2f}. FORZANDO a límite.",
             )
             normalized_lots = max_allowed_lots
 
@@ -250,8 +250,8 @@ class RiskValidator:
 
     @handle_exception
     def validate_stop_loss_distance(
-        self, sl_points: float, symbol: str
-    ) -> Tuple[bool, str]:
+        self, sl_points: float, symbol: str,
+    ) -> tuple[bool, str]:
         """Validate stop loss distance is reasonable"""
         min_sl_points = config_manager.get("MIN_SL_POINTS", 5.0)
         max_sl_points = config_manager.get("MAX_SL_POINTS", 100.0)
@@ -261,18 +261,17 @@ class RiskValidator:
                 False,
                 f"SL distance {sl_points:.1f} points too small, minimum {min_sl_points:.1f}",
             )
-        elif sl_points > max_sl_points:
+        if sl_points > max_sl_points:
             return (
                 False,
                 f"SL distance {sl_points:.1f} points too large, maximum {max_sl_points:.1f}",
             )
-        else:
-            return True, f"SL distance {sl_points:.1f} points is acceptable"
+        return True, f"SL distance {sl_points:.1f} points is acceptable"
 
     @handle_exception
     def validate_take_profit_ratio(
-        self, tp_points: float, sl_points: float
-    ) -> Tuple[bool, str]:
+        self, tp_points: float, sl_points: float,
+    ) -> tuple[bool, str]:
         """Validate take profit to stop loss ratio"""
         if sl_points <= 0:
             return False, "Invalid stop loss distance"
@@ -282,13 +281,12 @@ class RiskValidator:
 
         if ratio < min_ratio:
             return False, f"TP/SL ratio {ratio:.2f} too low, minimum {min_ratio:.2f}"
-        else:
-            return True, f"TP/SL ratio {ratio:.2f} is acceptable"
+        return True, f"TP/SL ratio {ratio:.2f} is acceptable"
 
     @handle_exception
     def check_account_risk_limits(
-        self, balance: float, risk_amount: float, max_risk_percent: float
-    ) -> Tuple[bool, str]:
+        self, balance: float, risk_amount: float, max_risk_percent: float,
+    ) -> tuple[bool, str]:
         """Check if risk amount is within account limits"""
         risk_percent = (risk_amount / balance) * 100 if balance > 0 else 0
 
@@ -297,8 +295,7 @@ class RiskValidator:
                 False,
                 f"Risk {risk_percent:.1f}% exceeds maximum {max_risk_percent:.1f}%",
             )
-        else:
-            return True, f"Risk {risk_percent:.1f}% is within limits"
+        return True, f"Risk {risk_percent:.1f}% is within limits"
 
     @handle_exception
     def get_account_exposure(self) -> float:
@@ -314,33 +311,32 @@ class RiskValidator:
 
             return total_exposure
         except Exception as e:
-            logging.error(f"Error getting account exposure: {e}")
+            logging.exception(f"Error getting account exposure: {e}")
             return 0.0
 
     @handle_exception
     def validate_position_sizing(
-        self, lot_size: float, max_lot_size: float, min_lot_size: float
-    ) -> Tuple[bool, str]:
+        self, lot_size: float, max_lot_size: float, min_lot_size: float,
+    ) -> tuple[bool, str]:
         """Validate position lot size is within limits"""
         if lot_size < min_lot_size:
             return (
                 False,
                 f"Lot size {lot_size:.3f} too small, minimum {min_lot_size:.3f}",
             )
-        elif lot_size > max_lot_size:
+        if lot_size > max_lot_size:
             return (
                 False,
                 f"Lot size {lot_size:.3f} too large, maximum {max_lot_size:.3f}",
             )
-        else:
-            return True, f"Lot size {lot_size:.3f} is acceptable"
+        return True, f"Lot size {lot_size:.3f} is acceptable"
 
 
 class MarketValidator:
     """Validador especializado en condiciones de mercado y sesiones"""
 
     def __init__(
-        self, mt5_module: mt5, market_data_service: TechnicalIndicatorsCalculator
+        self, mt5_module: mt5, market_data_service: TechnicalIndicatorsCalculator,
     ):
         self.mt5 = mt5_module
         self.market_data = market_data_service
@@ -364,11 +360,11 @@ class MarketValidator:
 
             return True
         except Exception as e:
-            logging.error(f"Error validating trading conditions: {e}")
+            logging.exception(f"Error validating trading conditions: {e}")
             return False
 
     @handle_exception
-    def validate_session_conditions(self, symbol: str) -> Tuple[bool, str]:
+    def validate_session_conditions(self, symbol: str) -> tuple[bool, str]:
         """Validar condiciones específicas de sesión"""
         try:
             import time
@@ -401,5 +397,5 @@ class MarketValidator:
             return True, "OK"
 
         except Exception as e:
-            logging.error(f"Error validating session conditions: {e}")
-            return False, f"Validation error: {str(e)}"
+            logging.exception(f"Error validating session conditions: {e}")
+            return False, f"Validation error: {e!s}"

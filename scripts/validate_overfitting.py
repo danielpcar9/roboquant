@@ -3,11 +3,12 @@ Overfitting Detection Tool
 Validates strategy robustness using multiple techniques
 """
 
-import pandas as pd
 import logging
-from datetime import timedelta
 import os
 import sys
+from datetime import timedelta
+
+import pandas as pd
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -15,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from scripts.backtest_apex_vectorbt import load_data, run_backtest
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
 
@@ -34,6 +35,7 @@ def walk_forward_analysis(df, n_splits=5, optimization_ratio=0.7):
 
     Returns:
         DataFrame with IS vs OOS performance comparison
+
     """
     logging.info("=" * 70)
     logging.info("🔍 WALK-FORWARD ANALYSIS - Overfitting Detection")
@@ -118,14 +120,14 @@ def walk_forward_analysis(df, n_splits=5, optimization_ratio=0.7):
                     "Sharpe_Degradation_%": round(sharpe_degradation, 2),
                     "IS_Trades": is_trades,
                     "OOS_Trades": oos_trades,
-                }
+                },
             )
 
             logging.info(
-                f"   IS Return: {is_return:.2f}% | OOS Return: {oos_return:.2f}%"
+                f"   IS Return: {is_return:.2f}% | OOS Return: {oos_return:.2f}%",
             )
             logging.info(
-                f"   IS Sharpe: {is_sharpe:.2f} | OOS Sharpe: {oos_sharpe:.2f}"
+                f"   IS Sharpe: {is_sharpe:.2f} | OOS Sharpe: {oos_sharpe:.2f}",
             )
             logging.info(f"   Degradation: {return_degradation:.1f}%")
 
@@ -219,7 +221,7 @@ def robustness_test(df, base_params):
     for var in variations:
         logging.info(f"\n📊 Testing {var['name']} variation")
         logging.info(
-            f"   Donchian: {var['donchian']}, SL: {var['sl']}, TP: {var['tp']}"
+            f"   Donchian: {var['donchian']}, SL: {var['sl']}, TP: {var['tp']}",
         )
 
         portfolio = run_backtest(
@@ -244,7 +246,7 @@ def robustness_test(df, base_params):
                     "Max_DD_%": round(portfolio.max_drawdown() * 100, 2),
                     "Win_Rate_%": round(portfolio.trades.win_rate() * 100, 2),
                     "Trades": portfolio.trades.count(),
-                }
+                },
             )
 
     results_df = pd.DataFrame(results)
@@ -325,7 +327,7 @@ def period_stability_test(df, years_back=5):
                     "Max_DD_%": round(portfolio.max_drawdown() * 100, 2),
                     "Win_Rate_%": round(portfolio.trades.win_rate() * 100, 2),
                     "Trades": portfolio.trades.count(),
-                }
+                },
             )
 
     results_df = pd.DataFrame(results)
@@ -342,7 +344,7 @@ def period_stability_test(df, years_back=5):
     consistency_rate = (positive_years / total_years * 100) if total_years > 0 else 0
 
     print(
-        f"\n🎯 Profitable Years: {positive_years}/{total_years} ({consistency_rate:.0f}%)"
+        f"\n🎯 Profitable Years: {positive_years}/{total_years} ({consistency_rate:.0f}%)",
     )
 
     if consistency_rate >= 80:
@@ -351,7 +353,7 @@ def period_stability_test(df, years_back=5):
         print("   ⚠️  MODERATE - Some years underperform")
     else:
         print(
-            "   ❌ INCONSISTENT - Strategy may be overfit to specific market conditions"
+            "   ❌ INCONSISTENT - Strategy may be overfit to specific market conditions",
         )
 
     # Save results

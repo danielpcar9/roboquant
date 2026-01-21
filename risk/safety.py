@@ -1,13 +1,13 @@
 # safety.py
-import os
 import json
 import logging
+import os
 from datetime import datetime, timedelta
-import numpy as np
-import pandas as pd
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
+import numpy as np
+import pandas as pd
 
 KILL_SWITCH_FILE = os.path.join(os.path.dirname(__file__), "config", "kill_switch.flag")
 
@@ -40,7 +40,7 @@ class Safety:
     def _load_hwm(self):
         if os.path.exists(self.hwm_file):
             try:
-                with open(self.hwm_file, "r") as f:
+                with open(self.hwm_file) as f:
                     data = json.load(f)
                     return float(data.get("hwm", 0.0))
             except Exception as e:
@@ -71,7 +71,7 @@ class Safety:
 
         if dd_pct >= self.max_dd_pct:
             logging.error(
-                "Drawdown global %.2f%% excede limite %.2f%%", dd_pct, self.max_dd_pct
+                "Drawdown global %.2f%% excede limite %.2f%%", dd_pct, self.max_dd_pct,
             )
             return False, "global_dd_" + str(round(dd_pct, 2))
 
@@ -87,7 +87,7 @@ class Safety:
 
         if os.path.exists(self.daily_file):
             try:
-                with open(self.daily_file, "r") as f:
+                with open(self.daily_file) as f:
                     data = json.load(f)
                     start_balance = float(data.get("balance", balance))
                     start_date = data.get("date")
@@ -262,7 +262,7 @@ class FTMOSafety(Safety):
 
             self.ftmo_manager = ftmo_manager
         except ImportError:
-            logging.error("Failed to import FTMO manager")
+            logging.exception("Failed to import FTMO manager")
             self.ftmo_manager = None
 
     def check_ftmo_rules(self, symbol: str = "XAUUSD"):

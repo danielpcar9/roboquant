@@ -5,12 +5,12 @@ Provides all data persistence operations with proper error handling and logging
 
 import logging
 import os
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Optional
 
 try:
-    from supabase import create_client, Client
+    from supabase import Client, create_client
 except ImportError:
     Client = None  # type: ignore
 
@@ -28,13 +28,13 @@ class Trade:
     entry_price: float
     sl: float
     tp: float
-    ticket: Optional[int] = None
-    timestamp_close: Optional[datetime] = None
-    exit_price: Optional[float] = None
-    pnl: Optional[float] = None
-    pnl_pct: Optional[float] = None
-    duration_minutes: Optional[int] = None
-    reason_closed: Optional[str] = None
+    ticket: int | None = None
+    timestamp_close: datetime | None = None
+    exit_price: float | None = None
+    pnl: float | None = None
+    pnl_pct: float | None = None
+    duration_minutes: int | None = None
+    reason_closed: str | None = None
 
 
 @dataclass
@@ -63,7 +63,7 @@ class DatabaseService:
 
     def __init__(self):
         if not self._initialized:
-            self.client: Optional[Client] = None
+            self.client: Client | None = None
             self._initialize_client()
             DatabaseService._initialized = True
 
@@ -75,7 +75,7 @@ class DatabaseService:
 
             if not url or not key:
                 logger.warning(
-                    "Supabase credentials not configured, database service disabled"
+                    "Supabase credentials not configured, database service disabled",
                 )
                 return False
 
@@ -84,7 +84,7 @@ class DatabaseService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize Supabase client: {str(e)}")
+            logger.error(f"Failed to initialize Supabase client: {e!s}")
             return False
 
     def _is_ready(self) -> bool:
@@ -103,6 +103,7 @@ class DatabaseService:
 
         Returns:
             bool: True if successful
+
         """
         if not self._is_ready():
             return False
@@ -129,17 +130,17 @@ class DatabaseService:
 
             self.client.table("trades").insert(trade_data).execute()  # type: ignore
             logger.info(
-                f"Trade saved successfully: {trade.symbol} {trade.side} @ {trade.entry_price}"
+                f"Trade saved successfully: {trade.symbol} {trade.side} @ {trade.entry_price}",
             )
             return True
 
         except Exception as e:
-            logger.error(f"Failed to save trade: {str(e)}")
+            logger.error(f"Failed to save trade: {e!s}")
             return False
 
     def get_trades(
-        self, symbol: Optional[str] = None, days: int = 30, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+        self, symbol: str | None = None, days: int = 30, limit: int = 100,
+    ) -> list[dict[str, Any]]:
         """
         Retrieve trades from the database
 
@@ -150,6 +151,7 @@ class DatabaseService:
 
         Returns:
             List of trade records
+
         """
         if not self._is_ready():
             return []
@@ -172,7 +174,7 @@ class DatabaseService:
             return result.data
 
         except Exception as e:
-            logger.error(f"Failed to retrieve trades: {str(e)}")
+            logger.error(f"Failed to retrieve trades: {e!s}")
             return []
 
     def update_trade_close(
@@ -195,6 +197,7 @@ class DatabaseService:
 
         Returns:
             bool: True if successful
+
         """
         if not self._is_ready():
             return False
@@ -210,13 +213,13 @@ class DatabaseService:
             }
 
             self.client.table("trades").update(update_data).eq(
-                "ticket", ticket
+                "ticket", ticket,
             ).execute()  # type: ignore
             logger.info(f"Trade {ticket} closed: P&L={pnl:.2f} ({pnl_pct:.2f}%)")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update trade close: {str(e)}")
+            logger.error(f"Failed to update trade close: {e!s}")
             return False
 
     def save_performance_metrics(self, metrics: PerformanceMetrics) -> bool:
@@ -228,6 +231,7 @@ class DatabaseService:
 
         Returns:
             bool: True if successful
+
         """
         if not self._is_ready():
             return False
@@ -249,12 +253,12 @@ class DatabaseService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to save performance metrics: {str(e)}")
+            logger.error(f"Failed to save performance metrics: {e!s}")
             return False
 
     def get_performance_metrics(
-        self, period: str, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+        self, period: str, limit: int = 10,
+    ) -> list[dict[str, Any]]:
         """
         Retrieve performance metrics
 
@@ -264,6 +268,7 @@ class DatabaseService:
 
         Returns:
             List of metrics records
+
         """
         if not self._is_ready():
             return []
@@ -278,15 +283,15 @@ class DatabaseService:
                 .execute()
             )  # type: ignore
             logger.debug(
-                f"Retrieved {len(result.data)} performance metrics for period: {period}"
+                f"Retrieved {len(result.data)} performance metrics for period: {period}",
             )
             return result.data
 
         except Exception as e:
-            logger.error(f"Failed to retrieve performance metrics: {str(e)}")
+            logger.error(f"Failed to retrieve performance metrics: {e!s}")
             return []
 
-    def save_strategy_config(self, name: str, config: Dict[str, Any]) -> bool:
+    def save_strategy_config(self, name: str, config: dict[str, Any]) -> bool:
         """
         Save or update strategy configuration
 
@@ -296,6 +301,7 @@ class DatabaseService:
 
         Returns:
             bool: True if successful
+
         """
         if not self._is_ready():
             return False
@@ -316,7 +322,7 @@ class DatabaseService:
 
             if result.data:
                 self.client.table("strategy_configs").update(config_data).eq(
-                    "name", name
+                    "name", name,
                 ).execute()  # type: ignore
             else:
                 self.client.table("strategy_configs").insert(config_data).execute()  # type: ignore
@@ -325,10 +331,10 @@ class DatabaseService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to save strategy config: {str(e)}")
+            logger.error(f"Failed to save strategy config: {e!s}")
             return False
 
-    def get_strategy_config(self, name: str) -> Optional[Dict[str, Any]]:
+    def get_strategy_config(self, name: str) -> dict[str, Any] | None:
         """
         Retrieve strategy configuration
 
@@ -337,6 +343,7 @@ class DatabaseService:
 
         Returns:
             Configuration parameters or None
+
         """
         if not self._is_ready():
             return None
@@ -358,7 +365,7 @@ class DatabaseService:
             return None
 
         except Exception as e:
-            logger.error(f"Failed to retrieve strategy config: {str(e)}")
+            logger.error(f"Failed to retrieve strategy config: {e!s}")
             return None
 
 

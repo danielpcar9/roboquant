@@ -1,6 +1,5 @@
 import logging
-from datetime import datetime, timezone
-from typing import Dict, List, Tuple, Optional
+from datetime import UTC, datetime
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
@@ -26,8 +25,9 @@ class SessionFilter:
 
         Returns:
             Current session name
+
         """
-        current_hour = datetime.now(timezone.utc).hour
+        current_hour = datetime.now(UTC).hour
 
         for session_name, (start, end) in self.sessions.items():
             if start <= current_hour < end:
@@ -36,8 +36,8 @@ class SessionFilter:
         return "OTHER"
 
     def get_session_performance(
-        self, symbol: str, hours_back: int = 240
-    ) -> Dict[str, Dict[str, float]]:
+        self, symbol: str, hours_back: int = 240,
+    ) -> dict[str, dict[str, float]]:
         """
         Analyze historical performance by session
 
@@ -47,20 +47,21 @@ class SessionFilter:
 
         Returns:
             Dictionary with session performance statistics
+
         """
         try:
             # Get historical hourly data
             rates = self.mt5.copy_rates_from_pos(
-                symbol, self.mt5.TIMEFRAME_H1, 1, hours_back
+                symbol, self.mt5.TIMEFRAME_H1, 1, hours_back,
             )  # type: ignore
             if rates is None or len(rates) == 0:
                 logging.warning(
-                    f"Insufficient data to analyze session performance for {symbol}"
+                    f"Insufficient data to analyze session performance for {symbol}",
                 )
                 return {}
 
             # Initialize session statistics
-            session_stats: Dict[str, Dict[str, float]] = {
+            session_stats: dict[str, dict[str, float]] = {
                 session: {
                     "total_bars": 0.0,
                     "up_bars": 0.0,
@@ -105,12 +106,12 @@ class SessionFilter:
 
             return session_stats
         except Exception as e:
-            logging.error(f"Error analyzing session performance for {symbol}: {e}")
+            logging.exception(f"Error analyzing session performance for {symbol}: {e}")
             return {}
 
     def is_favorable_session(
-        self, symbol: str, session_name: Optional[str] = None
-    ) -> Tuple[bool, float]:
+        self, symbol: str, session_name: str | None = None,
+    ) -> tuple[bool, float]:
         """
         Determine if the current or specified session is favorable for trading
 
@@ -120,6 +121,7 @@ class SessionFilter:
 
         Returns:
             Tuple of (is_favorable, confidence_score)
+
         """
         if session_name is None:
             session_name = self.get_current_session()
@@ -169,12 +171,12 @@ class SessionFilter:
         is_favorable = confidence > 0.6
 
         logging.info(
-            f"Session {session_name} favorable: {is_favorable} (confidence: {confidence:.2f})"
+            f"Session {session_name} favorable: {is_favorable} (confidence: {confidence:.2f})",
         )
 
         return is_favorable, confidence
 
-    def get_best_sessions(self, symbol: str, top_n: int = 3) -> List[Tuple[str, float]]:
+    def get_best_sessions(self, symbol: str, top_n: int = 3) -> list[tuple[str, float]]:
         """
         Get the top N best performing sessions for a symbol
 
@@ -184,6 +186,7 @@ class SessionFilter:
 
         Returns:
             List of (session_name, confidence_score) tuples
+
         """
         performance = self.get_session_performance(symbol)
         if not performance:
@@ -207,7 +210,7 @@ session_filter = SessionFilter()
 if __name__ == "__main__":
     # Example usage
     logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s"
+        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s",
     )
 
     # Test session detection

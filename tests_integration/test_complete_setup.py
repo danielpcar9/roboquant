@@ -1,6 +1,6 @@
+import logging
 import os
 import sys
-import logging
 
 # Set up detailed logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -57,7 +57,7 @@ def test_mt5_connection():
         return True
 
     except Exception as e:
-        logging.error(f"MT5 connection test failed: {e}")
+        logging.exception(f"MT5 connection test failed: {e}")
         return False
 
 
@@ -96,7 +96,7 @@ def test_xauusd_symbol():
         return True
 
     except Exception as e:
-        logging.error(f"XAUUSD symbol test failed: {e}")
+        logging.exception(f"XAUUSD symbol test failed: {e}")
         return False
 
 
@@ -119,12 +119,11 @@ def test_safety_module():
 
             logging.info("Safety module test passed")
             return True
-        else:
-            logging.warning("Safety module not available, skipping test")
-            return True
+        logging.warning("Safety module not available, skipping test")
+        return True
 
     except Exception as e:
-        logging.error(f"Safety module test failed: {e}")
+        logging.exception(f"Safety module test failed: {e}")
         return False
 
 
@@ -260,7 +259,7 @@ def test_order_execution():
         return True
 
     except Exception as e:
-        logging.error(f"Order execution test failed: {e}")
+        logging.exception(f"Order execution test failed: {e}")
         return False
 
 
@@ -292,7 +291,7 @@ def main():
             else:
                 logging.error(f"❌ {test_name} test failed")
         except Exception as e:
-            logging.error(f"❌ {test_name} test failed with exception: {e}")
+            logging.exception(f"❌ {test_name} test failed with exception: {e}")
             results.append((test_name, False))
 
     # Display summary
@@ -313,11 +312,10 @@ def main():
     if passed_tests == total_tests:
         logging.info("🎉 All tests passed! Your setup is complete.")
         return 0
-    else:
-        logging.error(
-            f"💥 {total_tests - passed_tests} test(s) failed. Please review the errors above."
-        )
-        return 1
+    logging.error(
+        f"💥 {total_tests - passed_tests} test(s) failed. Please review the errors above.",
+    )
+    return 1
 
 
 if __name__ == "__main__":

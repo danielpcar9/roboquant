@@ -2,8 +2,9 @@
 Tests unitarios para MarketValidator
 """
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 
 
 class TestMarketValidator:
@@ -29,7 +30,7 @@ class TestMarketValidator:
         assert validator.mt5 == mock_mt5
 
     def test_is_trading_session_active_during_hours(
-        self, market_validator, mock_config_manager
+        self, market_validator, mock_config_manager,
     ):
         """Test de sesión de trading activa durante horas permitidas"""
 
@@ -48,7 +49,7 @@ class TestMarketValidator:
             assert isinstance(message, str)
 
     def test_is_trading_session_active_outside_hours(
-        self, market_validator, mock_config_manager
+        self, market_validator, mock_config_manager,
     ):
         """Test de sesión de trading fuera de horas permitidas"""
 
@@ -85,20 +86,20 @@ class TestMarketValidator:
         assert isinstance(message, str)
 
     def test_check_spread_too_wide(
-        self, market_validator, mock_mt5, mock_config_manager
+        self, market_validator, mock_mt5, mock_config_manager,
     ):
         """Test de verificación de spread demasiado amplio"""
         symbol = "XAUUSD"
 
         # Mock para devolver spread muy amplio
         mock_mt5.symbol_info_tick.return_value = Mock(
-            ask=2355.0, bid=2340.0
+            ask=2355.0, bid=2340.0,
         )  # Spread de 150 puntos
         mock_mt5.symbol_info.return_value = Mock(point=0.1)
 
         # Mock configuración de spread máximo
         with patch.object(
-            mock_config_manager, "get", return_value=50
+            mock_config_manager, "get", return_value=50,
         ):  # 50 puntos máximos
             is_acceptable, message = market_validator.check_spread(symbol)
 
@@ -200,7 +201,7 @@ class TestMarketValidator:
                     "high": price + 2,
                     "low": price - 2,
                     "close": price + 0.3,
-                }
+                },
             )
 
         mock_mt5.copy_rates_from_pos.return_value = mock_rates
@@ -221,7 +222,7 @@ class TestMarketValidator:
             if i < 5:
                 # Precios normales
                 mock_rates.append(
-                    {"open": 2345.0, "high": 2347.0, "low": 2343.0, "close": 2345.5}
+                    {"open": 2345.0, "high": 2347.0, "low": 2343.0, "close": 2345.5},
                 )
             else:
                 # Movimiento extremo
@@ -231,7 +232,7 @@ class TestMarketValidator:
                         "high": 2380.0,  # +35 puntos de repente
                         "low": 2345.0,
                         "close": 2375.0,
-                    }
+                    },
                 )
 
         mock_mt5.copy_rates_from_pos.return_value = mock_rates
@@ -270,7 +271,7 @@ class TestMarketValidator:
         mock_mt5.copy_rates_from_pos.return_value = mock_rates
 
         is_sufficient, message = market_validator.is_liquidity_sufficient(
-            symbol, lookback, min_avg_volume
+            symbol, lookback, min_avg_volume,
         )
 
         assert is_sufficient is True
@@ -290,7 +291,7 @@ class TestMarketValidator:
         mock_mt5.copy_rates_from_pos.return_value = mock_rates
 
         is_sufficient, message = market_validator.is_liquidity_sufficient(
-            symbol, lookback, min_avg_volume
+            symbol, lookback, min_avg_volume,
         )
 
         assert is_sufficient is False
@@ -298,7 +299,7 @@ class TestMarketValidator:
         assert "insufficient" in message.lower()
 
     def test_is_liquidity_sufficient_insufficient_data(
-        self, market_validator, mock_mt5
+        self, market_validator, mock_mt5,
     ):
         """Test de verificación de liquidez con datos insuficientes"""
         symbol = "XAUUSD"
@@ -309,7 +310,7 @@ class TestMarketValidator:
         mock_mt5.copy_rates_from_pos.return_value = []
 
         is_sufficient, message = market_validator.is_liquidity_sufficient(
-            symbol, lookback, min_avg_volume
+            symbol, lookback, min_avg_volume,
         )
 
         # Con pocos datos, debería considerarse suficiente por defecto
@@ -336,7 +337,7 @@ class TestMarketValidator:
                     "high": price + 1.5,
                     "low": price - 1.5,
                     "close": price + random.uniform(-0.5, 0.5),
-                }
+                },
             )
 
         mock_mt5.copy_rates_from_pos.return_value = mock_rates

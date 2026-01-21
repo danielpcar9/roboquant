@@ -6,17 +6,17 @@ def analyze_donchian_structure():
     print("🔍 ANALIZANDO ESTRUCTURA DE donchian_strategy.py\n")
 
     try:
-        with open("core/donchian_strategy.py", "r", encoding="utf-8") as f:
+        with open("core/donchian_strategy.py", encoding="utf-8") as f:
             lines = f.readlines()
 
         print("📊 ESTADÍSTICAS GENERALES:")
         print(f"Total líneas: {len(lines)}")
         print(
-            f"Líneas de código: {len([line for line in lines if line.strip() and not line.strip().startswith('#')])}"
+            f"Líneas de código: {len([line for line in lines if line.strip() and not line.strip().startswith('#')])}",
         )
         print(f"Líneas en blanco: {len([line for line in lines if not line.strip()])}")
         print(
-            f"Comentarios: {len([line for line in lines if line.strip().startswith('#')])}"
+            f"Comentarios: {len([line for line in lines if line.strip().startswith('#')])}",
         )
 
         # Encontrar clases
@@ -30,7 +30,7 @@ def analyze_donchian_structure():
 
         print(f"\n🏛️ CLASES ENCONTRADAS ({len(classes)}):")
         print("-" * 50)
-        for line_num, class_name, full_line in classes:
+        for line_num, class_name, _full_line in classes:
             print(f"Línea {line_num:4d}: {class_name}")
 
         # Encontrar métodos principales
@@ -43,7 +43,7 @@ def analyze_donchian_structure():
 
             # Detectar métodos
             if line.strip().startswith("def ") and not line.strip().startswith(
-                "def __"
+                "def __",
             ):
                 method_line = line.strip()
                 method_name = method_line.split("(")[0].replace("def ", "").strip()
@@ -90,7 +90,7 @@ def analyze_donchian_structure():
 
         for section, line_numbers in sections_found.items():
             print(
-                f"{section.replace('_', ' ').title()}: {len(line_numbers)} líneas encontradas"
+                f"{section.replace('_', ' ').title()}: {len(line_numbers)} líneas encontradas",
             )
             # Mostrar primeras y últimas líneas como ejemplo
             if len(line_numbers) <= 10:

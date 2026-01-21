@@ -3,8 +3,8 @@
 Core MT5 functionality consolidated in one place to eliminate duplication.
 """
 
-import time
 import logging
+import time
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5  # type: ignore
@@ -31,7 +31,7 @@ def initialize_mt5():
         try:
             login_int = int(login)
             logging.info(
-                f"Initializing MT5 with credentials for account {login_int} on server {server}"
+                f"Initializing MT5 with credentials for account {login_int} on server {server}",
             )
             if not mt5.initialize(login=login_int, password=password, server=server):  # type: ignore
                 logging.error("Failed to initialize MT5 with credentials")
@@ -39,8 +39,8 @@ def initialize_mt5():
                 logging.error(f"MT5 initialization error: {error}")
                 return False
         except ValueError as e:
-            logging.error(
-                f"Invalid login format: {login}. Error: {sanitize_error_message(str(e))}"
+            logging.exception(
+                f"Invalid login format: {login}. Error: {sanitize_error_message(str(e))}",
             )
             return False
     else:
@@ -91,16 +91,16 @@ def strategy_performance_monitor(func):
             execution_time = end_time - start_time
             strategy_execution_times.append(execution_time)
             logging.debug(
-                f"Strategy Performance: {func.__name__} executed in {execution_time:.4f} seconds"
+                f"Strategy Performance: {func.__name__} executed in {execution_time:.4f} seconds",
             )
 
             # Log average execution time every 10 executions
             if len(strategy_execution_times) % 10 == 0:
                 avg_time = sum(strategy_execution_times[-10:]) / min(
-                    10, len(strategy_execution_times)
+                    10, len(strategy_execution_times),
                 )
                 logging.info(
-                    f"Average execution time (last 10): {avg_time:.4f} seconds"
+                    f"Average execution time (last 10): {avg_time:.4f} seconds",
                 )
 
             return result
@@ -108,7 +108,7 @@ def strategy_performance_monitor(func):
             end_time = time.perf_counter()
             execution_time = end_time - start_time
             logging.debug(
-                f"Strategy Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {e}"
+                f"Strategy Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {e}",
             )
             raise
 
@@ -128,6 +128,7 @@ def mt5_performance_monitor(func):
 
     Returns:
         Wrapped function with performance monitoring
+
     """
 
     def wrapper(*args, **kwargs):
@@ -140,14 +141,14 @@ def mt5_performance_monitor(func):
             end_time = time.perf_counter()
             execution_time = end_time - start_time
             logging.debug(
-                f"Performance: {func.__name__} executed in {execution_time:.4f} seconds"
+                f"Performance: {func.__name__} executed in {execution_time:.4f} seconds",
             )
             return result
         except Exception as e:
             end_time = time.perf_counter()
             execution_time = end_time - start_time
             logging.debug(
-                f"Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {e}"
+                f"Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {e}",
             )
             raise
 
@@ -169,6 +170,7 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
 
     Returns:
         tuple: (adjusted_sl, adjusted_tp)
+
     """
     if mt5_module is None:
         mt5_module = mt5
@@ -177,7 +179,7 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
     symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
     if not symbol_info:
         logging.warning(
-            f"Could not get symbol info for {symbol}, returning original SL/TP"
+            f"Could not get symbol info for {symbol}, returning original SL/TP",
         )
         return sl, tp
 
@@ -196,7 +198,7 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
         min_stop_distance = 400  # Default safe value
 
     logging.debug(
-        f"Symbol {symbol} min stop distance: {min_stop_distance} points, point: {point}, digits: {digits}"
+        f"Symbol {symbol} min stop distance: {min_stop_distance} points, point: {point}, digits: {digits}",
     )
 
     # Round prices to correct number of decimal places
@@ -264,7 +266,7 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
         adjusted_tp = round(adjusted_tp, digits)
 
     logging.debug(
-        f"SL/TP adjustment - Original: SL={sl}, TP={tp} | Adjusted: SL={adjusted_sl}, TP={adjusted_tp}"
+        f"SL/TP adjustment - Original: SL={sl}, TP={tp} | Adjusted: SL={adjusted_sl}, TP={adjusted_tp}",
     )
     return adjusted_sl, adjusted_tp
 

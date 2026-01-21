@@ -5,7 +5,8 @@ Decoradores comunes para el proyecto RoboQuant
 import functools
 import logging
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def handle_exception(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -17,6 +18,7 @@ def handle_exception(func: Callable[..., Any]) -> Callable[..., Any]:
 
     Returns:
         Función decorada con manejo de excepciones
+
     """
 
     @functools.wraps(func)
@@ -25,7 +27,7 @@ def handle_exception(func: Callable[..., Any]) -> Callable[..., Any]:
             return func(*args, **kwargs)
         except Exception as e:
             func_name = getattr(func, "__name__", "unknown")
-            logging.error(f"Error in {func_name}: {str(e)}", exc_info=True)
+            logging.error(f"Error in {func_name}: {e!s}", exc_info=True)
             # Relanzar la excepción para que pueda ser manejada por el código llamador
             raise
 
@@ -41,6 +43,7 @@ def performance_monitor(func: Callable[..., Any]) -> Callable[..., Any]:
 
     Returns:
         Función decorada con monitoreo de rendimiento
+
     """
 
     @functools.wraps(func)
@@ -55,7 +58,7 @@ def performance_monitor(func: Callable[..., Any]) -> Callable[..., Any]:
         except Exception:
             execution_time = time.time() - start_time
             func_name = getattr(func, "__name__", "unknown")
-            logging.error(f"{func_name} failed after {execution_time:.4f} seconds")
+            logging.exception(f"{func_name} failed after {execution_time:.4f} seconds")
             raise
 
     return wrapper

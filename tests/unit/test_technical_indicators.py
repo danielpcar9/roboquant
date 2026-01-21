@@ -2,8 +2,9 @@
 Tests unitarios para TechnicalIndicatorsCalculator
 """
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 
 
 class TestTechnicalIndicatorsCalculator:
@@ -24,10 +25,10 @@ class TestTechnicalIndicatorsCalculator:
 
     def test_get_timeframe_from_config_h1(self, mock_mt5):
         """Test de conversión de timeframe H1 desde configuración"""
+        from config.config_manager import config_manager
         from core.donchian_components.calculators.technical_indicators import (
             TechnicalIndicatorsCalculator,
         )
-        from config.config_manager import config_manager
 
         # Test con timeframe válido (H1)
         with patch.object(config_manager, "get", return_value="H1"):
@@ -37,10 +38,10 @@ class TestTechnicalIndicatorsCalculator:
 
     def test_get_timeframe_from_config_invalid(self, mock_mt5):
         """Test de conversión con timeframe inválido (debe usar default M5)"""
+        from config.config_manager import config_manager
         from core.donchian_components.calculators.technical_indicators import (
             TechnicalIndicatorsCalculator,
         )
-        from config.config_manager import config_manager
 
         # Test con timeframe inválido (debería usar default M5)
         with patch.object(config_manager, "get", return_value="INVALID"):
@@ -57,7 +58,7 @@ class TestTechnicalIndicatorsCalculator:
 
         # Verificar que se llamaron las funciones correctas
         mock_mt5.copy_rates_from_pos.assert_called_once_with(
-            symbol, technical_calculator.timeframe, 1, period
+            symbol, technical_calculator.timeframe, 1, period,
         )
 
         # Verificar resultados (deben ser números válidos)
@@ -68,12 +69,12 @@ class TestTechnicalIndicatorsCalculator:
         assert lower > 0
 
     def test_get_donchian_channels_insufficient_data(
-        self, technical_calculator, mock_mt5
+        self, technical_calculator, mock_mt5,
     ):
         """Test de canales Donchian con datos insuficientes"""
         # Configurar mock para devolver menos datos de los necesarios
         mock_mt5.copy_rates_from_pos.return_value = [
-            {"high": 2350.0, "low": 2340.0}
+            {"high": 2350.0, "low": 2340.0},
         ]  # Solo 1 vela
 
         upper, lower = technical_calculator.get_donchian_channels("XAUUSD", 20)
@@ -102,7 +103,7 @@ class TestTechnicalIndicatorsCalculator:
 
         # Verificar llamada correcta
         mock_mt5.copy_rates_from_pos.assert_called_with(
-            symbol, technical_calculator.timeframe, 1, period + 1
+            symbol, technical_calculator.timeframe, 1, period + 1,
         )
 
         # Verificar resultado válido
@@ -113,7 +114,7 @@ class TestTechnicalIndicatorsCalculator:
         """Test de ATR con datos insuficientes"""
         # Solo una vela (necesita al menos 2 para calcular TR)
         mock_mt5.copy_rates_from_pos.return_value = [
-            {"high": 2350.0, "low": 2340.0, "close": 2345.0}
+            {"high": 2350.0, "low": 2340.0, "close": 2345.0},
         ]
 
         atr = technical_calculator.calculate_atr("XAUUSD", 14)
@@ -129,7 +130,7 @@ class TestTechnicalIndicatorsCalculator:
 
         # Verificar llamada correcta
         mock_mt5.copy_rates_from_pos.assert_called_with(
-            symbol, technical_calculator.timeframe, 1, lookback
+            symbol, technical_calculator.timeframe, 1, lookback,
         )
 
         # Verificar resultado válido
@@ -207,12 +208,12 @@ class TestTechnicalIndicatorsCalculator:
         lookback = 20
 
         current_volume, avg_volume = technical_calculator.get_volume_stats(
-            symbol, lookback
+            symbol, lookback,
         )
 
         # Verificar llamada correcta
         mock_mt5.copy_rates_from_pos.assert_called_with(
-            symbol, technical_calculator.timeframe, 1, lookback
+            symbol, technical_calculator.timeframe, 1, lookback,
         )
 
         # Verificar resultados válidos
@@ -229,7 +230,7 @@ class TestTechnicalIndicatorsCalculator:
 
         # Verificar llamada correcta (necesita 3 velas)
         mock_mt5.copy_rates_from_pos.assert_called_with(
-            symbol, technical_calculator.timeframe, 1, 3
+            symbol, technical_calculator.timeframe, 1, 3,
         )
 
         # Verificar resultados booleanos

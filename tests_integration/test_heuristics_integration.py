@@ -1,19 +1,19 @@
 import logging
-import sys
 import os
+import sys
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from analysis.trade_scorer import TradeScorer
-from risk.adaptive_risk import adaptive_risk_manager
 from core.session_filter import session_filter
+from risk.adaptive_risk import adaptive_risk_manager
 
 
 def test_heuristics_integration():
     """Test the integration of all heuristic components"""
     logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s"
+        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s",
     )
 
     print("=== Testing Heuristics Integration ===\n")
@@ -35,7 +35,7 @@ def test_heuristics_integration():
     )
 
     print(
-        f"   High quality trade score: {quality1['score']}/100 (Grade: {quality1['grade']})"
+        f"   High quality trade score: {quality1['score']}/100 (Grade: {quality1['grade']})",
     )
     print(f"   Trade recommended: {quality1['trade_recommended']}")
 
@@ -52,7 +52,7 @@ def test_heuristics_integration():
     )
 
     print(
-        f"   Low quality trade score: {quality2['score']}/100 (Grade: {quality2['grade']})"
+        f"   Low quality trade score: {quality2['score']}/100 (Grade: {quality2['grade']})",
     )
     print(f"   Trade recommended: {quality2['trade_recommended']}\n")
 
@@ -82,7 +82,7 @@ def test_heuristics_integration():
     # Adjust position size by volatility
     base_lots = 0.1
     adjusted_lots = adaptive_risk_manager.adjust_position_size_by_volatility(
-        base_lots=base_lots, atr=5.2, avg_atr=4.8
+        base_lots=base_lots, atr=5.2, avg_atr=4.8,
     )
 
     print(f"   Position size adjustment: {base_lots:.2f} -> {adjusted_lots:.2f}\n")

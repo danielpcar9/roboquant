@@ -3,19 +3,19 @@
 Test script to validate the refactored Donchian Strategy following SOLID principles
 """
 
-import sys
 import os
+import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from brokers.mt5_utils import MT5Gateway
 from core.donchian_strategy_refactored import (
     DonchianStrategy,
     MarketDataService,
+    QuantitativeIntegration,
     RiskCalculator,
     SessionManager,
-    QuantitativeIntegration,
 )
-from brokers.mt5_utils import MT5Gateway
 
 
 def test_strategy_instantiation():
@@ -156,13 +156,13 @@ def test_solid_principles():
         # Single Responsibility: Each class has a single, well-defined responsibility
 
         print(
-            "✅ Single Responsibility: Each class has a single, well-defined responsibility"
+            "✅ Single Responsibility: Each class has a single, well-defined responsibility",
         )
 
         # Open/Closed: Classes are open for extension but closed for modification
         # This is demonstrated by the ability to extend functionality without changing core classes
         print(
-            "✅ Open/Closed: Classes are designed to be extended without modification"
+            "✅ Open/Closed: Classes are designed to be extended without modification",
         )
 
         # Liskov Substitution: Not applicable in this context as we don't have inheritance
@@ -173,7 +173,7 @@ def test_solid_principles():
 
         # Dependency Inversion: Classes depend on abstractions (services) not concrete implementations
         print(
-            "✅ Dependency Inversion: Classes depend on abstractions, not concrete implementations"
+            "✅ Dependency Inversion: Classes depend on abstractions, not concrete implementations",
         )
 
         return True
@@ -209,12 +209,11 @@ def main():
 
     if all(results):
         print(
-            "🎉 All tests passed! The refactored strategy follows SOLID principles correctly."
+            "🎉 All tests passed! The refactored strategy follows SOLID principles correctly.",
         )
         return True
-    else:
-        print("❌ Some tests failed. Please review the implementation.")
-        return False
+    print("❌ Some tests failed. Please review the implementation.")
+    return False
 
 
 if __name__ == "__main__":

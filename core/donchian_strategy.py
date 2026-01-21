@@ -14,23 +14,24 @@ Fecha: 2026-01-20
 """
 
 import logging
+import os
 import time
-from typing import Optional, Dict, Any
+from typing import Any
 
 import MetaTrader5 as mt5
 
-from config.config_manager import config_manager
 from brokers.mt5_utils import MT5Gateway
+from config.config_manager import config_manager
 from core.donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator,
-)
-from core.donchian_components.validators.risk_market_validators import (
-    RiskValidator,
-    MarketValidator,
 )
 from core.donchian_components.managers.position_managers import (
     PositionManager,
     TradeTracker,
+)
+from core.donchian_components.validators.risk_market_validators import (
+    MarketValidator,
+    RiskValidator,
 )
 from core.quant.quantitative_integration import QuantitativeIntegration
 
@@ -43,7 +44,19 @@ class StrategyConfig:
         self.timeframe = config_manager.get("TIMEFRAME", "H1")
         self.period = config_manager.get("PERIOD", 50)
         self.lookback = config_manager.get("LOOKBACK", 10)
-        self.risk_percent = config_manager.get("RISK_PERCENT", 1.0)
+
+        # Get risk percent from set file manager first, fallback to config_manager
+        try:
+            from config.set_file_manager import get_set_manager
+            cfg = get_set_manager()
+            # Load default configuration if no env var is set
+            set_file = os.getenv("ROBOQUANT_SET_FILE", "default.json")
+            cfg.load_set_file(set_file)
+            self.risk_percent = cfg.get("risk_management.risk_per_trade_pct", 2.0)
+        except Exception as e:
+            logging.warning(f"Failed to load risk percent from set file, using config_manager: {e}")
+            self.risk_percent = config_manager.get("RISK_PERCENT", 2.0)  # Changed default to 2.0
+
         self.use_risk_management = config_manager.get("USE_RISK_MANAGEMENT", True)
         self.max_spread_points = config_manager.get("MAX_SPREAD_POINTS", 20)
         self.trading_hour_start = config_manager.get("TRADING_HOUR_START", 0)
@@ -93,7 +106,7 @@ class DonchianStrategy:
             quant_result = self.quant_integration.apply_quantitative_analysis(symbol)
             if not quant_result["should_trade"]:
                 logging.info(
-                    f"Quantitative analysis rejected trade: {quant_result['reason']}"
+                    f"Quantitative analysis rejected trade: {quant_result['reason']}",
                 )
                 return
 
@@ -115,7 +128,7 @@ class DonchianStrategy:
             order_type = signal["direction"]
 
         except Exception as e:
-            logging.error(f"Signal generation failed: {e}")
+            logging.exception(f"Signal generation failed: {e}")
             return
 
         # Phase 4: Calculate risk parameters
@@ -131,13 +144,13 @@ class DonchianStrategy:
                 return
 
             sl_price, tp_price = self.risk_validator.calculate_dynamic_stops(
-                symbol, entry_price, order_type, atr
+                symbol, entry_price, order_type, atr,
             )
 
             sl_distance = abs(entry_price - sl_price)
 
         except Exception as e:
-            logging.error(f"Risk calculation failed: {e}")
+            logging.exception(f"Risk calculation failed: {e}")
             return
 
         # Phase 5: Calculate position size
@@ -148,7 +161,7 @@ class DonchianStrategy:
                 return
 
             lots = self.risk_validator.compute_lot_size(
-                account_info.balance, self.config.risk_percent, sl_distance, symbol
+                account_info.balance, self.config.risk_percent, sl_distance, symbol,
             )
 
             if lots <= 0:
@@ -156,7 +169,7 @@ class DonchianStrategy:
                 return
 
         except Exception as e:
-            logging.error(f"Position sizing failed: {e}")
+            logging.exception(f"Position sizing failed: {e}")
             return
 
         # Phase 6: Execute trade
@@ -165,12 +178,12 @@ class DonchianStrategy:
             tp_points = abs(entry_price - tp_price) / mt5.symbol_info(symbol).point
 
             success = self.position_manager.execute_trade(
-                symbol, order_type, lots, sl_points, tp_points
+                symbol, order_type, lots, sl_points, tp_points,
             )
 
             if success:
                 logging.info(
-                    f"✅ Trade executed successfully: {order_type} {symbol} @ {entry_price}"
+                    f"✅ Trade executed successfully: {order_type} {symbol} @ {entry_price}",
                 )
                 # Track the trade for post-mortem analysis
                 # Note: Ticket association will be handled in mt5_utils monitor loop
@@ -178,14 +191,14 @@ class DonchianStrategy:
                 logging.error("❌ Trade execution failed")
 
         except Exception as e:
-            logging.error(f"Trade execution error: {e}")
+            logging.exception(f"Trade execution error: {e}")
 
-    def _generate_signal(self, symbol: str) -> Dict[str, Any]:
+    def _generate_signal(self, symbol: str) -> dict[str, Any]:
         """Generate trading signal using Donchian channels"""
         try:
             # Get Donchian channels
             upper_channel, lower_channel = self.market_data.get_donchian_channels(
-                symbol, self.config.period
+                symbol, self.config.period,
             )
 
             if upper_channel is None or lower_channel is None:
@@ -209,20 +222,19 @@ class DonchianStrategy:
                     "direction": "BUY",
                     "reason": "Price above upper channel",
                 }
-            elif sell_signal:
+            if sell_signal:
                 return {
                     "should_enter": True,
                     "direction": "SELL",
                     "reason": "Price below lower channel",
                 }
-            else:
-                return {"should_enter": False, "reason": "No breakout signal"}
+            return {"should_enter": False, "reason": "No breakout signal"}
 
         except Exception as e:
-            logging.error(f"Signal generation error: {e}")
+            logging.exception(f"Signal generation error: {e}")
             return {
                 "should_enter": False,
-                "reason": f"Signal generation failed: {str(e)}",
+                "reason": f"Signal generation failed: {e!s}",
             }
 
     def initialize_mt5(self) -> bool:
@@ -234,7 +246,7 @@ class DonchianStrategy:
             logging.info("MT5 gateway initialized successfully")
             return True
         except Exception as e:
-            logging.error(f"MT5 initialization error: {e}")
+            logging.exception(f"MT5 initialization error: {e}")
             return False
 
     def main(self):
@@ -254,7 +266,7 @@ class DonchianStrategy:
                     logging.info("Strategy stopped by user")
                     break
                 except Exception as e:
-                    logging.error(f"Strategy iteration error: {e}")
+                    logging.exception(f"Strategy iteration error: {e}")
                     # Add delay even on error to prevent spamming
                     time.sleep(180)
 
@@ -264,9 +276,9 @@ class DonchianStrategy:
 
 # Global variables for quantitative integration
 # These need to be accessible from other modules
-QUANT_OPTIMAL_LOTS: Optional[float] = None
-CURRENT_ENTRY_SCORE: Optional[float] = None
-TRADE_ENTRY_SCORES: Dict[int, float] = {}
+QUANT_OPTIMAL_LOTS: float | None = None
+CURRENT_ENTRY_SCORE: float | None = None
+TRADE_ENTRY_SCORES: dict[int, float] = {}
 
 
 if __name__ == "__main__":
