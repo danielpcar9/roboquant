@@ -76,12 +76,18 @@ class QuantitativeEngine:
         )
 
         # Determine recommendation based on probability
-        probability = probability_result["probability"]
-        if probability >= 0.75:  # Aumentado de 0.7 a 0.75 para ser más selectivo
+        probability_result_dict = probability_result["probability"]
+        # Ensure we have a numeric value
+        if isinstance(probability_result_dict, dict):
+            probability = float(probability_result_dict.get("value", 0.0))
+        else:
+            probability = float(probability_result_dict)
+            
+        if probability >= 0.70:  # Reducido de 0.75 para más oportunidades
             recommendation = "STRONG_BUY" if di_plus > di_minus else "STRONG_SELL"
-        elif probability >= 0.65:  # Aumentado de 0.6 a 0.65
+        elif probability >= 0.60:  # Reducido de 0.65 para más señales
             recommendation = "BUY" if di_plus > di_minus else "SELL"
-        elif probability >= 0.45:  # Ajustado de 0.4 a 0.45
+        elif probability >= 0.40:  # Reducido de 0.45 para capturar más movimientos
             recommendation = "HOLD"
         else:
             recommendation = "AVOID"
