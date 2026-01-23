@@ -49,24 +49,26 @@ class QuantitativeIntegration:
             price_array = np.array(prices)
                 
             # Calculate ADX and DI using existing market data service
-            # For now, use simplified approach since calculate_adx method may not exist
             try:
-                # Try to get ADX data from calculator (with type ignore for ty)
-                adx_data = calculator.calculate_adx(symbol, 14)  # type: ignore
+                # Try to get ADX data from calculator 
+                adx_data = calculator.calculate_adx(symbol, 14)
                 if adx_data is not None:
-                    adx_value = adx_data.get("adx", 25.0)  # default value
-                    di_plus = adx_data.get("di_plus", 25.0)  # default value
-                    di_minus = adx_data.get("di_minus", 25.0)  # default value
+                    adx_value = adx_data.get("adx", 25.0)
+                    di_plus = adx_data.get("di_plus", 25.0)
+                    di_minus = adx_data.get("di_minus", 25.0)
+                    logging.debug(f"Using calculated ADX values: ADX={adx_value:.2f}, DI+={di_plus:.2f}, DI-={di_minus:.2f}")
                 else:
                     # Fallback values
                     adx_value = 25.0
                     di_plus = 25.0
                     di_minus = 25.0
+                    logging.debug("Using fallback ADX values")
             except AttributeError:
                 # Method doesn't exist, use fallback values
                 adx_value = 25.0
                 di_plus = 25.0
                 di_minus = 25.0
+                logging.debug("ADX method not available, using defaults")
                 
             # Perform quantitative analysis
             analysis_result = self.quant_engine.calculate_entry_score(

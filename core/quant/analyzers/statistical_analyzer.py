@@ -127,12 +127,16 @@ class QuantitativeAnalyzer:
         # Weighted combination
         weights = self.weights["probability"]
 
+        # Calculate DI contribution (consider both bullish and bearish)
+        # Take absolute value to reward strong directional movement regardless of direction
+        di_contribution = weights["di_diff"] * abs(di_norm)
+
         probability = (
             weights["momentum"] * max(0, momentum_norm)
             + weights["volatility"] * max(0, volatility_norm)
             + weights["trend"] * max(0, trend_norm)
             + weights["adx"] * adx_norm
-            + weights["di_diff"] * max(0, di_norm)  # Only positive DI difference
+            + di_contribution  # Now considers both directions
         )
 
         return {
