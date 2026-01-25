@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 # Import MetaTrader5 (official package name)
-import MetaTrader5 as mt5  # type: ignore
+import MetaTrader5 as mt5
 
 
 class TradeScorer:

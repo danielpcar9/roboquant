@@ -2,7 +2,6 @@
 Implements quantitative formulas for optimal position sizing
 """
 
-
 import numpy as np
 
 

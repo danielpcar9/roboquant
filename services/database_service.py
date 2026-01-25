@@ -12,7 +12,9 @@ from typing import Any, Optional
 try:
     from supabase import Client, create_client
 except ImportError:
-    Client = None  # type: ignore
+    # type: ignore[no-redef]
+    Client = None  # type: ignore[assignment]
+    create_client = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 

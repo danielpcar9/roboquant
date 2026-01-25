@@ -5,6 +5,8 @@ import sys
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+import pandas as pd
+
 from analysis.trade_scorer import TradeScorer
 
 
@@ -60,6 +62,14 @@ def test_trade_scorer():
     print(f"Trade Quality Score: {quality2['score']}/100")
     print(f"Grade: {quality2['grade']}")
     print(f"Trade Recommended: {quality2['trade_recommended']}")
+
+    # Test scoring a batch of trades
+    temp_trades_file = os.path.join(os.path.dirname(__file__), "data", "temp_trades.csv")
+    df = pd.read_csv(temp_trades_file, encoding="utf-8")
+    scores = scorer.score_trades(df)
+
+    print("\n--- Batch Test ---")
+    print(f"Scores: {scores}")
 
 
 if __name__ == "__main__":

@@ -6,10 +6,12 @@ and XGBoost-based trading model.
 
 import logging
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
+
+if TYPE_CHECKING:
+    pass
 
 # Try to import XGBoost
 try:

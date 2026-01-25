@@ -7,7 +7,7 @@ import logging
 import time
 
 # Import MetaTrader5 (official package name)
-import MetaTrader5 as mt5  # type: ignore
+import MetaTrader5 as mt5
 
 # Import security manager for credential handling
 from services.security_manager import SecureCredentialManager, sanitize_error_message

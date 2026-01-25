@@ -124,7 +124,7 @@ def alert_daily_summary():
     """Envía resumen diario automático al final del día"""
     try:
         # Import MetaTrader5 (official package name)
-        import MetaTrader5 as mt5  # type: ignore
+        import MetaTrader5 as mt5
 
         from analysis.post_mortem import analyze_recent_trades
 
@@ -148,7 +148,7 @@ Balance: ${:.2f}
 Fecha: {}
 """.format(
                 account_info.balance if account_info else 0,
-                datetime.utcnow().strftime("%Y-%m-%d"),
+                datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             )
         else:
             msg = """
