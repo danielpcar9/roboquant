@@ -6,11 +6,14 @@ from .analyzers import QuantitativeAnalyzer
 from .engine import QuantitativeEngine, QuantitativeIntegration
 from .optimizers import QuantitativeOptimizer
 from .sizers import PositionSizer
+from .validators import MLStrategyValidator, MLValidator
 
 __all__ = [
     "PositionSizer",
-    "QuantitativeAnalyzer",
+    "QuantitativeAnalyzer", 
     "QuantitativeEngine",
     "QuantitativeIntegration",
     "QuantitativeOptimizer",
+    "MLStrategyValidator",
+    "MLValidator"
 ]
