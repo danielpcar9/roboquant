@@ -10,7 +10,7 @@ from .validators import MLStrategyValidator, MLValidator
 
 __all__ = [
     "PositionSizer",
-    "QuantitativeAnalyzer", 
+    "QuantitativeAnalyzer",
     "QuantitativeEngine",
     "QuantitativeIntegration",
     "QuantitativeOptimizer",

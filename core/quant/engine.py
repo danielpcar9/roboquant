@@ -82,7 +82,7 @@ class QuantitativeEngine:
             probability = float(probability_result_dict.get("value", 0.0))
         else:
             probability = float(probability_result_dict)
-            
+
         if probability >= 0.70:  # Reducido de 0.75 para más oportunidades
             recommendation = "STRONG_BUY" if di_plus > di_minus else "STRONG_SELL"
         elif probability >= 0.60:  # Reducido de 0.65 para más señales

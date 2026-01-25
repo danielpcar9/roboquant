@@ -51,47 +51,47 @@ class TechnicalIndicatorsCalculator:
             return None
 
         # Convert to pandas for easier manipulation
-        import pandas as pd
         import numpy as np
-        
+        import pandas as pd
+
         df = pd.DataFrame(rates)
-        
+
         # Calculate True Range
         df['high_low'] = df['high'] - df['low']
         df['high_close'] = abs(df['high'] - df['close'].shift())
         df['low_close'] = abs(df['low'] - df['close'].shift())
         df['tr'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
-        
+
         # Calculate Directional Movement
         df['up_move'] = df['high'] - df['high'].shift()
         df['down_move'] = df['low'].shift() - df['low']
-        
+
         df['plus_dm'] = np.where((df['up_move'] > df['down_move']) & (df['up_move'] > 0), df['up_move'], 0)
         df['minus_dm'] = np.where((df['down_move'] > df['up_move']) & (df['down_move'] > 0), df['down_move'], 0)
-        
+
         # Smooth using Wilder's smoothing (EMA with alpha = 1/period)
         alpha = 1 / period
         df['atr'] = df['tr'].ewm(alpha=alpha, adjust=False).mean()
         df['plus_dm_smooth'] = df['plus_dm'].ewm(alpha=alpha, adjust=False).mean()
         df['minus_dm_smooth'] = df['minus_dm'].ewm(alpha=alpha, adjust=False).mean()
-        
+
         # Calculate DI+
         df['plus_di'] = 100 * (df['plus_dm_smooth'] / df['atr'])
         df['minus_di'] = 100 * (df['minus_dm_smooth'] / df['atr'])
-        
+
         # Calculate DX
         df['dx'] = 100 * abs(df['plus_di'] - df['minus_di']) / (df['plus_di'] + df['minus_di'])
-        
+
         # Calculate ADX
         df['adx'] = df['dx'].ewm(alpha=alpha, adjust=False).mean()
-        
+
         # Get latest values
         adx_value = float(df['adx'].iloc[-1])
         di_plus = float(df['plus_di'].iloc[-1])
         di_minus = float(df['minus_di'].iloc[-1])
-        
+
         logging.debug(f"ADX for {symbol}: {adx_value:.2f}, DI+: {di_plus:.2f}, DI-: {di_minus:.2f}")
-        
+
         return {
             'adx': adx_value,
             'di_plus': di_plus,

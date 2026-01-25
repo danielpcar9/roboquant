@@ -16,7 +16,6 @@ Fecha: 2026-01-20
 import logging
 import os
 import time
-from typing import Any
 
 import MetaTrader5 as mt5
 
@@ -58,7 +57,7 @@ class DonchianStrategy:
         self.timeframe = config_manager.get("TIMEFRAME", "H1")
         self.period = config_manager.get("PERIOD", 50)
         self.lookback = config_manager.get("LOOKBACK", 10)
-        
+
         # Get risk percent from set file manager first, fallback to config_manager
         try:
             from config.set_file_manager import get_set_manager
@@ -88,10 +87,10 @@ class DonchianStrategy:
     def run_strategy(self, symbol="XAUUSD"):
         """Main strategy function - coordinates all components"""
         logging.info(f"🚀 Running modular strategy for symbol: {symbol}")
-            
+
         # Log current market conditions
         self._log_market_conditions(symbol)
-            
+
         # Phase 1: Validate market conditions
         is_valid, reason = self.position_manager.validate_market_conditions(symbol)
         if not is_valid:
@@ -106,7 +105,7 @@ class DonchianStrategy:
         signal_and_risk = self._generate_signal_with_risk(symbol)
         if not signal_and_risk:
             return
-        
+
         order_type, entry_price, sl_distance, tp_price = signal_and_risk
 
         # Phase 5: Calculate position size
@@ -135,7 +134,7 @@ class DonchianStrategy:
         # Generate signals
         buy_signal = current_price > upper_channel
         sell_signal = current_price < lower_channel
-        
+
         if buy_signal:
             order_type = "BUY"
             entry_price = current_price
@@ -147,20 +146,20 @@ class DonchianStrategy:
         else:
             logging.info("No breakout signal")
             return None
-            
+
         logging.info(f"Signal generated: {order_type} - {reason}")
-        
+
         # Calculate risk parameters
         atr = self.market_data.calculate_atr(symbol, 14)
         if atr is None:
             logging.error("Failed to calculate ATR")
             return None
-            
+
         sl_price, tp_price = self.risk_validator.calculate_dynamic_stops(
             symbol, entry_price, order_type, atr
         )
         sl_distance = abs(entry_price - sl_price)
-        
+
         return order_type, entry_price, sl_distance, tp_price
 
 
@@ -223,7 +222,6 @@ class DonchianStrategy:
 
     def _calculate_position_size(self, symbol: str, sl_distance: float) -> float | None:
         """Calculate position size based on risk management"""
-        import MetaTrader5 as mt5
         account_info = mt5.account_info()  # type: ignore
         if account_info is None:
             logging.error("Failed to get account info")
@@ -232,18 +230,17 @@ class DonchianStrategy:
         lots = self.risk_validator.compute_lot_size(
             account_info.balance, self.risk_percent, sl_distance, symbol
         )
-        
+
         if lots <= 0:
             logging.warning("Calculated lot size is zero or negative")
             return None
-        
+
         return lots
 
     @handle_exception
-    def _execute_trade(self, symbol: str, order_type: str, lots: float, 
+    def _execute_trade(self, symbol: str, order_type: str, lots: float,
                       entry_price: float, sl_distance: float, tp_price: float) -> None:
         """Execute the trade with calculated parameters"""
-        import MetaTrader5 as mt5
         sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
         tp_points = abs(entry_price - tp_price) / mt5.symbol_info(symbol).point  # type: ignore
 

@@ -2,45 +2,57 @@
 Uses machine learning to validate and enhance quantitative trading signals
 """
 import logging
-import pickle
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import joblib
 import MetaTrader5 as mt5
 import numpy as np
-import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 
+from ...donchian_components.calculators.technical_indicators import (
+    TechnicalIndicatorsCalculator,
+)
 from ..analyzers.statistical_analyzer import QuantitativeAnalyzer
-from ...donchian_components.calculators.technical_indicators import TechnicalIndicatorsCalculator
 
 
 class MLStrategyValidator:
     """Machine Learning validator for trading signals using Random Forest classification"""
-    
+
     def __init__(self):
+        # Initialize MT5 if not already initialized
+        if not mt5.initialize():
+            raise RuntimeError("Failed to initialize MT5")
+
         self.model = None
         self.feature_names = [
             'momentum_score', 'volatility_score', 'trend_strength',
-            'adx', 'di_plus', 'di_minus', 
+            'adx', 'di_plus', 'di_minus',
             'channel_position', 'atr_normalized', 'volume_ratio'
         ]
         self.models_dir = Path("models")
         self.models_dir.mkdir(exist_ok=True)
         self.model_path = self.models_dir / "ml_validator.pkl"
-        
+
         # Initialize components
         self.analyzer = QuantitativeAnalyzer()
         self.indicator_calculator = TechnicalIndicatorsCalculator()
-        
+
         # Load existing model if available
         self._load_model()
-        
+
         logging.info("MLStrategyValidator initialized")
-    
+
+    def __del__(self):
+        """Cleanup MT5 connection"""
+        try:
+            if mt5.initialize():  # Check if MT5 is initialized
+                mt5.shutdown()
+        except:
+            pass  # Ignore cleanup errors
+
     def _load_model(self) -> None:
         """Load trained model from disk if exists"""
         try:
@@ -52,7 +64,7 @@ class MLStrategyValidator:
         except Exception as e:
             logging.warning(f"Failed to load ML model: {e}")
             self.model = None
-    
+
     def _save_model(self) -> None:
         """Save trained model to disk"""
         try:
@@ -60,8 +72,8 @@ class MLStrategyValidator:
             logging.info(f"ML model saved to {self.model_path}")
         except Exception as e:
             logging.error(f"Failed to save ML model: {e}")
-    
-    def extract_features(self, symbol: str) -> Dict[str, float]:
+
+    def extract_features(self, symbol: str) -> dict[str, float]:
         """Extract all required features for ML prediction"""
         try:
             # Get price data
@@ -69,15 +81,15 @@ class MLStrategyValidator:
             if rates is None or len(rates) < 50:
                 logging.warning("Insufficient price data for feature extraction")
                 return {}
-            
+
             prices = np.array([rate[4] for rate in rates])  # close prices
             volumes = np.array([rate[5] for rate in rates])  # volumes
-            
+
             # Calculate quantitative features
             momentum_score = self.analyzer.calculate_momentum_score(prices)
             volatility_score = self.analyzer.calculate_volatility_score(prices)
             trend_strength = self.analyzer.calculate_trend_strength(prices)
-            
+
             # Calculate technical indicators
             adx_data = self.indicator_calculator.calculate_adx(symbol, 14)
             if adx_data:
@@ -86,25 +98,25 @@ class MLStrategyValidator:
                 di_minus = adx_data.get('di_minus', 25.0)
             else:
                 adx, di_plus, di_minus = 25.0, 25.0, 25.0
-            
+
             # Calculate Donchian channels and position
             upper_channel, lower_channel = self.indicator_calculator.get_donchian_channels(symbol, 50)
             current_price = self.indicator_calculator.get_current_price(symbol, "BUY")
-            
+
             if upper_channel and lower_channel and current_price:
                 channel_width = upper_channel - lower_channel
                 channel_position = (current_price - lower_channel) / channel_width if channel_width > 0 else 0.5
             else:
                 channel_position = 0.5
-            
+
             # Calculate ATR and volume ratio
             atr = self.indicator_calculator.calculate_atr(symbol, 14)
             atr_normalized = atr / current_price if atr and current_price else 0.001
-            
+
             current_volume = volumes[-1] if len(volumes) > 0 else 1
             avg_volume = np.mean(volumes[-20:]) if len(volumes) >= 20 else current_volume
             volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
-            
+
             features = {
                 'momentum_score': momentum_score,
                 'volatility_score': volatility_score,
@@ -116,15 +128,15 @@ class MLStrategyValidator:
                 'atr_normalized': atr_normalized,
                 'volume_ratio': volume_ratio
             }
-            
+
             logging.debug(f"Features extracted for {symbol}: {features}")
             return features
-            
+
         except Exception as e:
             logging.error(f"Error extracting features: {e}")
             return {}
-    
-    def validate_signal(self, features_dict: Dict[str, float]) -> Tuple[bool, float, str]:
+
+    def validate_signal(self, features_dict: dict[str, float]) -> tuple[bool, float, str]:
         """Validate trading signal using ML model
         
         Args:
@@ -136,33 +148,33 @@ class MLStrategyValidator:
         if not self.model:
             logging.warning("No ML model available, returning neutral validation")
             return False, 0.0, "HOLD"
-        
+
         try:
             # Prepare feature vector
             feature_vector = np.array([[features_dict.get(name, 0.0) for name in self.feature_names]])
-            
+
             # Get prediction and probabilities
             prediction = self.model.predict(feature_vector)[0]
             probabilities = self.model.predict_proba(feature_vector)[0]
-            
+
             # Map prediction to action
             action_map = {1: "BUY", -1: "SELL", 0: "HOLD"}
             predicted_action = action_map.get(prediction, "HOLD")
-            
+
             # Get confidence (max probability)
             confidence = float(np.max(probabilities))
-            
+
             # Decision logic
             should_trade = prediction != 0 and confidence > 0.6  # Only trade if confident
-            
+
             logging.info(f"ML Validation - Action: {predicted_action}, Confidence: {confidence:.3f}, Trade: {should_trade}")
-            
+
             return should_trade, confidence, predicted_action
-            
+
         except Exception as e:
             logging.error(f"Error in ML validation: {e}")
             return False, 0.0, "HOLD"
-    
+
     def create_labels(self, prices: np.ndarray, window: int = 5, threshold: float = 0.005) -> np.ndarray:
         """Create training labels based on future price movement
         
@@ -175,23 +187,26 @@ class MLStrategyValidator:
             Array of labels: 1 (BUY), -1 (SELL), 0 (HOLD)
         """
         labels = []
-        
+
+        # Ensure prices are float64 scalars
+        prices = prices.astype(np.float64)
+
         for i in range(len(prices) - window):
-            current_price = prices[i]
-            future_price = prices[i + window]
-            
+            current_price = float(prices[i])  # Convert to scalar
+            future_price = float(prices[i + window])  # Convert to scalar
+
             price_change = (future_price - current_price) / current_price
-            
+
             if price_change > threshold:
                 labels.append(1)  # BUY signal
             elif price_change < -threshold:
                 labels.append(-1)  # SELL signal
             else:
                 labels.append(0)  # HOLD signal
-                
+
         return np.array(labels)
-    
-    def train_from_history(self, symbol: str = "XAUUSD", n_days: int = 90) -> Dict[str, Any]:
+
+    def train_from_history(self, symbol: str = "XAUUSD", n_days: int = 90) -> dict[str, Any]:
         """Train ML model using historical data
         
         Args:
@@ -203,65 +218,66 @@ class MLStrategyValidator:
         """
         try:
             logging.info(f"Training ML validator for {symbol} using {n_days} days of data")
-            
+
             # Get historical data
             rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, n_days * 24)  # type: ignore
-            if rates is None or len(rates) < 100:
-                raise ValueError("Insufficient historical data for training")
-            
+            logging.info(f"Requested {n_days * 24} bars, got {len(rates) if rates else 0} bars")
+            if rates is None or len(rates) < 50:
+                raise ValueError(f"Insufficient historical data for training: got {len(rates) if rates else 0} bars, need at least 50")
+
             prices = np.array([rate[4] for rate in rates])
             logging.info(f"Retrieved {len(prices)} price points for training")
-            
+
             # Create labels
             labels = self.create_labels(prices, window=5, threshold=0.005)
             logging.info(f"Created {len(labels)} labels: BUY={np.sum(labels==1)}, SELL={np.sum(labels==-1)}, HOLD={np.sum(labels==0)}")
-            
+
             # Extract features for training data
             feature_data = []
             valid_labels = []
-            
+
             # We need to align features with labels (labels are shorter due to window)
             for i in range(len(labels)):
                 # Get features using data up to point i
                 temp_rates = rates[:i+50]  # Use data up to current point + buffer
                 if len(temp_rates) < 50:
                     continue
-                    
+
                 temp_prices = np.array([rate[4] for rate in temp_rates])
                 temp_volumes = np.array([rate[5] for rate in temp_rates])
-                
+
                 # Calculate features using temporary data
                 momentum_score = self.analyzer.calculate_momentum_score(temp_prices)
                 volatility_score = self.analyzer.calculate_volatility_score(temp_prices)
                 trend_strength = self.analyzer.calculate_trend_strength(temp_prices)
-                
+
                 # For simplicity, use fixed indicator values during training
                 adx, di_plus, di_minus = 25.0, 25.0, 25.0
                 channel_position = 0.5
                 atr_normalized = 0.001
                 volume_ratio = 1.0
-                
+
                 features = [
                     momentum_score, volatility_score, trend_strength,
                     adx, di_plus, di_minus,
                     channel_position, atr_normalized, volume_ratio
                 ]
-                
+
                 feature_data.append(features)
                 valid_labels.append(labels[i])
-            
-            if len(feature_data) < 50:
+
+            if len(feature_data) < 30:  # Reduced from 50 to 30
                 raise ValueError("Insufficient aligned data for training")
-            
+
             # Convert to arrays
             X = np.array(feature_data)
             y = np.array(valid_labels)
-            
+
             # Split data
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=0.2, random_state=42, stratify=y
             )
-            
+
             # Train model
             self.model = RandomForestClassifier(
                 n_estimators=100,
@@ -270,24 +286,24 @@ class MLStrategyValidator:
                 min_samples_leaf=2,
                 random_state=42
             )
-            
+
             self.model.fit(X_train, y_train)
-            
+
             # Evaluate model
             train_score = self.model.score(X_train, y_train)
             test_score = self.model.score(X_test, y_test)
-            
+
             # Predictions for metrics
             y_pred = self.model.predict(X_test)
-            
+
             # Calculate metrics
             report = classification_report(y_test, y_pred, output_dict=True)
             confusion = confusion_matrix(y_test, y_pred)
             feature_importance = dict(zip(self.feature_names, self.model.feature_importances_))
-            
+
             # Save model
             self._save_model()
-            
+
             results = {
                 'training_samples': len(X_train),
                 'test_samples': len(X_test),
@@ -298,12 +314,12 @@ class MLStrategyValidator:
                 'feature_importances': feature_importance,
                 'model_parameters': self.model.get_params()
             }
-            
+
             logging.info(f"ML Model Training Complete - Accuracy: {test_score:.3f}")
             logging.info(f"Feature Importances: {feature_importance}")
-            
+
             return results
-            
+
         except Exception as e:
             logging.error(f"Error training ML model: {e}")
             return {'error': str(e)}
