@@ -55,7 +55,7 @@ class SetFileManager:
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(
                 f"Invalid JSON in {filepath}: {e!s}", e.doc, e.pos,
-            )
+            ) from e
 
         # Validate configuration structure
         self._validate_config(config)

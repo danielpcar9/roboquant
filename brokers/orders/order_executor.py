@@ -54,34 +54,118 @@ def build_and_send_order(
     if mt5_module is None:
         mt5_module = mt5
 
+    # Validate inputs and prepare order data
+    validation_result = _validate_and_prepare_order(symbol, side, volume, mt5_module)
+    if not validation_result:
+        return None
+
+    order_type, price = validation_result
+
+    # Build order request
+    request = _build_base_order_request(
+        symbol, volume, order_type, price, deviation, magic, mt5_module
+    )
+
+    # Add stop levels if provided
+    _add_stop_levels_to_request(request, sl, tp)
+
+    # Attempt to send order with comprehensive retry logic
+    return _execute_order_with_retry_strategy(
+        request, symbol, side, price, sl, tp, retries, mt5_module
+    )
+
+
+def _validate_and_prepare_order(
+    symbol: str, side: str, volume: float, mt5_module: Any
+) -> tuple[Any, float] | None:
+    """Validate inputs and prepare order components."""
     # Validate inputs
+    if not _validate_order_inputs(symbol, side, volume):
+        return None
+
+    # Prepare order components
+    order_components = _prepare_order_components(symbol, side, mt5_module)
+    if order_components is None:
+        return None
+
+    order_type, price = order_components
+    return order_type, price
+
+
+def _validate_order_inputs(symbol: str, side: str, volume: float) -> bool:
+    """Validate order input parameters."""
     if not symbol or not side or volume <= 0:
         logging.error(
             f"Invalid parameters for order: symbol={symbol}, side={side}, volume={volume}",
         )
-        return None
+        return False
+    return True
 
+
+def _prepare_order_components(
+    symbol: str, side: str, mt5_module: Any
+) -> tuple[Any, float] | None:
+    """Prepare order type and price components."""
     # Select symbol
-    if not mt5_module.symbol_select(symbol, True):  # type: ignore
-        logging.error(f"Failed to select symbol {symbol}")
+    if not _select_trading_symbol(symbol, mt5_module):
         return None
 
     # Determine order type
+    order_type = _get_order_type_by_side(side, mt5_module)
+    if order_type is None:
+        return None
+
+    # Get current price
+    price = _get_current_market_price(symbol, side, mt5_module)
+    if price is None:
+        return None
+
+    return order_type, price
+
+
+def _select_trading_symbol(symbol: str, mt5_module: Any) -> bool:
+    """Select trading symbol in MT5."""
+    if not mt5_module.symbol_select(symbol, True):  # type: ignore
+        logging.error(f"Failed to select symbol {symbol}")
+        return False
+    return True
+
+
+def _get_order_type_by_side(side: str, mt5_module: Any) -> Any | None:
+    """Get MT5 order type based on side."""
     if side == "BUY":
-        order_type = mt5_module.ORDER_TYPE_BUY  # type: ignore
+        return mt5_module.ORDER_TYPE_BUY  # type: ignore
     elif side == "SELL":
-        order_type = mt5_module.ORDER_TYPE_SELL  # type: ignore
+        return mt5_module.ORDER_TYPE_SELL  # type: ignore
     else:
         logging.error(f"Invalid order side: {side}")
         return None
 
-    # Get current price
+
+def _get_current_market_price(symbol: str, side: str, mt5_module: Any) -> float | None:
+    """Get current market price for the symbol."""
+    tick = _get_tick_data_for_symbol(symbol, mt5_module)
+    if tick is None:
+        return None
+
+    return _extract_price_by_side(tick, side, mt5_module)
+
+
+def _get_tick_data_for_symbol(symbol: str, mt5_module: Any) -> Any | None:
+    """Get tick data for a symbol."""
     tick = mt5_module.symbol_info_tick(symbol)  # type: ignore
     if tick is None:
         logging.error(f"Failed to get tick data for {symbol}")
         return None
+    return tick
 
-    price = tick.ask if side == "BUY" else tick.bid
+
+def _extract_price_by_side(tick: Any, side: str, mt5_module: Any) -> float:
+    """Extract price based on order side."""
+    if side == "BUY":
+        return tick.ask
+    else:
+        return tick.bid
 
     # Try different filling modes
     filling_modes_to_try = [

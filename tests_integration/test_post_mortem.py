@@ -31,7 +31,7 @@ def test_log_trade():
 
     try:
         # Temporarily override the TRADES_FILE path
-        post_mortem.TRADES_FILE = temp_trades_file
+        post_mortem.TRADES_FILE = str(temp_trades_file)
 
         # Test logging a trade
         trade_data = {

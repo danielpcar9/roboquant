@@ -23,62 +23,44 @@ class QuantitativeIntegration:
         self.behavior_logger = get_behavior_logger()  # Initialize behavior logger
         logging.info("QuantitativeIntegration initialized")
 
-    def _should_trade_adaptive(self, recommendation: str, ml_confidence: float,
+    def _should_trade_adaptive(self, recommendation: str, ml_confidence: float, 
                               entry_score: float, adx_value: float, di_diff: float) -> bool:
-        """Determina si debe operar usando sistema de votación flexible y umbrales adaptativos"""
+        """Determina si debe operar usando umbrales adaptativos según condiciones de mercado"""
         # Verificar que sea una recomendación válida para trading
         valid_recommendations = ["STRONG_BUY", "BUY", "STRONG_SELL", "SELL"]
         if recommendation not in valid_recommendations:
             return False
-
-        # Sistema de votación flexible basado en regímenes de mercado
-        # Ajustar umbrales según fuerza de tendencia (ADX)
-        if adx_value > 40:
-            # Tendencia fuerte - umbrales más permisivos
-            ml_threshold = 0.40
-            quant_threshold = 0.25
-            regime = "FUERTE"
-        elif adx_value > 30:
-            # Tendencia moderada - umbrales intermedios
-            ml_threshold = 0.50
-            quant_threshold = 0.35
-            regime = "MODERADA"
+            
+        # Condiciones para tendencia fuerte y clara
+        strong_trend = adx_value > 50
+        significant_di_diff_long = di_diff > 15   # Tendencia alcista fuerte
+        significant_di_diff_short = di_diff < -15 # Tendencia bajista fuerte
+        
+        # Umbrales adaptativos
+        if strong_trend and (significant_di_diff_long or significant_di_diff_short):
+            # En condiciones de tendencia fuerte, usar umbrales más permisivos
+            ml_threshold = 0.35  # Reducido de 0.60 a 0.35
+            quant_threshold = 0.45  # Reducido de 0.50 a 0.45
         else:
-            # Rango lateral/débil - umbrales más estrictos
-            ml_threshold = 0.65
-            quant_threshold = 0.45
-            regime = "LATERAL"
-
-        # Sistema de votación ponderada en lugar de AND estricto
-        # Calcular puntuación combinada
-        ml_weight = 0.6 if ml_confidence > 0.5 else 0.4
-        quant_weight = 0.4 if entry_score > 0.3 else 0.2
-
-        combined_score = (ml_confidence * ml_weight) + (entry_score * quant_weight)
-        min_combined_threshold = 0.35  # Umbral mínimo para votación combinada
-
-        # Validación tradicional AND (para comparación)
-        traditional_approval = (ml_confidence > ml_threshold and entry_score > quant_threshold)
-
-        # Nueva lógica: aprobar si cualquiera de los dos sistemas da señal fuerte
-        # O si la votación combinada supera el umbral
-        voting_approval = combined_score > min_combined_threshold
-
-        # Aprobación final: cualquiera de las dos condiciones
-        meets_criteria = traditional_approval or voting_approval
-
-        # Logging detallado para monitoreo
-        logging.debug(
-            f"Validación adaptativa [{regime}] - "
-            f"ADX: {adx_value:.2f}, DI Diff: {di_diff:.2f}\n"
-            f"  Umbrales -> ML: {ml_threshold:.2f}, Quant: {quant_threshold:.2f}\n"
-            f"  Ponderación -> ML Weight: {ml_weight:.2f}, Quant Weight: {quant_weight:.2f}\n"
-            f"  Scores -> ML: {ml_confidence:.3f}, Quant: {entry_score:.3f}\n"
-            f"  Combined Score: {combined_score:.3f} (threshold: {min_combined_threshold})\n"
-            f"  Traditional Approval: {traditional_approval}, Voting Approval: {voting_approval}\n"
-            f"  Final Decision: {meets_criteria}"
+            # En condiciones normales, mantener umbrales estrictos
+            ml_threshold = 0.60
+            quant_threshold = 0.50
+            
+        # Validación final
+        meets_criteria = (
+            ml_confidence > ml_threshold and
+            entry_score > quant_threshold
         )
-
+        
+        logging.debug(
+            f"Validación adaptativa - "
+            f"Tendencia fuerte: {strong_trend}, "
+            f"DI Diff: {di_diff:.2f}, "
+            f"ML Threshold: {ml_threshold}, "
+            f"Quant Threshold: {quant_threshold}, "
+            f"Cumple criterios: {meets_criteria}"
+        )
+        
         return meets_criteria
 
     def calculate_entry_score(self, prices: np.ndarray, adx: float, di_plus: float, di_minus: float) -> dict[str, Any]:
@@ -222,11 +204,12 @@ class QuantitativeIntegration:
                 ml_should_trade, ml_confidence, ml_action = self.ml_validator.validate_signal(features)
                 logging.info(f"ML Validation - Should Trade: {ml_should_trade}, Confidence: {ml_confidence:.3f}, Action: {ml_action}")
 
-            # Combined decision logic with adaptive thresholds
+            # Combined decision logic
             # Both quantitative analysis AND ML validation must approve the trade
-            di_diff = di_plus - di_minus
-            should_trade = self._should_trade_adaptive(
-                recommendation, ml_confidence, entry_score, adx_value, di_diff
+            should_trade = (
+                recommendation in ["STRONG_BUY", "BUY", "STRONG_SELL", "SELL"] and
+                ml_should_trade and
+                ml_confidence > 0.5  # Additional confidence requirement from ML
             )
 
             result = {
@@ -287,3 +270,4 @@ else:
 # Backward compatibility
 # Note: QuantitativeEngine is now an alias for QuantitativeIntegration
 # This maintains backward compatibility while avoiding circular imports
+

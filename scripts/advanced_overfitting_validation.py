@@ -115,18 +115,47 @@ def backtest_with_regime_filter(
     """
     Backtest with optional ADX regime filter
     """
+    # Set random seeds for reproducibility
     if random_seed is not None:
         np.random.seed(random_seed)
         random.seed(random_seed)
 
     df = df.copy()
 
+    # Calculate technical indicators
+    df = _calculate_technical_indicators(df, donchian_period)
+
+    # Apply ADX+DI filter if enabled
+    if use_adx_filter:
+        df = _apply_adx_filter(df, adx_threshold, di_threshold)
+
+    # Generate trading signals
+    df = _generate_trading_signals(df)
+
+    # Simulate trades and calculate results
+    return _simulate_trades_and_calculate_metrics(df)
+
+
+def _calculate_technical_indicators(df, donchian_period):
+    """Calculate all required technical indicators."""
     # Calculate ADX and DI
     df["adx"] = calculate_adx(df, period=14)
+    df["plus_di"], df["minus_di"] = _calculate_directional_indicators(df)
+
+    # Calculate Donchian Channels
+    df["donchian_upper"] = df["high"].rolling(window=donchian_period).max()
+    df["donchian_lower"] = df["low"].rolling(window=donchian_period).min()
+
+    return df
+
+
+def _calculate_directional_indicators(df):
+    """Calculate Plus DI and Minus DI indicators."""
     up_move = df["high"] - df["high"].shift()
     down_move = df["low"].shift() - df["low"]
     plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
     minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
+
     tr = pd.concat(
         [
             df["high"] - df["low"],
@@ -135,91 +164,117 @@ def backtest_with_regime_filter(
         ],
         axis=1,
     ).max(axis=1)
+
     atr = tr.rolling(window=14).mean()
-    df["plus_di"] = 100 * (
-        pd.Series(plus_dm, index=df.index).rolling(window=14).mean() / atr
-    )
-    df["minus_di"] = 100 * (
-        pd.Series(minus_dm, index=df.index).rolling(window=14).mean() / atr
-    )
+    plus_di = 100 * (pd.Series(plus_dm, index=df.index).rolling(window=14).mean() / atr)
+    minus_di = 100 * (pd.Series(minus_dm, index=df.index).rolling(window=14).mean() / atr)
 
-    # Calculate Donchian Channels
-    df["donchian_upper"] = df["high"].rolling(window=donchian_period).max()
-    df["donchian_lower"] = df["low"].rolling(window=donchian_period).min()
+    return plus_di, minus_di
 
+
+def _apply_adx_filter(df, adx_threshold, di_threshold):
+    """Apply ADX and DI filtering to trading signals."""
+    strength = np.maximum(df["plus_di"], df["minus_di"])
+    filter_condition = (df["adx"] > adx_threshold) & (strength >= di_threshold)
+
+    # Apply filter to existing signals
+    df["long_signal"] = df["long_signal"] & filter_condition
+    df["short_signal"] = df["short_signal"] & filter_condition
+
+    return df
+
+
+def _generate_trading_signals(df):
+    """Generate breakout trading signals."""
     # Simple signals: breakout only
     df["long_signal"] = df["close"] > df["donchian_upper"].shift(1)
     df["short_signal"] = df["close"] < df["donchian_lower"].shift(1)
 
-    # Apply ADX+DI filter if enabled
-    if use_adx_filter:
-        strength = np.maximum(df["plus_di"], df["minus_di"])
-        df["long_signal"] = (
-            df["long_signal"] & (df["adx"] > adx_threshold) & (strength >= di_threshold)
-        )
-        df["short_signal"] = (
-            df["short_signal"]
-            & (df["adx"] > adx_threshold)
-            & (strength >= di_threshold)
-        )
+    return df
 
-    # Simulate trades
+
+def _simulate_trades_and_calculate_metrics(df):
+    """Simulate trades and calculate performance metrics."""
+    # Initialize trading variables
     position = 0  # 1 = long, -1 = short, 0 = flat
     entry_price = 0
     capital = 10000
     trades = []
     equity_curve = [capital]
 
+    # Process each bar
     for i in range(len(df)):
-        if position == 0:
-            # Enter long
-            if df["long_signal"].iloc[i]:
-                position = 1
-                entry_price = df["close"].iloc[i]
-            # Enter short
-            elif df["short_signal"].iloc[i]:
-                position = -1
-                entry_price = df["close"].iloc[i]
-
-        elif position == 1:
-            # Exit long on opposite signal
-            if df["short_signal"].iloc[i]:
-                exit_price = df["close"].iloc[i]
-                pnl = (exit_price - entry_price) * 100  # Simplified PnL
-                capital += pnl
-                trades.append(
-                    {
-                        "type": "LONG",
-                        "entry": entry_price,
-                        "exit": exit_price,
-                        "pnl": pnl,
-                        "capital": capital,
-                    },
-                )
-                position = -1  # Flip to short
-                entry_price = exit_price
-
-        elif position == -1:
-            # Exit short on opposite signal
-            if df["long_signal"].iloc[i]:
-                exit_price = df["close"].iloc[i]
-                pnl = (entry_price - exit_price) * 100  # Simplified PnL
-                capital += pnl
-                trades.append(
-                    {
-                        "type": "SHORT",
-                        "entry": entry_price,
-                        "exit": exit_price,
-                        "pnl": pnl,
-                        "capital": capital,
-                    },
-                )
-                position = 1  # Flip to long
-                entry_price = exit_price
-
+        position, entry_price, capital = _process_trading_step(
+            df, i, position, entry_price, capital, trades
+        )
         equity_curve.append(capital)
 
-    # Calculate metrics
+    # Calculate final metrics
+    return _calculate_performance_metrics(trades, equity_curve, capital)
+
+
+def _process_trading_step(df, i, position, entry_price, capital, trades):
+    """Process a single trading step."""
+    if position == 0:
+        # Enter new position
+        position, entry_price = _enter_position(df, i)
+
+    elif position == 1:
+        # Manage long position
+        position, entry_price, capital = _manage_long_position(df, i, entry_price, capital, trades)
+
+    elif position == -1:
+        # Manage short position
+        position, entry_price, capital = _manage_short_position(df, i, entry_price, capital, trades)
+
+    return position, entry_price, capital
+
+
+def _enter_position(df, i):
+    """Enter a new trading position."""
+    if df["long_signal"].iloc[i]:
+        return 1, df["close"].iloc[i]
+    elif df["short_signal"].iloc[i]:
+        return -1, df["close"].iloc[i]
+    return 0, 0
+
+
+def _manage_long_position(df, i, entry_price, capital, trades):
+    """Manage existing long position."""
+    if df["short_signal"].iloc[i]:
+        exit_price = df["close"].iloc[i]
+        pnl = (exit_price - entry_price) * 100  # Simplified PnL
+        capital += pnl
+        trades.append(_create_trade_record("LONG", entry_price, exit_price, pnl, capital))
+        return -1, exit_price, capital  # Flip to short
+    return 1, entry_price, capital
+
+
+def _manage_short_position(df, i, entry_price, capital, trades):
+    """Manage existing short position."""
+    if df["long_signal"].iloc[i]:
+        exit_price = df["close"].iloc[i]
+        pnl = (entry_price - exit_price) * 100  # Simplified PnL
+        capital += pnl
+        trades.append(_create_trade_record("SHORT", entry_price, exit_price, pnl, capital))
+        return 1, exit_price, capital  # Flip to long
+    return -1, entry_price, capital
+
+
+def _create_trade_record(trade_type, entry_price, exit_price, pnl, capital):
+    """Create standardized trade record."""
+    return {
+        "type": trade_type,
+        "entry": entry_price,
+        "exit": exit_price,
+        "pnl": pnl,
+        "capital": capital,
+    }
+
+
+def _calculate_performance_metrics(trades, equity_curve, final_capital):
+    """Calculate comprehensive performance metrics."""
+    # Handle case with no trades
     if len(trades) == 0:
         return {
             "total_trades": 0,
@@ -231,6 +286,7 @@ def backtest_with_regime_filter(
             "equity_curve": equity_curve,
         }
 
+    # Calculate basic trade statistics
     trades_df = pd.DataFrame(trades)
     winning_trades = trades_df[trades_df["pnl"] > 0]
     losing_trades = trades_df[trades_df["pnl"] < 0]
@@ -238,29 +294,37 @@ def backtest_with_regime_filter(
     total_wins = winning_trades["pnl"].sum() if len(winning_trades) > 0 else 0
     total_losses = abs(losing_trades["pnl"].sum()) if len(losing_trades) > 0 else 0
 
-    # Calculate Sharpe Ratio
-    equity_series = pd.Series(equity_curve)
-    returns = equity_series.pct_change().dropna()
-    sharpe = (
-        (returns.mean() / returns.std() * np.sqrt(252 * 24)) if returns.std() > 0 else 0
-    )  # Hourly data
-
-    # Calculate Max Drawdown
-    equity_series = pd.Series(equity_curve)
-    running_max = equity_series.expanding().max()
-    drawdown = (equity_series - running_max) / running_max * 100
-    max_dd = drawdown.min()
+    # Calculate risk metrics
+    sharpe = _calculate_sharpe_ratio(equity_curve)
+    max_dd = _calculate_max_drawdown(equity_curve)
 
     return {
         "total_trades": len(trades),
         "win_rate": len(winning_trades) / len(trades) * 100 if len(trades) > 0 else 0,
-        "total_return": (capital - 10000) / 10000 * 100,
+        "total_return": (final_capital - 10000) / 10000 * 100,
         "profit_factor": total_wins / total_losses if total_losses > 0 else 0,
         "sharpe_ratio": sharpe,
         "max_drawdown": max_dd,
-        "final_capital": capital,
+        "final_capital": final_capital,
         "equity_curve": equity_curve,
     }
+
+
+def _calculate_sharpe_ratio(equity_curve):
+    """Calculate Sharpe ratio from equity curve."""
+    equity_series = pd.Series(equity_curve)
+    returns = equity_series.pct_change().dropna()
+    if returns.std() > 0:
+        return returns.mean() / returns.std() * np.sqrt(252 * 24)  # Hourly data
+    return 0
+
+
+def _calculate_max_drawdown(equity_curve):
+    """Calculate maximum drawdown from equity curve."""
+    equity_series = pd.Series(equity_curve)
+    running_max = equity_series.expanding().max()
+    drawdown = (equity_series - running_max) / running_max * 100
+    return drawdown.min()
 
 
 def anchored_walk_forward(df, initial_train_years=2, test_months=6):

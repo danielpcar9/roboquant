@@ -50,47 +50,66 @@ class NewsFilter:
 
         now = datetime.utcnow()
 
-        # Check for NFP (First Friday of month at 13:30 UTC)
-        if "NFP" in self.avoid_events and self.is_first_friday(now):
-            nfp_time = datetime.strptime("13:30", "%H:%M").time()
-            nfp_datetime = datetime.combine(now.date(), nfp_time)
-            time_diff = abs((now - nfp_datetime).total_seconds() / 60)
-            if time_diff <= self.buffer_minutes:
-                logger.info("NFP event detected")
-                return True
+        # Check different economic events
+        if self._check_nfp_event(now):
+            return True
 
-        # Check for CPI (Monthly around 15th at 13:30 UTC)
-        if "CPI" in self.avoid_events and 13 <= now.day <= 17:
-            cpi_time = datetime.strptime("13:30", "%H:%M").time()
-            cpi_datetime = datetime.combine(now.date(), cpi_time)
-            time_diff = abs((now - cpi_datetime).total_seconds() / 60)
-            if time_diff <= self.buffer_minutes:
-                logger.info("CPI event detected")
-                return True
+        if self._check_cpi_event(now):
+            return True
 
-        # Check for PPI (Monthly around 15th at 13:30 UTC)
-        if "PPI" in self.avoid_events and 13 <= now.day <= 17:
-            ppi_time = datetime.strptime("13:30", "%H:%M").time()
-            ppi_datetime = datetime.combine(now.date(), ppi_time)
-            time_diff = abs((now - ppi_datetime).total_seconds() / 60)
-            if time_diff <= self.buffer_minutes:
-                logger.info("PPI event detected")
-                return True
+        if self._check_ppi_event(now):
+            return True
 
-        # Check for FOMC (typically 2x per month, Wednesdays)
-        # Simplified check for FOMC days
-        if "FOMC" in self.avoid_events:
-            # FOMC typically occurs on Wednesdays, last two weeks of month
-            if now.weekday() == 2:  # Wednesday
-                last_day = calendar.monthrange(now.year, now.month)[1]
-                if now.day > last_day - 14:  # Last two weeks
-                    fomc_time = datetime.strptime("19:00", "%H:%M").time()
-                    fomc_datetime = datetime.combine(now.date(), fomc_time)
-                    time_diff = abs((now - fomc_datetime).total_seconds() / 60)
-                    if time_diff <= self.buffer_minutes:
-                        logger.info("FOMC event detected")
-                        return True
+        if self._check_fomc_event(now):
+            return True
 
+        return False
+
+    def _check_nfp_event(self, now):
+        """Check for Non-Farm Payrolls event."""
+        if "NFP" not in self.avoid_events or not self.is_first_friday(now):
+            return False
+
+        return self._is_event_time(now, "13:30", "NFP")
+
+    def _check_cpi_event(self, now):
+        """Check for Consumer Price Index event."""
+        if "CPI" not in self.avoid_events or not (13 <= now.day <= 17):
+            return False
+
+        return self._is_event_time(now, "13:30", "CPI")
+
+    def _check_ppi_event(self, now):
+        """Check for Producer Price Index event."""
+        if "PPI" not in self.avoid_events or not (13 <= now.day <= 17):
+            return False
+
+        return self._is_event_time(now, "13:30", "PPI")
+
+    def _check_fomc_event(self, now):
+        """Check for Federal Open Market Committee event."""
+        if "FOMC" not in self.avoid_events:
+            return False
+
+        # FOMC typically occurs on Wednesdays, last two weeks of month
+        if now.weekday() != 2:  # Not Wednesday
+            return False
+
+        last_day = calendar.monthrange(now.year, now.month)[1]
+        if now.day <= last_day - 14:  # Not in last two weeks
+            return False
+
+        return self._is_event_time(now, "19:00", "FOMC")
+
+    def _is_event_time(self, now, event_time_str, event_name):
+        """Check if current time is near the specified event time."""
+        event_time = datetime.strptime(event_time_str, "%H:%M").time()
+        event_datetime = datetime.combine(now.date(), event_time)
+        time_diff = abs((now - event_datetime).total_seconds() / 60)
+
+        if time_diff <= self.buffer_minutes:
+            logger.info(f"{event_name} event detected")
+            return True
         return False
 
 

@@ -149,7 +149,7 @@ class MarketRegimeDetector:
             y_mean = sum(y) / n
 
             # Calculate slope
-            numerator = sum((xi - x_mean) * (yi - y_mean) for xi, yi in zip(x, y))
+            numerator = sum((xi - x_mean) * (yi - y_mean) for xi, yi in zip(x, y, strict=True))
             denominator = sum((xi - x_mean) ** 2 for xi in x)
 
             slope = numerator / denominator if denominator != 0 else 0

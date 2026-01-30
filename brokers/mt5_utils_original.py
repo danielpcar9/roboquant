@@ -140,64 +140,107 @@ class MT5Gateway:
 
 @performance_monitor
 def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=None):
+    """Calculate position size based on risk percentage."""
     if mt5_module is None:
         mt5_module = mt5
 
-    account_info = mt5_module.account_info()  # type: ignore
+    # Get account information
+    account_info = _get_account_info(mt5_module)
     if not account_info:
-        logging.error("No se pudo obtener informacion de cuenta")
-        sym_info = mt5_module.symbol_info(symbol)  # type: ignore
-        return sym_info.volume_min if sym_info else 0.01
+        return _get_default_volume(symbol, mt5_module)
 
+    # Calculate risk parameters
     balance = float(account_info.balance)
     risk_amount = balance * (risk_pct / 100.0)
 
+    # Get symbol information
+    sym_info = _get_symbol_info(symbol, mt5_module)
+    if not sym_info:
+        return 0.01
+
+    # Calculate position size
+    lots = _calculate_lots(risk_amount, entry_price, stop_price, symbol, sym_info)
+
+    # Apply safety limits
+    final_lots = _apply_safety_limits(lots, symbol, sym_info, mt5_module)
+
+    _log_risk_calculation(balance, risk_amount, entry_price, stop_price, final_lots, sym_info)
+
+    return final_lots
+
+
+def _get_account_info(mt5_module):
+    """Get MT5 account information."""
+    account_info = mt5_module.account_info()  # type: ignore
+    if not account_info:
+        logging.error("No se pudo obtener informacion de cuenta")
+    return account_info
+
+
+def _get_default_volume(symbol, mt5_module):
+    """Get default volume when account info is unavailable."""
+    sym_info = mt5_module.symbol_info(symbol)  # type: ignore
+    return sym_info.volume_min if sym_info else 0.01
+
+
+def _get_symbol_info(symbol, mt5_module):
+    """Get symbol information from MT5."""
     sym_info = mt5_module.symbol_info(symbol)  # type: ignore
     if not sym_info:
         logging.error("Symbol %s info not available", symbol)
-        return 0.01
+    return sym_info
 
+
+def _calculate_lots(risk_amount, entry_price, stop_price, symbol, sym_info):
+    """Calculate raw lot size based on risk parameters."""
     point = sym_info.point
     # Adjust point value for NASDAQ
     if "NASDAQ" in symbol.upper():
         point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
-    volume_min = sym_info.volume_min
 
     stop_distance_points = abs(entry_price - stop_price) / point
 
     if stop_distance_points == 0:
         logging.error("Stop distance es cero")
-        return volume_min
+        return sym_info.volume_min
 
+    tick_value = _get_tick_value(symbol, sym_info)
+
+    return risk_amount / (stop_distance_points * tick_value)
+
+
+def _get_tick_value(symbol, sym_info):
+    """Get tick value for the symbol."""
     # CORRECTION: More accurate tick values for different instruments
     # For XAU/USD, 1 lot = 100 oz troy, so point value is 100
     if "XAU" in symbol or "GOLD" in symbol:
-        tick_value = 100.0
+        return 100.0
     else:
         tick_value = getattr(sym_info, "trade_tick_value", None)
         if tick_value is None or tick_value == 0:
             logging.warning(
                 "tick_value no disponible del broker, usando valor por defecto",
             )
-            # Default values by instrument type
-            if "JPY" in symbol:
-                # Pairs with JPY (ej: USDJPY)
-                tick_value = 1000.0
-            elif any(curr in symbol for curr in ["EUR", "GBP", "AUD", "NZD"]):
-                # Major forex pairs
-                tick_value = 10.0
-            else:
-                # Conservative default
-                tick_value = 10.0
+            return _get_default_tick_value(symbol)
+        return tick_value
 
-    logging.info(
-        "DEBUG: tick_value=%s, point=%s, contract_size=%s",
-        tick_value,
-        point,
-        getattr(sym_info, "trade_contract_size", "N/A"),
-    )
 
-    lots = risk_amount / (stop_distance_points * tick_value)
+def _get_default_tick_value(symbol):
+    """Get default tick value based on symbol characteristics."""
+    if "JPY" in symbol:
+        # Pairs with JPY (ej: USDJPY)
+        return 1000.0
+    elif any(curr in symbol for curr in ["EUR", "GBP", "AUD", "NZD"]):
+        # Major forex pairs
+        return 10.0
+    else:
+        # Conservative default
+        return 10.0
+
+
+def _apply_safety_limits(lots, symbol, sym_info, mt5_module):
+    """Apply strict safety limits to protect capital."""
+    volume_min = sym_info.volume_min
 
     # Limites de seguridad ESTRICTOS para proteger capital
     # Límite ultra conservador: máximo 0.30 lotes para protección extrema
@@ -214,15 +257,27 @@ def estimate_lots_by_risk(symbol, entry_price, stop_price, risk_pct, mt5_module=
         )
         result = max_allowed_lots
 
+    return result
+
+
+def _log_risk_calculation(balance, risk_amount, entry_price, stop_price, lots, sym_info):
+    """Log risk calculation details."""
+    point = sym_info.point
+    stop_distance_points = abs(entry_price - stop_price) / point
+
     logging.info(
         "Risk calc: balance=%.2f, risk_amount=%.2f, stop_distance=%.1f points, lots=%.2f",
         balance,
         risk_amount,
         stop_distance_points,
-        result,
+        lots,
     )
-
-    return result
+    logging.info(
+        "DEBUG: tick_value=%s, point=%s, contract_size=%s",
+        _get_tick_value(sym_info._symbol, sym_info),
+        point,
+        getattr(sym_info, "trade_contract_size", "N/A"),
+    )
 
 
 @performance_monitor
@@ -735,229 +790,316 @@ def update_trailing_stops(mt5_module=None):
         mt5_module = mt5
 
     # Get all open positions
-    positions = mt5_module.positions_get()  # type: ignore
+    positions = _get_open_positions_for_trailing(mt5_module)
     if not positions:
         return
 
-    # Get set file configuration for trailing stops
-    try:
-        from config.set_file_manager import get_set_manager
-
-        cfg = get_set_manager()
-        # Get trailing stop configuration with defaults
-        trailing_enabled = cfg.get("trailing.enabled", True)
-        trailing_start_pips = cfg.get("trailing.start_pips", 10)
-        trailing_distance_pips = cfg.get("trailing.distance_pips", 15)
-        break_even_enabled = cfg.get("trailing.break_even_enabled", True)
-        partial_tp_enabled = cfg.get("trailing.partial_tp_enabled", False)
-        partial_tp_percent = cfg.get("trailing.partial_tp_percent", 50.0)
-        partial_tp_at_r = cfg.get("trailing.partial_tp_at_r", 1.0)
-        # ATR-based trailing configuration
-        use_atr = cfg.get("trailing.use_atr", True)
-        start_atr_mult = cfg.get("trailing.start_atr_mult", 1.0)
-        distance_atr_mult = cfg.get("trailing.distance_atr_mult", 1.5)
-    except Exception as e:
-        # Use default values if configuration cannot be loaded
-        trailing_enabled = True
-        trailing_start_pips = 10
-        trailing_distance_pips = 15
-        break_even_enabled = True
-        partial_tp_enabled = False
-        partial_tp_percent = 50.0
-        partial_tp_at_r = 1.0
-        # ATR-based trailing defaults
-        use_atr = True
-        start_atr_mult = 1.0
-        distance_atr_mult = 1.5
-        logging.debug(f"Using default trailing stop settings: {e}")
+    # Get configuration settings
+    config = _get_trailing_config()
 
     # If trailing stops are disabled, exit early
-    if not trailing_enabled:
+    if not config['enabled']:
         return
 
+    _log_trailing_config(config)
+
+    # Process each position
+    _process_positions_for_trailing(positions, config, mt5_module)
+
+
+def _get_open_positions_for_trailing(mt5_module):
+    """Get all open positions from MT5 for trailing stop processing."""
+    positions = mt5_module.positions_get()  # type: ignore
+    if not positions:
+        return None
+    return positions
+
+
+def _get_trailing_config():
+    """Get trailing stop configuration with defaults."""
+    try:
+        from config.set_file_manager import get_set_manager
+        cfg = get_set_manager()
+
+        return {
+            'enabled': cfg.get("trailing.enabled", True),
+            'start_pips': cfg.get("trailing.start_pips", 10),
+            'distance_pips': cfg.get("trailing.distance_pips", 15),
+            'break_even_enabled': cfg.get("trailing.break_even_enabled", True),
+            'partial_tp_enabled': cfg.get("trailing.partial_tp_enabled", False),
+            'partial_tp_percent': cfg.get("trailing.partial_tp_percent", 50.0),
+            'partial_tp_at_r': cfg.get("trailing.partial_tp_at_r", 1.0),
+            'use_atr': cfg.get("trailing.use_atr", True),
+            'start_atr_mult': cfg.get("trailing.start_atr_mult", 1.0),
+            'distance_atr_mult': cfg.get("trailing.distance_atr_mult", 1.5)
+        }
+    except Exception as e:
+        # Use default values if configuration cannot be loaded
+        logging.debug(f"Using default trailing stop settings: {e}")
+        return {
+            'enabled': True,
+            'start_pips': 10,
+            'distance_pips': 15,
+            'break_even_enabled': True,
+            'partial_tp_enabled': False,
+            'partial_tp_percent': 50.0,
+            'partial_tp_at_r': 1.0,
+            'use_atr': True,
+            'start_atr_mult': 1.0,
+            'distance_atr_mult': 1.5
+        }
+
+
+def _log_trailing_config(config):
+    """Log trailing stop configuration."""
     logging.debug(
-        f"Trailing stops update - Enabled: {trailing_enabled}, Start: {trailing_start_pips} pips, Distance: {trailing_distance_pips} pips, BE: {break_even_enabled}",
+        f"Trailing stops update - Enabled: {config['enabled']}, "
+        f"Start: {config['start_pips']} pips, "
+        f"Distance: {config['distance_pips']} pips, "
+        f"BE: {config['break_even_enabled']}",
     )
 
+
+def _process_positions_for_trailing(positions, config, mt5_module):
+    """Process each position for trailing stop updates."""
     for pos in positions:
         try:
-            symbol = pos.symbol
-            ticket = pos.ticket
-            price_open = pos.price_open
-            sl = pos.sl
-            order_type = pos.type
+            _process_single_position_trailing(pos, config, mt5_module)
+        except Exception as e:
+            logging.exception(f"Error processing trailing stop for position {pos.ticket}: {e}")
 
-            # Get symbol information for point value
-            symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
-            if not symbol_info:
-                logging.warning(f"Could not get symbol info for {symbol}")
-                continue
 
-            point = symbol_info.point
-            # Adjust point value for NASDAQ
-            if "NASDAQ" in symbol.upper():
-                point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
-            digits = symbol_info.digits
+def _process_single_position_trailing(pos, config, mt5_module):
+    """Process trailing stop logic for a single position."""
+    symbol = pos.symbol
+    ticket = pos.ticket
+    price_open = pos.price_open
+    sl = pos.sl
+    order_type = pos.type
 
-            # Convert pips to price units
-            pip_value = point * 10
+    # Get symbol information
+    symbol_info = _get_symbol_info_for_trailing(symbol, mt5_module)
+    if not symbol_info:
+        return
 
-            # Determine trailing thresholds: ATR-based preferred
-            try:
-                from core.donchian_components.calculators.technical_indicators import (
-                    TechnicalIndicatorsCalculator as MarketDataService,
+    # Calculate point and pip values
+    point, pip_value, digits = _calculate_symbol_values(symbol, symbol_info)
+
+    # Calculate trailing thresholds
+    trailing_start_price, trailing_distance_price = _calculate_trailing_thresholds(
+        symbol, config, pip_value, mt5_module
+    )
+
+    # Calculate current profit
+    current_price, profit_price = _calculate_current_profit(
+        order_type, symbol, price_open, mt5_module
+    )
+
+    # Check if profit exceeds trailing start threshold
+    if profit_price >= trailing_start_price:
+        # Handle partial take profit if enabled
+        if config['partial_tp_enabled']:
+            _handle_partial_take_profit(
+                pos, symbol, ticket, price_open, sl, profit_price,
+                config, symbol_info, current_price, order_type, mt5_module
+            )
+
+        # Calculate and update stop loss
+        _calculate_and_update_stop_loss(
+            pos, order_type, current_price, trailing_distance_price,
+            price_open, sl, digits, config, mt5_module
+        )
+
+
+def _get_symbol_info_for_trailing(symbol, mt5_module):
+    """Get symbol information for trailing stop calculations."""
+    symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
+    if not symbol_info:
+        logging.warning(f"Could not get symbol info for {symbol}")
+        return None
+    return symbol_info
+
+
+def _calculate_symbol_values(symbol, symbol_info):
+    """Calculate point, pip value and digits for the symbol."""
+    point = symbol_info.point
+    # Adjust point value for NASDAQ
+    if "NASDAQ" in symbol.upper():
+        point = 1.0  # NASDAQ typically uses 1.0 point increments for indices
+    digits = symbol_info.digits
+    pip_value = point * 10
+
+    return point, pip_value, digits
+
+
+def _calculate_trailing_thresholds(symbol, config, pip_value, mt5_module):
+    """Calculate trailing start and distance thresholds."""
+    # Determine trailing thresholds: ATR-based preferred
+    atr = _get_atr_value(symbol, mt5_module)
+
+    if config['use_atr'] and atr and atr > 0:
+        trailing_start_price = float(config['start_atr_mult']) * float(atr)
+        trailing_distance_price = float(config['distance_atr_mult']) * float(atr)
+    else:
+        trailing_start_price = config['start_pips'] * pip_value
+        trailing_distance_price = config['distance_pips'] * pip_value
+
+    return trailing_start_price, trailing_distance_price
+
+
+def _get_atr_value(symbol, mt5_module):
+    """Get ATR value for the symbol."""
+    try:
+        from core.donchian_components.calculators.technical_indicators import (
+            TechnicalIndicatorsCalculator as MarketDataService,
+        )
+        market_data = MarketDataService(mt5_module)
+        return market_data.calculate_atr(symbol)
+    except Exception:
+        return None
+
+
+def _calculate_current_profit(order_type, symbol, price_open, mt5_module):
+    """Calculate current profit for the position."""
+    if order_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
+        current_price = mt5_module.symbol_info_tick(symbol).bid  # type: ignore
+        profit_price = current_price - price_open
+    else:  # SELL
+        current_price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
+        profit_price = price_open - current_price
+
+    return current_price, profit_price
+
+
+def _handle_partial_take_profit(pos, symbol, ticket, price_open, sl, profit_price,
+                              config, symbol_info, current_price, order_type, mt5_module):
+    """Handle partial take profit execution."""
+    # Calculate 1R profit level (entry + SL distance)
+    sl_distance = abs(price_open - sl) if sl > 0 else config['start_pips'] * symbol_info.point * 10
+    one_r_profit = sl_distance * config['partial_tp_at_r']
+
+    # If profit >= 1R and volume hasn't been reduced yet
+    if profit_price >= one_r_profit and pos.volume == normalize_volume(
+        symbol, pos.volume, mt5_module,
+    ):
+        _execute_partial_take_profit(pos, symbol, ticket, config, symbol_info,
+                                   current_price, order_type, mt5_module)
+
+
+def _execute_partial_take_profit(pos, symbol, ticket, config, symbol_info,
+                               current_price, order_type, mt5_module):
+    """Execute partial take profit order."""
+    partial_volume = round(pos.volume * (config['partial_tp_percent'] / 100.0), 2)
+    if partial_volume >= symbol_info.volume_min:
+        try:
+            close_request = {
+                "action": mt5_module.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": partial_volume,
+                "type": mt5_module.ORDER_TYPE_SELL
+                if order_type == mt5_module.POSITION_TYPE_BUY
+                else mt5_module.ORDER_TYPE_BUY,
+                "position": int(ticket),
+                "price": current_price,
+                "deviation": 30,
+                "magic": int(getattr(pos, "magic", 0)),
+                "comment": "partial_tp",
+                "type_time": mt5_module.ORDER_TIME_GTC,
+                "type_filling": mt5_module.ORDER_FILLING_FOK,
+            }
+            result = mt5_module.order_send(close_request)
+            if (
+                result
+                and getattr(result, "retcode", None)
+                == mt5_module.TRADE_RETCODE_DONE
+            ):
+                logging.info(
+                    f"Partial TP ({config['partial_tp_percent']}%) executed for position {ticket} at 1R profit",
                 )
-
-                market_data = MarketDataService(mt5_module)
-                atr = market_data.calculate_atr(symbol)
-            except Exception:
-                atr = None
-
-            if use_atr and atr and atr > 0:
-                trailing_start_price = float(start_atr_mult) * float(atr)
-                trailing_distance_price = float(distance_atr_mult) * float(atr)
-            else:
-                trailing_start_price = trailing_start_pips * pip_value
-                trailing_distance_price = trailing_distance_pips * pip_value
-
-            # Calculate current profit in price units
-            if order_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
-                current_price = mt5_module.symbol_info_tick(symbol).bid  # type: ignore
-                profit_price = current_price - price_open
-            else:  # SELL
-                current_price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
-                profit_price = price_open - current_price
-
-            # Check if profit exceeds trailing start threshold
-            if profit_price >= trailing_start_price:
-                # Check for partial TP if enabled and not yet executed
-                if partial_tp_enabled:
-                    # Calculate 1R profit level (entry + SL distance)
-                    sl_distance = (
-                        abs(price_open - sl) if sl > 0 else trailing_start_price
-                    )
-                    one_r_profit = sl_distance * partial_tp_at_r
-
-                    # If profit >= 1R and volume hasn't been reduced yet
-                    if profit_price >= one_r_profit and pos.volume == normalize_volume(
-                        symbol, pos.volume, mt5_module,
-                    ):
-                        # Close partial position
-                        partial_volume = round(
-                            pos.volume * (partial_tp_percent / 100.0), 2,
-                        )
-                        if partial_volume >= symbol_info.volume_min:
-                            try:
-                                close_request = {
-                                    "action": mt5_module.TRADE_ACTION_DEAL,
-                                    "symbol": symbol,
-                                    "volume": partial_volume,
-                                    "type": mt5_module.ORDER_TYPE_SELL
-                                    if order_type == mt5_module.POSITION_TYPE_BUY
-                                    else mt5_module.ORDER_TYPE_BUY,
-                                    "position": int(ticket),
-                                    "price": current_price,
-                                    "deviation": 30,
-                                    "magic": int(getattr(pos, "magic", 0)),
-                                    "comment": "partial_tp",
-                                    "type_time": mt5_module.ORDER_TIME_GTC,
-                                    "type_filling": mt5_module.ORDER_FILLING_FOK,
-                                }
-                                result = mt5_module.order_send(close_request)
-                                if (
-                                    result
-                                    and getattr(result, "retcode", None)
-                                    == mt5_module.TRADE_RETCODE_DONE
-                                ):
-                                    logging.info(
-                                        f"Partial TP ({partial_tp_percent}%) executed for position {ticket} at 1R profit",
-                                    )
-                            except Exception as e:
-                                logging.exception(
-                                    f"Error executing partial TP for position {ticket}: {e!s}",
-                                )
-
-                # Calculate new stop loss level based on trailing distance
-                if order_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
-                    new_sl = current_price - trailing_distance_price
-                    # For break-even, ensure SL is at least at entry price
-                    if break_even_enabled and new_sl < price_open:
-                        new_sl = price_open
-                    # CRITICAL: Never allow SL to move backwards (always lock in gains)
-                    if sl > 0 and new_sl < sl:
-                        new_sl = sl  # Keep current SL if calculated one would be worse
-                else:  # SELL
-                    new_sl = current_price + trailing_distance_price
-                    # For break-even, ensure SL is at least at entry price
-                    if break_even_enabled and new_sl > price_open:
-                        new_sl = price_open
-                    # CRITICAL: Never allow SL to move backwards (always lock in gains)
-                    if sl > 0 and new_sl > sl:
-                        new_sl = sl  # Keep current SL if calculated one would be worse
-
-                # Only update if new SL is better than current SL
-                rounded_new_sl = round(new_sl, digits)
-                rounded_sl = round(sl, digits) if sl > 0 else 0
-                should_update = False
-                if order_type == mt5_module.POSITION_TYPE_BUY and (
-                    sl == 0 or rounded_new_sl > rounded_sl
-                ):  # type: ignore
-                    should_update = True
-                elif order_type == mt5_module.POSITION_TYPE_SELL and (
-                    sl == 0 or rounded_new_sl < rounded_sl
-                ):  # type: ignore
-                    should_update = True
-
-                if should_update:
-                    # Debug log: show previous vs calculated SL
-                    logging.debug(
-                        f"Trailing calc for {symbol} ticket {ticket}: prev_sl={rounded_sl:.{digits}f}, calc_sl={rounded_new_sl:.{digits}f}, price={current_price:.{digits}f}, type={'BUY' if order_type == mt5_module.POSITION_TYPE_BUY else 'SELL'}",
-                    )
-                    # Prepare modification request
-                    request = {
-                        "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
-                        "symbol": symbol,
-                        "position": int(ticket),
-                        "sl": rounded_new_sl,
-                        "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
-                        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
-                    }
-
-                    # Send modification request
-                    try:
-                        result = mt5_module.order_send(request)  # type: ignore
-                        if (
-                            result
-                            and getattr(result, "retcode", None)
-                            == mt5_module.TRADE_RETCODE_DONE
-                        ):  # type: ignore
-                            logging.info(
-                                f"Trailing stop updated for position {ticket}: SL moved to {rounded_new_sl:.{digits}f}",
-                            )
-                        else:
-                            retcode = (
-                                getattr(result, "retcode", "N/A") if result else "N/A"
-                            )
-                            comment = (
-                                getattr(result, "comment", "N/A") if result else "N/A"
-                            )
-                            logging.warning(
-                                f"Failed to update trailing stop for position {ticket}: retcode={retcode}, comment={comment}",
-                            )
-                    except Exception as e:
-                        logging.exception(
-                            f"Exception updating trailing stop for position {ticket}: {e!s}",
-                        )
-            else:
-                logging.debug(
-                    f"Position {ticket} profit ({profit_price / point:.1f} pips) below trailing start threshold ({trailing_start_pips} pips)",
-                )
-
         except Exception as e:
             logging.exception(
-                f"Error processing position {pos.ticket if hasattr(pos, 'ticket') else 'unknown'}: {e!s}",
+                f"Error executing partial TP for position {ticket}: {e!s}",
             )
-            continue
+
+
+def _calculate_and_update_stop_loss(pos, order_type, current_price, trailing_distance_price,
+                                  price_open, sl, digits, config, mt5_module):
+    """Calculate new stop loss and update if better than current."""
+    ticket = pos.ticket
+    symbol = pos.symbol
+
+    # Calculate new stop loss level based on trailing distance
+    if order_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
+        new_sl = current_price - trailing_distance_price
+        # For break-even, ensure SL is at least at entry price
+        if config['break_even_enabled'] and new_sl < price_open:
+            new_sl = price_open
+        # CRITICAL: Never allow SL to move backwards (always lock in gains)
+        if sl > 0 and new_sl < sl:
+            new_sl = sl  # Keep current SL if calculated one would be worse
+    else:  # SELL
+        new_sl = current_price + trailing_distance_price
+        # For break-even, ensure SL is at least at entry price
+        if config['break_even_enabled'] and new_sl > price_open:
+            new_sl = price_open
+        # CRITICAL: Never allow SL to move backwards (always lock in gains)
+        if sl > 0 and new_sl > sl:
+            new_sl = sl  # Keep current SL if calculated one would be worse
+
+    # Only update if new SL is better than current SL
+    rounded_new_sl = round(new_sl, digits)
+    rounded_sl = round(sl, digits) if sl > 0 else 0
+    should_update = _should_update_stop_loss(order_type, sl, rounded_new_sl, rounded_sl)
+
+    if should_update:
+        _update_position_stop_loss(ticket, symbol, rounded_new_sl, mt5_module)
+
+
+def _should_update_stop_loss(order_type, sl, rounded_new_sl, rounded_sl):
+    """Determine if stop loss should be updated."""
+    if order_type == mt5_module.POSITION_TYPE_BUY and (
+        sl == 0 or rounded_new_sl > rounded_sl
+    ):  # type: ignore
+        return True
+    elif order_type == mt5_module.POSITION_TYPE_SELL and (
+        sl == 0 or rounded_new_sl < rounded_sl
+    ):  # type: ignore
+        return True
+    return False
+
+
+def _update_position_stop_loss(ticket, symbol, new_sl, mt5_module):
+    """Update position stop loss."""
+    # Debug log: show previous vs calculated SL
+    logging.debug(
+        f"Updating SL for {symbol} ticket {ticket}: new_sl={new_sl:.5f}"
+    )
+    # Prepare modification request
+    request = {
+        "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+        "symbol": symbol,
+        "position": int(ticket),
+        "sl": float(new_sl),
+        "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
+        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
+    }
+
+    try:
+        result = mt5_module.order_send(request)  # type: ignore
+        if (
+            result
+            and getattr(result, "retcode", None) == mt5_module.TRADE_RETCODE_DONE
+        ):  # type: ignore
+            logging.info(f"Trailing stop updated for position {ticket}")
+        else:
+            retcode = getattr(result, "retcode", "N/A") if result else "N/A"
+            comment = getattr(result, "comment", "N/A") if result else "N/A"
+            logging.warning(
+                f"Failed to update trailing stop for position {ticket}: "
+                f"retcode={retcode}, comment={comment}",
+            )
+    except Exception as e:
+        logging.exception(f"Exception updating trailing stop for position {ticket}: {e}")
 
 
 # Global variable to track previous positions for trade closure detection

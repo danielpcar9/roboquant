@@ -42,21 +42,21 @@ class DonchianStrategy:
     This class orchestrates the strategy execution by delegating to specialized services.
     """
 
-    def __init__(self):
-        # Initialize core components
-        self.mt5_gateway = MT5Gateway()
-        self.market_data = TechnicalIndicatorsCalculator()
-        self.risk_validator = RiskValidator(self.market_data)
-        self.market_validator = MarketValidator(self.mt5_gateway, self.market_data)
-        self.position_manager = PositionManager(self.market_data, self.risk_validator)
-        self.trade_tracker = TradeTracker()
-        self.quant_integration = QuantitativeIntegration()
+    def __init__(self) -> None:
+        # Initialize core components with type hints
+        self.mt5_gateway: MT5Gateway = MT5Gateway()
+        self.market_data: TechnicalIndicatorsCalculator = TechnicalIndicatorsCalculator()
+        self.risk_validator: RiskValidator = RiskValidator(self.market_data)
+        self.market_validator: MarketValidator = MarketValidator(self.mt5_gateway, self.market_data)
+        self.position_manager: PositionManager = PositionManager(self.market_data, self.risk_validator)
+        self.trade_tracker: TradeTracker = TradeTracker()
+        self.quant_integration: QuantitativeIntegration = QuantitativeIntegration()
 
         # Load configuration directly in __init__
-        self.symbol = config_manager.get("SYMBOL", "XAUUSD")
-        self.timeframe = config_manager.get("TIMEFRAME", "H1")
-        self.period = config_manager.get("PERIOD", 50)
-        self.lookback = config_manager.get("LOOKBACK", 10)
+        self.symbol: str = config_manager.get("SYMBOL", "XAUUSD")
+        self.timeframe: str = config_manager.get("TIMEFRAME", "H1")
+        self.period: int = config_manager.get("PERIOD", 50)
+        self.lookback: int = config_manager.get("LOOKBACK", 10)
 
         # Get risk percent from set file manager first, fallback to config_manager
         try:
@@ -65,16 +65,16 @@ class DonchianStrategy:
             # Load default configuration if no env var is set
             set_file = os.getenv("ROBOQUANT_SET_FILE", "default.json")
             cfg.load_set_file(set_file)
-            self.risk_percent = cfg.get("risk_management.risk_per_trade_pct", 2.0)
+            self.risk_percent: float = cfg.get("risk_management.risk_per_trade_pct", 2.0)
         except Exception as e:
             logging.warning(f"Failed to load risk percent from set file, using config_manager: {e}")
             self.risk_percent = config_manager.get("RISK_PERCENT", 2.0)
 
-        self.use_risk_management = config_manager.get("USE_RISK_MANAGEMENT", True)
-        self.max_spread_points = config_manager.get("MAX_SPREAD_POINTS", 20)
-        self.trading_hour_start = config_manager.get("TRADING_HOUR_START", 0)
-        self.trading_hour_end = config_manager.get("TRADING_HOUR_END", 23)
-        self.magic_number = config_manager.get("MAGIC_NUMBER", 123456)
+        self.use_risk_management: bool = config_manager.get("USE_RISK_MANAGEMENT", True)
+        self.max_spread_points: int = config_manager.get("MAX_SPREAD_POINTS", 20)
+        self.trading_hour_start: int = config_manager.get("TRADING_HOUR_START", 0)
+        self.trading_hour_end: int = config_manager.get("TRADING_HOUR_END", 23)
+        self.magic_number: int = config_manager.get("MAGIC_NUMBER", 123456)
 
         # Global variables for quantitative integration
         global QUANT_OPTIMAL_LOTS, CURRENT_ENTRY_SCORE, TRADE_ENTRY_SCORES
@@ -84,7 +84,7 @@ class DonchianStrategy:
 
         logging.info("Donchian Strategy initialized with modular architecture")
 
-    def run_strategy(self, symbol="XAUUSD"):
+    def run_strategy(self, symbol: str = "XAUUSD") -> None:
         """Main strategy function - coordinates all components"""
         logging.info(f"🚀 Running modular strategy for symbol: {symbol}")
 
@@ -92,6 +92,8 @@ class DonchianStrategy:
         self._log_market_conditions(symbol)
 
         # Phase 1: Validate market conditions
+        is_valid: bool
+        reason: str
         is_valid, reason = self.position_manager.validate_market_conditions(symbol)
         if not is_valid:
             logging.info(f"Market validation failed: {reason}")
@@ -102,14 +104,18 @@ class DonchianStrategy:
             return
 
         # Phase 3-4: Generate signal and calculate risk parameters (consolidated)
-        signal_and_risk = self._generate_signal_with_risk(symbol)
+        signal_and_risk: tuple[str, float, float, float] | None = self._generate_signal_with_risk(symbol)
         if not signal_and_risk:
             return
 
+        order_type: str
+        entry_price: float
+        sl_distance: float
+        tp_price: float
         order_type, entry_price, sl_distance, tp_price = signal_and_risk
 
         # Phase 5: Calculate position size
-        lots = self._calculate_position_size(symbol, sl_distance)
+        lots: float | None = self._calculate_position_size(symbol, sl_distance)
         if lots is None or lots <= 0:
             return
 

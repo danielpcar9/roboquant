@@ -165,7 +165,7 @@ class MLStrategyValidator:
             confidence = float(np.max(probabilities))
 
             # Decision logic
-            should_trade = prediction != 0 and confidence > 0.35  # Only trade if confident
+            should_trade = prediction != 0 and confidence > 0.6  # Only trade if confident
 
             logging.info(f"ML Validation - Action: {predicted_action}, Confidence: {confidence:.3f}, Trade: {should_trade}")
 

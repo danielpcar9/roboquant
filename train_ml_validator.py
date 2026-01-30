@@ -8,7 +8,7 @@ from core.quant.validators.ml_validator import MLStrategyValidator
 
 def train_ml_validator(data_days: int = 60, symbol: str = "XAUUSD"):
     """Train the ML validator model
-    
+
     Args:
         data_days: Number of days of historical data to use for training
         symbol: Trading symbol to train on

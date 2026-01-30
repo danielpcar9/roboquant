@@ -25,7 +25,7 @@ class TestMarketValidator:
             MarketValidator,
         )
 
-        validator = MarketValidator(mt5_module=mock_mt5)
+        validator = MarketValidator(mt5_module=mock_mt5, market_data_service=Mock())
 
         assert validator.mt5 == mock_mt5
 

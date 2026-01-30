@@ -1,4 +1,4 @@
-"""ML Strategy Validator for Enhanced Trade Decision Making
+﻿"""ML Strategy Validator for Enhanced Trade Decision Making
 Uses machine learning to validate and enhance quantitative trading signals
 """
 import logging
@@ -165,8 +165,7 @@ class MLStrategyValidator:
             confidence = float(np.max(probabilities))
 
             # Decision logic
-            should_trade = prediction != 0 and confidence > 0.35  # Only trade if confident
-
+        should_trade = prediction != 0 and confidence > 0.35  # Only trade if confident
             logging.info(f"ML Validation - Action: {predicted_action}, Confidence: {confidence:.3f}, Trade: {should_trade}")
 
             return should_trade, confidence, predicted_action

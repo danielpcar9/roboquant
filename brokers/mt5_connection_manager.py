@@ -72,7 +72,7 @@ class MT5ConnectionManager:
             except ValueError as e:
                 error_msg = sanitize_error_message(str(e))
                 logger.error(f"Invalid login format: {login}. Error: {error_msg}")
-                raise MT5ConnectionError(f"Invalid credentials: {error_msg}")
+                raise MT5ConnectionError(f"Invalid credentials: {error_msg}") from e
         else:
             logger.info(
                 "No credentials provided, attempting to initialize without authentication",

@@ -22,13 +22,13 @@ def close_position_by_ticket(
 ) -> bool:
     """
     Close a position by ticket number.
-    
+
     Args:
         ticket: Position ticket number
         deviation: Price deviation in points
         retries: Number of retry attempts
         mt5_module: MT5 module instance
-        
+
     Returns:
         bool: True if successful, False otherwise
 
@@ -114,10 +114,10 @@ def close_position_by_ticket(
 def get_open_positions(mt5_module: Any = None) -> list:
     """
     Get all open positions.
-    
+
     Args:
         mt5_module: MT5 module instance
-        
+
     Returns:
         list: List of open positions
 
@@ -137,10 +137,10 @@ def get_open_positions(mt5_module: Any = None) -> list:
 def close_all_positions(mt5_module: Any = None) -> tuple[int, int]:
     """
     Close all open positions.
-    
+
     Args:
         mt5_module: MT5 module instance
-        
+
     Returns:
         tuple: (closed_count, error_count)
 
@@ -177,11 +177,11 @@ def close_all_positions(mt5_module: Any = None) -> tuple[int, int]:
 def get_position_pnl(ticket: int, mt5_module: Any = None) -> float:
     """
     Get P&L for a specific position.
-    
+
     Args:
         ticket: Position ticket number
         mt5_module: MT5 module instance
-        
+
     Returns:
         float: Position P&L
 
@@ -202,10 +202,10 @@ def get_position_pnl(ticket: int, mt5_module: Any = None) -> float:
 def get_total_exposure(mt5_module: Any = None) -> float:
     """
     Calculate total exposure across all positions.
-    
+
     Args:
         mt5_module: MT5 module instance
-        
+
     Returns:
         float: Total exposure in lots
 
@@ -229,11 +229,11 @@ def get_total_exposure(mt5_module: Any = None) -> float:
 def get_net_position_by_symbol(symbol: str, mt5_module: Any = None) -> float:
     """
     Get net position for a specific symbol.
-    
+
     Args:
         symbol: Trading symbol
         mt5_module: MT5 module instance
-        
+
     Returns:
         float: Net position volume (positive for long, negative for short)
 
