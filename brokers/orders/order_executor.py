@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-import MetaTrader5 as mt5  # type: ignore
+import MetaTrader5 as mt5
 
 from brokers.mt5_core import (
     mt5_performance_monitor as performance_monitor,
@@ -18,7 +18,7 @@ from services.error_handler import retry_with_exponential_backoff, safe_mt5_call
 def _build_base_order_request(symbol: str, volume: float, order_type: Any, price: float, deviation: int, magic: int, mt5_module: Any):
     """Build base order request dictionary."""
     return {
-        "action": mt5_module.TRADE_ACTION_DEAL,  # type: ignore
+        "action": mt5_module.TRADE_ACTION_DEAL,
         "symbol": symbol,
         "volume": volume,
         "type": order_type,
@@ -26,8 +26,8 @@ def _build_base_order_request(symbol: str, volume: float, order_type: Any, price
         "deviation": deviation,
         "magic": magic,
         "comment": "bot_order",
-        "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
-        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
+        "type_time": mt5_module.ORDER_TIME_GTC,
+        "type_filling": mt5_module.ORDER_FILLING_FOK,
     }
 
 
@@ -43,9 +43,9 @@ def _execute_order_with_retry_strategy(request: dict, symbol: str, side: str, pr
     """Execute order with retry strategy."""
     # Try different filling modes
     filling_modes_to_try = [
-        mt5_module.ORDER_FILLING_FOK,  # type: ignore
-        mt5_module.ORDER_FILLING_IOC,  # type: ignore
-        mt5_module.ORDER_FILLING_RETURN,  # type: ignore
+        mt5_module.ORDER_FILLING_FOK,
+        mt5_module.ORDER_FILLING_IOC,
+        mt5_module.ORDER_FILLING_RETURN,
     ]
 
     last_result = None
@@ -61,7 +61,7 @@ def _execute_order_with_retry_strategy(request: dict, symbol: str, side: str, pr
         request["type_filling"] = _filling_mode
 
         try:
-            result = mt5_module.order_send(request)  # type: ignore
+            result = mt5_module.order_send(request)
         except Exception:
             logging.exception(
                 "Exception en order_send (modo=%s, intento %d)",
@@ -71,7 +71,7 @@ def _execute_order_with_retry_strategy(request: dict, symbol: str, side: str, pr
             result = None
 
         if result is not None:
-            if result.retcode == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+            if result.retcode == mt5_module.TRADE_RETCODE_DONE:
                 logging.info(f"Orden ejecutada: {side} {symbol} @ {price}")
 
                 # If we have SL/TP to add, do it separately
@@ -149,15 +149,15 @@ def build_and_send_order(
 
     # Determine order type
     if side == "BUY":
-        order_type = mt5_module.ORDER_TYPE_BUY  # type: ignore
+        order_type = mt5_module.ORDER_TYPE_BUY
     elif side == "SELL":
-        order_type = mt5_module.ORDER_TYPE_SELL  # type: ignore
+        order_type = mt5_module.ORDER_TYPE_SELL
     else:
         logging.error(f"Invalid side: {side}")
         return None
 
     # Get current price
-    tick = mt5_module.symbol_info_tick(symbol)  # type: ignore
+    tick = mt5_module.symbol_info_tick(symbol)
     if tick is None:
         logging.error(f"Failed to get tick data for {symbol}")
         return None
@@ -202,13 +202,13 @@ def place_pending_order(
 
     # Determine MT5 order type based on string
     if order_type == "BUY_LIMIT":
-        mt5_order_type = mt5_module.ORDER_TYPE_BUY_LIMIT  # type: ignore
+        mt5_order_type = mt5_module.ORDER_TYPE_BUY_LIMIT
     elif order_type == "SELL_LIMIT":
-        mt5_order_type = mt5_module.ORDER_TYPE_SELL_LIMIT  # type: ignore
+        mt5_order_type = mt5_module.ORDER_TYPE_SELL_LIMIT
     elif order_type == "BUY_STOP":
-        mt5_order_type = mt5_module.ORDER_TYPE_BUY_STOP  # type: ignore
+        mt5_order_type = mt5_module.ORDER_TYPE_BUY_STOP
     elif order_type == "SELL_STOP":
-        mt5_order_type = mt5_module.ORDER_TYPE_SELL_STOP  # type: ignore
+        mt5_order_type = mt5_module.ORDER_TYPE_SELL_STOP
     else:
         logging.error(f"Invalid order type: {order_type}")
         return None
@@ -218,7 +218,7 @@ def place_pending_order(
 
     # Build request
     request = {
-        "action": mt5_module.TRADE_ACTION_PENDING,  # type: ignore
+        "action": mt5_module.TRADE_ACTION_PENDING,
         "symbol": symbol,
         "volume": volume,
         "type": mt5_order_type,
@@ -226,9 +226,9 @@ def place_pending_order(
         "deviation": deviation,
         "magic": magic,
         "comment": "bot_pending_order",
-        "type_time": mt5_module.ORDER_TIME_SPECIFIED,  # type: ignore
+        "type_time": mt5_module.ORDER_TIME_SPECIFIED,
         "expiration": expiration,
-        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
+        "type_filling": mt5_module.ORDER_FILLING_FOK,
     }
 
     # Add stop levels if provided
@@ -238,8 +238,8 @@ def place_pending_order(
         request["tp"] = tp
 
     # Send order
-    result = mt5_module.order_send(request)  # type: ignore
-    if result is not None and result.retcode == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+    result = mt5_module.order_send(request)
+    if result is not None and result.retcode == mt5_module.TRADE_RETCODE_DONE:
         logging.info(f"Pending order placed: {order_type} {symbol} @ {price}")
         return result
     else:
@@ -255,7 +255,7 @@ def cancel_expired_pending_orders(magic: int = 123456, mt5_module: Any = None) -
         mt5_module = mt5
 
     # Get all pending orders
-    pending_orders = mt5_module.orders_get()  # type: ignore
+    pending_orders = mt5_module.orders_get()
     if pending_orders is None:
         return 0
 
@@ -273,15 +273,15 @@ def cancel_expired_pending_orders(magic: int = 123456, mt5_module: Any = None) -
             if current_time > expiration_time:
                 # Cancel the order
                 cancel_request = {
-                    "action": mt5_module.TRADE_ACTION_REMOVE,  # type: ignore
+                    "action": mt5_module.TRADE_ACTION_REMOVE,
                     "symbol": order.symbol,
                     "ticket": order.ticket,
                     "type": order.type,
                     "position": order.ticket,
                 }
 
-                result = mt5_module.order_send(cancel_request)  # type: ignore
-                if result is not None and result.retcode == mt5_module.TRADE_RETCODE_DONE:  # type: ignore
+                result = mt5_module.order_send(cancel_request)
+                if result is not None and result.retcode == mt5_module.TRADE_RETCODE_DONE:
                     logging.info(f"Cancelled expired pending order: {order.ticket}")
                     cancelled_count += 1
                 else:

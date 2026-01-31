@@ -6,7 +6,7 @@ Handles position closing and management operations
 import logging
 from typing import Any
 
-import MetaTrader5 as mt5  # type: ignore
+import MetaTrader5 as mt5
 
 from brokers.mt5_core import (
     mt5_performance_monitor as performance_monitor,
@@ -37,7 +37,7 @@ def close_position_by_ticket(
         mt5_module = mt5
 
     # Get position info
-    positions = mt5_module.positions_get(ticket=ticket)  # type: ignore
+    positions = mt5_module.positions_get(ticket=ticket)
     if not positions:
         logging.error(f"Position {ticket} not found")
         return False
@@ -45,29 +45,29 @@ def close_position_by_ticket(
     pos = positions[0]
 
     # Determine close type
-    if pos.type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
-        close_type = mt5_module.ORDER_TYPE_SELL  # type: ignore
-    elif pos.type == mt5_module.POSITION_TYPE_SELL:  # type: ignore
-        close_type = mt5_module.ORDER_TYPE_BUY  # type: ignore
+    if pos.type == mt5_module.POSITION_TYPE_BUY:
+        close_type = mt5_module.ORDER_TYPE_SELL
+    elif pos.type == mt5_module.POSITION_TYPE_SELL:
+        close_type = mt5_module.ORDER_TYPE_BUY
     else:
         logging.error(f"Unknown position type for ticket {ticket}")
         return False
 
     # Get current price
-    tick = mt5_module.symbol_info_tick(pos.symbol)  # type: ignore
+    tick = mt5_module.symbol_info_tick(pos.symbol)
     if tick is None:
         logging.error(f"Failed to get tick data for {pos.symbol}")
         return False
 
-    price = tick.bid if pos.type == mt5_module.POSITION_TYPE_BUY else tick.ask  # type: ignore
+    price = tick.bid if pos.type == mt5_module.POSITION_TYPE_BUY else tick.ask
 
     # This eliminates unnecessary retries and speeds up order execution
-    filling_modes_to_try = [mt5_module.ORDER_FILLING_FOK]  # type: ignore
+    filling_modes_to_try = [mt5_module.ORDER_FILLING_FOK]
 
     # Try each filling mode
     for _filling_mode in filling_modes_to_try:
         request = {
-            "action": mt5_module.TRADE_ACTION_DEAL,  # type: ignore
+            "action": mt5_module.TRADE_ACTION_DEAL,
             "symbol": pos.symbol,
             "volume": pos.volume,
             "type": close_type,
@@ -76,17 +76,17 @@ def close_position_by_ticket(
             "deviation": deviation,
             "magic": int(getattr(pos, "magic", 0)),
             "comment": "close_by_bot",
-            "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
-            "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
+            "type_time": mt5_module.ORDER_TIME_GTC,
+            "type_filling": mt5_module.ORDER_FILLING_FOK,
         }
 
         try:
-            result = mt5_module.order_send(request)  # type: ignore
+            result = mt5_module.order_send(request)
 
             if (
                 result
                 and getattr(result, "retcode", None) == mt5_module.TRADE_RETCODE_DONE
-            ):  # type: ignore
+            ):
                 logging.info("Posicion %s cerrada exitosamente", ticket)
                 return True
             retcode = getattr(result, "retcode", "N/A") if result else "N/A"
@@ -189,7 +189,7 @@ def get_position_pnl(ticket: int, mt5_module: Any = None) -> float:
     if mt5_module is None:
         mt5_module = mt5
 
-    positions = mt5_module.positions_get(ticket=ticket)  # type: ignore
+    positions = mt5_module.positions_get(ticket=ticket)
     if not positions:
         return 0.0
 
@@ -251,9 +251,9 @@ def get_net_position_by_symbol(symbol: str, mt5_module: Any = None) -> float:
             volume = float(getattr(pos, "volume", 0.0))
             pos_type = getattr(pos, "type", None)
 
-            if pos_type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
+            if pos_type == mt5_module.POSITION_TYPE_BUY:
                 net_position += volume
-            elif pos_type == mt5_module.POSITION_TYPE_SELL:  # type: ignore
+            elif pos_type == mt5_module.POSITION_TYPE_SELL:
                 net_position -= volume
 
     return net_position

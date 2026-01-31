@@ -6,7 +6,7 @@ Handles trailing stops and stop loss/take profit updates
 import logging
 from typing import Any
 
-import MetaTrader5 as mt5  # type: ignore
+import MetaTrader5 as mt5
 
 from brokers.mt5_core import (
     mt5_performance_monitor as performance_monitor,
@@ -36,15 +36,15 @@ def update_trailing_stops(mt5_module: Any = None) -> None:
     _process_positions_for_trailing_stops(positions, mt5_module)
 
 
-def _get_open_positions(mt5_module):
+def _get_open_positions(mt5_module: Any):
     """Get all open positions from MT5."""
-    positions = mt5_module.positions_get()  # type: ignore
+    positions = mt5_module.positions_get()
     if not positions:
         return None
     return positions
 
 
-def _process_positions_for_trailing_stops(positions, mt5_module):
+def _process_positions_for_trailing_stops(positions, mt5_module: Any):
     """Process each position for trailing stop updates."""
     for pos in positions:
         try:
@@ -53,7 +53,7 @@ def _process_positions_for_trailing_stops(positions, mt5_module):
             logging.exception(f"Error updating trailing stop for position {pos.ticket}: {e}")
 
 
-def _update_single_position_trailing_stop(pos, mt5_module):
+def _update_single_position_trailing_stop(pos, mt5_module: Any):
     """Update trailing stop for a single position."""
     # Get symbol information
     symbol_info = _get_symbol_info_for_position_monitoring(pos.symbol, mt5_module)
@@ -72,15 +72,15 @@ def _update_single_position_trailing_stop(pos, mt5_module):
     _calculate_and_update_stop_loss(pos, current_price, trailing_distance, mt5_module)
 
 
-def _get_symbol_info_for_position_monitoring(symbol, mt5_module):
+def _get_symbol_info_for_position_monitoring(symbol, mt5_module: Any):
     """Get symbol information for a position (stop monitoring)."""
-    symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
+    symbol_info = mt5_module.symbol_info(symbol)
     if not symbol_info:
         return None
     return symbol_info
 
 
-def _calculate_point_value(symbol, symbol_info):
+def _calculate_point_value(symbol, symbol_info: Any):
     """Calculate point value for the symbol."""
     point = symbol_info.point
     # Adjust point value for NASDAQ
@@ -89,23 +89,23 @@ def _calculate_point_value(symbol, symbol_info):
     return point
 
 
-def _get_current_price(pos, mt5_module):
+def _get_current_price(pos, mt5_module: Any):
     """Get current market price for the position."""
     return (
-        mt5_module.symbol_info_tick(pos.symbol).bid  # type: ignore
-        if pos.type == mt5_module.POSITION_TYPE_BUY  # type: ignore
-        else mt5_module.symbol_info_tick(pos.symbol).ask  # type: ignore
+        mt5_module.symbol_info_tick(pos.symbol).bid
+        if pos.type == mt5_module.POSITION_TYPE_BUY
+        else mt5_module.symbol_info_tick(pos.symbol).ask
     )
 
 
-def _calculate_and_update_stop_loss(pos, current_price, trailing_distance, mt5_module):
+def _calculate_and_update_stop_loss(pos, current_price, trailing_distance, mt5_module: Any):
     """Calculate new stop loss and update if better than current."""
-    if pos.type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
+    if pos.type == mt5_module.POSITION_TYPE_BUY:
         new_sl = current_price - trailing_distance
         # Only update if new SL is better than current SL
         if pos.sl == 0 or new_sl > pos.sl:
             _modify_position_sl(pos.ticket, new_sl, mt5_module)
-    elif pos.type == mt5_module.POSITION_TYPE_SELL:  # type: ignore
+    elif pos.type == mt5_module.POSITION_TYPE_SELL:
         new_sl = current_price + trailing_distance
         # Only update if new SL is better than current SL
         if pos.sl == 0 or new_sl < pos.sl:
@@ -139,15 +139,15 @@ def monitor_and_update_stops(mt5_module: Any = None) -> None:
     _log_monitoring_results(updated_count, error_count)
 
 
-def _get_open_positions_for_monitoring(mt5_module):
+def _get_open_positions_for_monitoring(mt5_module: Any):
     """Get all open positions from MT5 for monitoring."""
-    positions = mt5_module.positions_get()  # type: ignore
+    positions = mt5_module.positions_get()
     if not positions:
         return None
     return positions
 
 
-def _process_positions_for_stop_updates(positions, mt5_module):
+def _process_positions_for_stop_updates(positions, mt5_module: Any):
     """Process each position for stop loss updates."""
     updated_count = 0
     error_count = 0
@@ -164,7 +164,7 @@ def _process_positions_for_stop_updates(positions, mt5_module):
     return updated_count, error_count
 
 
-def _process_single_position_stop_update(pos, mt5_module):
+def _process_single_position_stop_update(pos, mt5_module: Any):
     """Process stop update logic for a single position."""
     # Skip if no SL set initially
     if pos.sl == 0:
@@ -202,23 +202,23 @@ def _process_single_position_stop_update(pos, mt5_module):
         return 0, 0
 
 
-def _get_symbol_info_for_position(symbol, mt5_module):
+def _get_symbol_info_for_position(symbol, mt5_module: Any):
     """Get symbol information for a position."""
-    symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
+    symbol_info = mt5_module.symbol_info(symbol)
     if not symbol_info:
         return None
     return symbol_info
 
 
-def _get_tick_data_for_position(symbol, mt5_module):
+def _get_tick_data_for_position(symbol, mt5_module: Any):
     """Get tick data for a position."""
-    tick = mt5_module.symbol_info_tick(symbol)  # type: ignore
+    tick = mt5_module.symbol_info_tick(symbol)
     if not tick:
         return None
     return tick
 
 
-def _calculate_point_value_monitoring(symbol, symbol_info):
+def _calculate_point_value_monitoring(symbol, symbol_info: Any):
     """Calculate point value for the symbol (stop monitoring)."""
     point = symbol_info.point
     # Adjust point value for NASDAQ
@@ -227,12 +227,12 @@ def _calculate_point_value_monitoring(symbol, symbol_info):
     return point
 
 
-def _get_current_price_by_position_type(pos, tick, mt5_module):
+def _get_current_price_by_position_type(pos, tick, mt5_module: Any):
     """Get current price based on position type."""
-    return tick.bid if pos.type == mt5_module.POSITION_TYPE_BUY else tick.ask  # type: ignore
+    return tick.bid if pos.type == mt5_module.POSITION_TYPE_BUY else tick.ask
 
 
-def _should_update_stop_loss(pos, current_price, point, mt5_module):
+def _should_update_stop_loss(pos, current_price, point, mt5_module: Any):
     """Determine if stop loss should be updated and calculate new value."""
     # Calculate required move for trailing stop update
     min_move = 20 * point  # Minimum 20 points move
@@ -240,7 +240,7 @@ def _should_update_stop_loss(pos, current_price, point, mt5_module):
     should_update = False
     new_sl = pos.sl
 
-    if pos.type == mt5_module.POSITION_TYPE_BUY:  # type: ignore
+    if pos.type == mt5_module.POSITION_TYPE_BUY:
         # For long positions, update SL if price moved up significantly
         should_update, new_sl = _evaluate_buy_position_stop_update(
             pos, current_price, min_move, point
@@ -254,7 +254,7 @@ def _should_update_stop_loss(pos, current_price, point, mt5_module):
     return should_update, new_sl
 
 
-def _evaluate_buy_position_stop_update(pos, current_price, min_move, point):
+def _evaluate_buy_position_stop_update(pos: Any, current_price: float, min_move: float, point: float):
     """Evaluate stop update for BUY positions."""
     should_update = False
     new_sl = pos.sl
@@ -269,7 +269,7 @@ def _evaluate_buy_position_stop_update(pos, current_price, min_move, point):
     return should_update, new_sl
 
 
-def _evaluate_sell_position_stop_update(pos, current_price, min_move, point):
+def _evaluate_sell_position_stop_update(pos: Any, current_price: float, min_move: float, point: float):
     """Evaluate stop update for SELL positions."""
     should_update = False
     new_sl = pos.sl
@@ -284,7 +284,7 @@ def _evaluate_sell_position_stop_update(pos, current_price, min_move, point):
     return should_update, new_sl
 
 
-def _log_monitoring_results(updated_count, error_count):
+def _log_monitoring_results(updated_count: int, error_count: int):
     """Log monitoring completion results."""
     if updated_count > 0 or error_count > 0:
         logging.info(
@@ -311,19 +311,19 @@ def _modify_position_sl(
         mt5_module = mt5
 
     request = {
-        "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+        "action": mt5_module.TRADE_ACTION_SLTP,
         "position": int(ticket),
         "sl": float(new_sl),
-        "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
-        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
+        "type_time": mt5_module.ORDER_TIME_GTC,
+        "type_filling": mt5_module.ORDER_FILLING_FOK,
     }
 
     try:
-        result = mt5_module.order_send(request)  # type: ignore
+        result = mt5_module.order_send(request)
         if (
             result
             and getattr(result, "retcode", None) == mt5_module.TRADE_RETCODE_DONE
-        ):  # type: ignore
+        ):
             return True
         retcode = getattr(result, "retcode", "N/A") if result else "N/A"
         comment = getattr(result, "comment", "N/A") if result else "N/A"
@@ -347,13 +347,13 @@ def _create_modification_request(
 ) -> dict:
     """Create the modification request for adding SL/TP to position."""
     modification_request = {
-        "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+        "action": mt5_module.TRADE_ACTION_SLTP,
         "symbol": symbol,
         "position": int(ticket),
         "sl": float(sl_price) if sl_price is not None else 0,
         "tp": float(tp_price) if tp_price is not None else 0,
-        "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
-        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
+        "type_time": mt5_module.ORDER_TIME_GTC,
+        "type_filling": mt5_module.ORDER_FILLING_FOK,
     }
 
     # Remove zero values
@@ -409,12 +409,12 @@ def _process_add_sl_tp_attempt(
 ) -> tuple[bool, float | None, float | None]:
     """Process a single attempt to add SL/TP to position"""
     try:
-        result = mt5_module.order_send(modification_request)  # type: ignore
+        result = mt5_module.order_send(modification_request)
         if (
             result
             and getattr(result, "retcode", None)
             == mt5_module.TRADE_RETCODE_DONE
-        ):  # type: ignore
+        ):
             logging.info(
                 f"SL/TP added successfully to position {ticket}",
             )
@@ -483,7 +483,7 @@ def add_sl_tp_to_position(
 
     try:
         # Try each filling mode with retries
-        filling_modes_to_try = [mt5_module.ORDER_FILLING_FOK]  # type: ignore
+        filling_modes_to_try = [mt5_module.ORDER_FILLING_FOK]
         max_retries = 1
 
         for _filling_mode in filling_modes_to_try:

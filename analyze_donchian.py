@@ -125,6 +125,7 @@ def print_thematic_sections(sections_found):
 
 
 def analyze_donchian_structure():
+    """Analyze donchian_strategy.py structure."""
     print("🔍 ANALIZANDO ESTRUCTURA DE donchian_strategy.py\n")
 
     try:

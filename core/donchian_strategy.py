@@ -87,7 +87,7 @@ class DonchianStrategy:
 
     def run_strategy(self, symbol: str = "XAUUSD") -> None:
         """Main strategy function - coordinates all components"""
-        logging.info(f"🚀 Running modular strategy for symbol: {symbol}")
+        logging.info("🚀 Running modular strategy for symbol: %s", symbol)
 
         # Log current market conditions
         self._log_market_conditions(symbol)
@@ -224,7 +224,10 @@ class DonchianStrategy:
         """Apply quantitative analysis filter"""
         quant_result = self.quant_integration.apply_quantitative_analysis(symbol)
         if not quant_result["should_trade"]:
-            logging.info(f"Quantitative analysis rejected trade: {quant_result['reason']}")
+            logging.info(
+                "Quantitative analysis rejected trade: %s",
+                quant_result["reason"],
+            )
             return False
 
         entry_score = quant_result["entry_score"]

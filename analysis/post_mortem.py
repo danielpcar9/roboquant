@@ -188,7 +188,7 @@ def analyze_recent_trades(n: int = 100) -> dict[str, Any]:
     hourly_performance = (
         recent.groupby("hour_of_day")["pnl"].mean()
         if "hour_of_day" in recent.columns
-        else pd.Series()
+        else pd.Series(dtype=float)
     )
     best_hour = hourly_performance.idxmax() if len(hourly_performance) > 0 else None
     worst_hour = hourly_performance.idxmin() if len(hourly_performance) > 0 else None

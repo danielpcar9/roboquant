@@ -33,9 +33,9 @@ def initialize_mt5():
             logging.info(
                 f"Initializing MT5 with credentials for account {login_int} on server {server}",
             )
-            if not mt5.initialize(login=login_int, password=password, server=server):  # type: ignore
+            if not mt5.initialize(login=login_int, password=password, server=server):
                 logging.error("Failed to initialize MT5 with credentials")
-                error = mt5.last_error()  # type: ignore
+                error = mt5.last_error()
                 logging.error(f"MT5 initialization error: {error}")
                 return False
         except ValueError as e:
@@ -46,14 +46,41 @@ def initialize_mt5():
     else:
         # Initialize without credentials
         logging.info("Initializing MT5 without credentials")
-        if not mt5.initialize():  # type: ignore
+        if not mt5.initialize():
             logging.error("Failed to initialize MT5")
-            error = mt5.last_error()  # type: ignore
+            error = mt5.last_error()
             logging.error(f"MT5 initialization error: {error}")
             return False
 
     logging.info("MT5 initialized successfully")
     return True
+
+
+def initialize_mt5_connection(login: str, password: str, server: str, mt5_module=None):
+    """
+    Initialize MT5 connection with provided credentials.
+    
+    Args:
+        login: MT5 account login
+        password: MT5 account password
+        server: MT5 server name
+        mt5_module: MT5 module instance (for testing)
+    """
+    if mt5_module is None:
+        mt5_module = mt5
+
+    # Convert login to integer if it's a string
+    try:
+        login_int = int(login)
+    except ValueError:
+        raise ValueError(f"Invalid login format: {login}")
+
+    # Attempt connection
+    if not mt5_module.initialize(
+        login=login_int, password=password, server=server,
+    ):
+        error = mt5_module.last_error()
+        raise MT5InitializationError(f"MT5 initialization failed: {error}")
 
 
 def timeframe_to_string(timeframe):
@@ -198,7 +225,7 @@ def validate_and_adjust_stops(symbol, entry_price, sl, tp, side, mt5_module=None
 
 def _get_symbol_info_for_validation(symbol, mt5_module):
     """Get symbol information for stop validation."""
-    symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
+    symbol_info = mt5_module.symbol_info(symbol)
     if not symbol_info:
         logging.warning(
             f"Could not get symbol info for {symbol}, returning original SL/TP",
@@ -270,7 +297,7 @@ def _calculate_buy_stop_loss(sl, entry_price, symbol, min_stop_distance, point, 
         # Ensure SL is at least min_stop_distance below entry
         min_sl = entry_price - (min_stop_distance * point)
         # Make sure SL is not too close to current price
-        current_price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
+        current_price = mt5_module.symbol_info_tick(symbol).ask
         safe_sl = min_sl
         if current_price - (min_stop_distance * point) < safe_sl:
             safe_sl = current_price - (min_stop_distance * point)
@@ -285,7 +312,7 @@ def _calculate_buy_take_profit(tp, entry_price, symbol, min_stop_distance, point
         # Ensure TP is at least min_stop_distance above entry
         min_tp = entry_price + (min_stop_distance * point)
         # Make sure TP is not too close to current price
-        current_price = mt5_module.symbol_info_tick(symbol).ask  # type: ignore
+        current_price = mt5_module.symbol_info_tick(symbol).ask
         safe_tp = min_tp
         if current_price + (min_stop_distance * point) > safe_tp:
             safe_tp = current_price + (min_stop_distance * point)
@@ -300,7 +327,7 @@ def _calculate_sell_stop_loss(sl, entry_price, symbol, min_stop_distance, point,
         # Ensure SL is at least min_stop_distance above entry
         min_sl = entry_price + (min_stop_distance * point)
         # Make sure SL is not too close to current price
-        current_price = mt5_module.symbol_info_tick(symbol).bid  # type: ignore
+        current_price = mt5_module.symbol_info_tick(symbol).bid
         safe_sl = min_sl
         if current_price + (min_stop_distance * point) > safe_sl:
             safe_sl = current_price + (min_stop_distance * point)
@@ -315,7 +342,7 @@ def _calculate_sell_take_profit(tp, entry_price, symbol, min_stop_distance, poin
         # Ensure TP is at least min_stop_distance below entry
         min_tp = entry_price - (min_stop_distance * point)
         # Make sure TP is not too close to current price
-        current_price = mt5_module.symbol_info_tick(symbol).bid  # type: ignore
+        current_price = mt5_module.symbol_info_tick(symbol).bid
         safe_tp = min_tp
         if current_price - (min_stop_distance * point) < safe_tp:
             safe_tp = current_price - (min_stop_distance * point)
@@ -347,7 +374,7 @@ def get_filling_mode(symbol, mt5_module=None):
 
     # Check for Exness-specific handling first
     if _is_exness_account(mt5_module):
-        return mt5_module.ORDER_FILLING_RETURN  # type: ignore
+        return mt5_module.ORDER_FILLING_RETURN
 
     # Get symbol information
     sym_info = _get_symbol_info_for_filling(symbol, mt5_module)
@@ -367,12 +394,12 @@ def _is_exness_account(mt5_module):
     """Check if this is an Exness account that requires specific handling."""
     # For Exness accounts, use ORDER_FILLING_RETURN as the primary mode
     # Exness typically uses RETURN mode (mode 0) for most operations
-    return hasattr(mt5_module, "ORDER_FILLING_RETURN")  # type: ignore
+    return hasattr(mt5_module, "ORDER_FILLING_RETURN")
 
 
 def _get_symbol_info_for_filling(symbol, mt5_module):
     """Get symbol information for filling mode determination."""
-    sym = mt5_module.symbol_info(symbol)  # type: ignore
+    sym = mt5_module.symbol_info(symbol)
     if not sym:
         logging.warning("Symbol %s info not available", symbol)
     return sym
@@ -384,7 +411,7 @@ def _get_default_filling_mode(mt5_module):
         mt5_module.ORDER_FILLING_RETURN
         if hasattr(mt5_module, "ORDER_FILLING_RETURN")
         else 0
-    )  # type: ignore
+    )
 
 
 def _extract_filling_mode(sym_info):
@@ -400,15 +427,15 @@ def _determine_best_filling_mode(filling_mode, mt5_module):
     try:
         # Try FOK first (Fill or Kill)
         if _supports_filling_mode(mt5_module, "ORDER_FILLING_FOK", filling_mode):
-            return mt5_module.ORDER_FILLING_FOK  # type: ignore
+            return mt5_module.ORDER_FILLING_FOK
 
         # Try IOC next (Immediate or Cancel)
         if _supports_filling_mode(mt5_module, "ORDER_FILLING_IOC", filling_mode):
-            return mt5_module.ORDER_FILLING_IOC  # type: ignore
+            return mt5_module.ORDER_FILLING_IOC
 
         # Try RETURN as fallback (Return if not filled)
         if _supports_filling_mode(mt5_module, "ORDER_FILLING_RETURN", filling_mode):
-            return mt5_module.ORDER_FILLING_RETURN  # type: ignore
+            return mt5_module.ORDER_FILLING_RETURN
 
     except Exception as e:
         logging.debug("Error checking filling mode: %s", e)
@@ -420,9 +447,9 @@ def _determine_best_filling_mode(filling_mode, mt5_module):
 
 def _supports_filling_mode(mt5_module, mode_attr, filling_mode):
     """Check if a specific filling mode is supported."""
-    if hasattr(mt5_module, mode_attr):  # type: ignore
-        mode_value = getattr(mt5_module, mode_attr)  # type: ignore
-        return filling_mode & mode_value  # type: ignore
+    if hasattr(mt5_module, mode_attr):
+        mode_value = getattr(mt5_module, mode_attr)
+        return filling_mode & mode_value
     return False
 
 
@@ -430,7 +457,7 @@ def normalize_volume(symbol, requested_volume, mt5_module=None):
     if mt5_module is None:
         mt5_module = mt5
 
-    info = mt5_module.symbol_info(symbol)  # type: ignore
+    info = mt5_module.symbol_info(symbol)
     if not info:
         logging.error("Symbol %s info not available", symbol)
         return requested_volume

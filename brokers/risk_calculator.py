@@ -6,7 +6,7 @@ Provides risk-based lot calculation functions
 import logging
 from typing import Any
 
-import MetaTrader5 as mt5  # type: ignore
+import MetaTrader5 as mt5
 
 
 def estimate_lots_by_risk(
@@ -47,7 +47,7 @@ def estimate_lots_by_risk(
 
 def _get_account_info(mt5_module: Any):
     """Get MT5 account information."""
-    account_info = mt5_module.account_info()  # type: ignore
+    account_info = mt5_module.account_info()
     if not account_info:
         logging.error("No se pudo obtener informacion de cuenta")
     return account_info
@@ -55,13 +55,13 @@ def _get_account_info(mt5_module: Any):
 
 def _get_default_volume(symbol: str, mt5_module: Any) -> float:
     """Get default volume when account info is unavailable."""
-    sym_info = mt5_module.symbol_info(symbol)  # type: ignore
+    sym_info = mt5_module.symbol_info(symbol)
     return sym_info.volume_min if sym_info else 0.01
 
 
 def _get_symbol_info(symbol, mt5_module):
     """Get symbol information from MT5."""
-    sym_info = mt5_module.symbol_info(symbol)  # type: ignore
+    sym_info = mt5_module.symbol_info(symbol)
     if not sym_info:
         logging.error("Symbol %s info not available", symbol)
     return sym_info
