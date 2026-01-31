@@ -494,42 +494,38 @@ def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None)
     return report
 
 
-def print_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None):
-    """Print formatted performance report from MT5 history"""
-    report = get_mt5_performance_report(days_back, magic_number, mt5_module)
+def rate_pf(pf):
+    """Rate the profit factor"""
+    if pf >= 2.0:
+        return "EXCELLENT"
+    if pf >= 1.5:
+        return "GOOD"
+    if pf >= 1.0:
+        return "ACCEPTABLE"
+    return "POOR"
 
-    if "error" in report:
-        print(f"\n{report['error']}")
-        return
 
-    # Rating helper
-    def rate_pf(pf):
-        if pf >= 2.0:
-            return "EXCELLENT"
-        if pf >= 1.5:
-            return "GOOD"
-        if pf >= 1.0:
-            return "ACCEPTABLE"
-        return "POOR"
+def rate_sharpe(sr):
+    """Rate the sharpe ratio"""
+    if sr >= 3.0:
+        return "EXCELLENT"
+    if sr >= 2.0:
+        return "VERY GOOD"
+    if sr >= 1.0:
+        return "GOOD"
+    return "SUBOPTIMAL"
 
-    def rate_sharpe(sr):
-        if sr >= 3.0:
-            return "EXCELLENT"
-        if sr >= 2.0:
-            return "VERY GOOD"
-        if sr >= 1.0:
-            return "GOOD"
-        return "SUBOPTIMAL"
 
-    print("\n" + "=" * 60)
-    print(f"MT5 PERFORMANCE REPORT - {report['period']}")
-    print("=" * 60)
-
+def print_trading_activity(report):
+    """Print trading activity section"""
     print("\nTRADING ACTIVITY:")
     print(f"  Total Trades: {report['total_trades']}")
     print(f"  Total Profit: ${report['total_profit']:.2f}")
     print(f"  Win Rate: {report['win_rate']:.2f}%")
 
+
+def print_key_metrics(report):
+    """Print key metrics section"""
     print("\nKEY METRICS:")
     pf_rating = rate_pf(report["profit_factor"])
     print(f"  Profit Factor: {report['profit_factor']:.2f} ({pf_rating})")
@@ -537,6 +533,9 @@ def print_mt5_performance_report(days_back=30, magic_number=None, mt5_module=Non
     sr_rating = rate_sharpe(report["sharpe_ratio"])
     print(f"  Sharpe Ratio: {report['sharpe_ratio']:.2f} ({sr_rating})")
 
+
+def print_risk_metrics(report):
+    """Print risk metrics section"""
     print("\nRISK METRICS:")
     print(f"  Max Drawdown: ${report['max_drawdown']:.2f}")
     print(f"  Average Win: ${report['average_win']:.2f}")
@@ -545,5 +544,22 @@ def print_mt5_performance_report(days_back=30, magic_number=None, mt5_module=Non
     if report["average_loss"] != 0:
         rr_ratio = abs(report["average_win"] / report["average_loss"])
         print(f"  Risk/Reward Ratio: 1:{rr_ratio:.2f}")
+
+
+def print_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None):
+    """Print formatted performance report from MT5 history"""
+    report = get_mt5_performance_report(days_back, magic_number, mt5_module)
+
+    if "error" in report:
+        print(f"\n{report['error']}")
+        return
+
+    print("\n" + "=" * 60)
+    print(f"MT5 PERFORMANCE REPORT - {report['period']}")
+    print("=" * 60)
+
+    print_trading_activity(report)
+    print_key_metrics(report)
+    print_risk_metrics(report)
 
     print("=" * 60 + "\n")

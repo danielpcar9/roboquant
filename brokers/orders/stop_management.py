@@ -338,6 +338,110 @@ def _modify_position_sl(
 
 @performance_monitor
 @safe_mt5_call
+def _create_modification_request(ticket: int, symbol: str, sl_price: float | None, tp_price: float | None, mt5_module: Any) -> dict:
+    """Create the modification request for adding SL/TP to position"""
+    modification_request = {
+        "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
+        "symbol": symbol,
+        "position": int(ticket),
+        "sl": float(sl_price) if sl_price is not None else 0,
+        "tp": float(tp_price) if tp_price is not None else 0,
+        "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
+        "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
+    }
+
+    # Remove zero values
+    if modification_request["sl"] == 0:
+        modification_request.pop("sl")
+    if modification_request["tp"] == 0:
+        modification_request.pop("tp")
+
+    return modification_request
+
+
+def _handle_invalid_stops_error(
+    symbol: str,
+    entry_price: float,
+    sl_price: float | None,
+    tp_price: float | None,
+    side: str,
+    ticket: int,
+    mt5_module: Any
+) -> tuple[float | None, float | None]:
+    """Handle invalid stops error by adjusting the stops"""
+    logging.warning(
+        "Invalid stops detected for position %s, trying with adjusted levels",
+        ticket,
+    )
+    adjusted_sl, adjusted_tp = validate_and_adjust_stops(
+        symbol,
+        entry_price,
+        sl_price,
+        tp_price,
+        side,
+        mt5_module,
+    )
+    if adjusted_sl != sl_price or adjusted_tp != tp_price:
+        logging.info(
+            "Retrying with adjusted SL/TP: SL=%s, TP=%s",
+            adjusted_sl,
+            adjusted_tp,
+        )
+    return adjusted_sl, adjusted_tp
+
+
+def _process_add_sl_tp_attempt(
+    modification_request: dict,
+    ticket: int,
+    attempt: int,
+    symbol: str,
+    entry_price: float,
+    sl_price: float | None,
+    tp_price: float | None,
+    side: str,
+    mt5_module: Any
+) -> tuple[bool, float | None, float | None]:
+    """Process a single attempt to add SL/TP to position"""
+    try:
+        result = mt5_module.order_send(modification_request)  # type: ignore
+        if (
+            result
+            and getattr(result, "retcode", None)
+            == mt5_module.TRADE_RETCODE_DONE
+        ):  # type: ignore
+            logging.info(
+                f"SL/TP added successfully to position {ticket}",
+            )
+            return True, sl_price, tp_price
+        retcode = (
+            getattr(result, "retcode", "N/A")
+            if result
+            else "N/A"
+        )
+        comment = (
+            getattr(result, "comment", "N/A")
+            if result
+            else "N/A"
+        )
+        logging.warning(
+            f"Attempt {attempt} failed to add SL/TP to position {ticket}: retcode={retcode}, comment={comment}",
+        )
+
+        # If we get "Invalid stops" error, try with adjusted stops
+        if retcode == 10016:  # Invalid stops
+            adjusted_sl, adjusted_tp = _handle_invalid_stops_error(
+                symbol, entry_price, sl_price, tp_price, side, ticket, mt5_module
+            )
+            return False, adjusted_sl, adjusted_tp
+
+        return False, sl_price, tp_price
+    except Exception:
+        logging.exception(
+            f"Exception while adding SL/TP to position {ticket} (attempt {attempt})",
+        )
+        return False, sl_price, tp_price
+
+
 def add_sl_tp_to_position(
     ticket: int,
     symbol: str,
@@ -378,80 +482,27 @@ def add_sl_tp_to_position(
 
         for _filling_mode in filling_modes_to_try:
             for attempt in range(1, max_retries + 1):
-                # Try to modify position
-                modification_request = {
-                    "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
-                    "symbol": symbol,
-                    "position": int(ticket),
-                    "sl": float(sl_price) if sl_price is not None else 0,
-                    "tp": float(tp_price) if tp_price is not None else 0,
-                    "type_time": mt5_module.ORDER_TIME_GTC,  # type: ignore
-                    "type_filling": mt5_module.ORDER_FILLING_FOK,  # type: ignore
-                }
-
-                # Remove zero values
-                if modification_request["sl"] == 0:
-                    modification_request.pop("sl")
-                if modification_request["tp"] == 0:
-                    modification_request.pop("tp")
+                # Create modification request
+                modification_request = _create_modification_request(
+                    ticket, symbol, sl_price, tp_price, mt5_module
+                )
 
                 # If we still have something to set
                 if "sl" in modification_request or "tp" in modification_request:
-                    try:
-                        result = mt5_module.order_send(modification_request)  # type: ignore
-                        if (
-                            result
-                            and getattr(result, "retcode", None)
-                            == mt5_module.TRADE_RETCODE_DONE
-                        ):  # type: ignore
-                            logging.info(
-                                f"SL/TP added successfully to position {ticket}",
-                            )
-                            return True
-                        retcode = (
-                            getattr(result, "retcode", "N/A")
-                            if result
-                            else "N/A"
-                        )
-                        comment = (
-                            getattr(result, "comment", "N/A")
-                            if result
-                            else "N/A"
-                        )
-                        logging.warning(
-                            f"Attempt {attempt} failed to add SL/TP to position {ticket}: retcode={retcode}, comment={comment}",
-                        )
+                    success, sl_price, tp_price = _process_add_sl_tp_attempt(
+                        modification_request,
+                        ticket,
+                        attempt,
+                        symbol,
+                        entry_price,
+                        sl_price,
+                        tp_price,
+                        side,
+                        mt5_module
+                    )
 
-                        # If we get "Invalid stops" error, try with adjusted stops
-                        if retcode == 10016:  # Invalid stops
-                            logging.warning(
-                                "Invalid stops detected for position %s, trying with adjusted levels",
-                                ticket,
-                            )
-                            adjusted_sl, adjusted_tp = (
-                                validate_and_adjust_stops(
-                                    symbol,
-                                    entry_price,
-                                    sl_price,
-                                    tp_price,
-                                    side,
-                                    mt5_module,
-                                )
-                            )
-                            if (
-                                adjusted_sl != sl_price
-                                or adjusted_tp != tp_price
-                            ):
-                                logging.info(
-                                    "Retrying with adjusted SL/TP: SL=%s, TP=%s",
-                                    adjusted_sl,
-                                    adjusted_tp,
-                                )
-                                sl_price, tp_price = adjusted_sl, adjusted_tp
-                    except Exception:
-                        logging.exception(
-                            f"Exception while adding SL/TP to position {ticket} (attempt {attempt})",
-                        )
+                    if success:
+                        return True
                 else:
                     logging.warning(f"No valid SL/TP to add to position {ticket}")
                     return False

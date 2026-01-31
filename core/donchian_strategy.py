@@ -61,6 +61,7 @@ class DonchianStrategy:
         # Get risk percent from set file manager first, fallback to config_manager
         try:
             from config.set_file_manager import get_set_manager
+
             cfg = get_set_manager()
             # Load default configuration if no env var is set
             set_file = os.getenv("ROBOQUANT_SET_FILE", "default.json")
@@ -76,7 +77,7 @@ class DonchianStrategy:
         self.trading_hour_end: int = config_manager.get("TRADING_HOUR_END", 23)
         self.magic_number: int = config_manager.get("MAGIC_NUMBER", 123456)
 
-        # Global variables for quantitative integration
+        # Global variables for quantitative integration (reset on initialization)
         global QUANT_OPTIMAL_LOTS, CURRENT_ENTRY_SCORE, TRADE_ENTRY_SCORES
         QUANT_OPTIMAL_LOTS = None
         CURRENT_ENTRY_SCORE = None
@@ -177,8 +178,8 @@ class DonchianStrategy:
         logging.info("MT5 gateway initialized successfully")
         return True
 
-    def main(self):
-        """Main execution loop"""
+    def main(self) -> None:
+        """Main execution loop."""
         logging.info("Starting Donchian Strategy (Modular Version)")
 
         if not self.initialize_mt5():
@@ -244,9 +245,16 @@ class DonchianStrategy:
         return lots
 
     @handle_exception
-    def _execute_trade(self, symbol: str, order_type: str, lots: float,
-                      entry_price: float, sl_distance: float, tp_price: float) -> None:
-        """Execute the trade with calculated parameters"""
+    def _execute_trade(
+        self,
+        symbol: str,
+        order_type: str,
+        lots: float,
+        entry_price: float,
+        sl_distance: float,
+        tp_price: float,
+    ) -> None:
+        """Execute the trade with calculated parameters."""
         sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
         tp_points = abs(entry_price - tp_price) / mt5.symbol_info(symbol).point  # type: ignore
 
@@ -255,7 +263,12 @@ class DonchianStrategy:
         )
 
         if success:
-            logging.info(f"✅ Trade executed successfully: {order_type} {symbol} @ {entry_price}")
+            logging.info(
+                "✅ Trade executed successfully: %s %s @ %s",
+                order_type,
+                symbol,
+                entry_price,
+            )
             # Track the trade for post-mortem analysis
             # Note: Ticket association will be handled in mt5_utils monitor loop
         else:

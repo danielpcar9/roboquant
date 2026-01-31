@@ -9,7 +9,6 @@ import MetaTrader5 as mt5  # type: ignore
 from .mt5_core import (
     initialize_mt5,
 )
-from .mt5_utils_original import estimate_lots_by_risk
 from .orders.order_executor import (
     build_and_send_order,
     cancel_expired_pending_orders,
@@ -27,6 +26,7 @@ from .positions.position_manager import (
     get_position_pnl,
     get_total_exposure,
 )
+from .risk_calculator import estimate_lots_by_risk
 
 
 class MT5Gateway:
