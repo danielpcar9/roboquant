@@ -60,13 +60,21 @@ class DonchianStrategy:
 
         # Get risk percent from set file manager first, fallback to config_manager
         try:
+            from typing import Protocol
+
             from config.set_file_manager import get_set_manager
 
-            cfg = get_set_manager()
+            class _SetManager(Protocol):
+                def load_set_file(self, path: str) -> None: ...
+                def get(self, key: str, default: float) -> float: ...
+
+            cfg = get_set_manager()  # type: ignore[call-arg]
+            cfg = cfg  # type: _SetManager
+
             # Load default configuration if no env var is set
             set_file = os.getenv("ROBOQUANT_SET_FILE", "default.json")
             cfg.load_set_file(set_file)
-            self.risk_percent: float = cfg.get("risk_management.risk_per_trade_pct", 2.0)
+            self.risk_percent = cfg.get("risk_management.risk_per_trade_pct", 2.0)
         except Exception as e:
             logging.warning(f"Failed to load risk percent from set file, using config_manager: {e}")
             self.risk_percent = config_manager.get("RISK_PERCENT", 2.0)
@@ -127,7 +135,10 @@ class DonchianStrategy:
     def _generate_signal_with_risk(self, symbol: str) -> tuple[str, float, float, float] | None:
         """Generate trading signal and calculate risk parameters in one call"""
         # Get Donchian channels
-        upper_channel, lower_channel = self.market_data.get_donchian_channels(symbol, self.period)
+        from typing import cast
+
+        channels = self.market_data.get_donchian_channels(symbol, self.period)
+        upper_channel, lower_channel = cast(tuple[float | None, float | None], channels)
         if upper_channel is None or lower_channel is None:
             logging.info("Failed to calculate Donchian channels")
             return None
@@ -157,13 +168,16 @@ class DonchianStrategy:
         logging.info(f"Signal generated: {order_type} - {reason}")
 
         # Calculate risk parameters
-        atr = self.market_data.calculate_atr(symbol, 14)
-        if atr is None:
+        atr_value = self.market_data.calculate_atr(symbol, 14)
+        if atr_value is None:
             logging.error("Failed to calculate ATR")
             return None
 
         sl_price, tp_price = self.risk_validator.calculate_dynamic_stops(
-            symbol, entry_price, order_type, atr
+            symbol,
+            entry_price,
+            order_type,
+            atr_value,
         )
         sl_distance = abs(entry_price - sl_price)
 
@@ -221,16 +235,22 @@ class DonchianStrategy:
             logging.warning(f"Could not get market conditions: {e}")
 
     def _apply_quant_filter(self, symbol: str) -> bool:
-        """Apply quantitative analysis filter"""
-        quant_result = self.quant_integration.apply_quantitative_analysis(symbol)
-        if not quant_result["should_trade"]:
+        """Apply quantitative analysis filter."""
+        from typing import cast
+
+        raw_result = self.quant_integration.apply_quantitative_analysis(symbol)
+        quant_result = cast(dict[str, object], raw_result)
+
+        should_trade = bool(quant_result.get("should_trade", False))
+        if not should_trade:
+            reason = str(quant_result.get("reason", "No reason provided"))
             logging.info(
                 "Quantitative analysis rejected trade: %s",
-                quant_result["reason"],
+                reason,
             )
             return False
 
-        entry_score = quant_result["entry_score"]
+        entry_score = float(quant_result.get("entry_score", 0.0))
         global CURRENT_ENTRY_SCORE
         CURRENT_ENTRY_SCORE = entry_score
         return True
@@ -242,8 +262,14 @@ class DonchianStrategy:
             logging.error("Failed to get account info")
             return None
 
+        from typing import cast
+
+        balance = float(cast(float, account_info.balance))
         lots = self.risk_validator.compute_lot_size(
-            account_info.balance, self.risk_percent, sl_distance, symbol
+            balance,
+            self.risk_percent,
+            sl_distance,
+            symbol,
         )
 
         if lots <= 0:
@@ -263,8 +289,13 @@ class DonchianStrategy:
         tp_price: float,
     ) -> None:
         """Execute the trade with calculated parameters."""
-        sl_points = sl_distance / mt5.symbol_info(symbol).point  # type: ignore
-        tp_points = abs(entry_price - tp_price) / mt5.symbol_info(symbol).point  # type: ignore
+        symbol_info = mt5.symbol_info(symbol)  # type: ignore
+        if symbol_info is None:
+            logging.error("Failed to get symbol info for %s when executing trade", symbol)
+            return
+
+        sl_points = sl_distance / float(symbol_info.point)
+        tp_points = abs(entry_price - tp_price) / float(symbol_info.point)
 
         success = self.position_manager.execute_trade(
             symbol, order_type, lots, sl_points, tp_points
