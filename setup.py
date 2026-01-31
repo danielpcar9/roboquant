@@ -1,4 +1,10 @@
-from setuptools import find_packages, setup
+try:
+    from setuptools import find_packages, setup
+except ImportError:
+    # Fallback for cases where setuptools is not available
+    import sys
+    print("Error: setuptools is required to install roboquant. Please install it with 'pip install setuptools'")
+    sys.exit(1)
 
 with open("README.md", encoding="utf-8") as fh:
     long_description = fh.read()

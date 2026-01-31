@@ -39,10 +39,9 @@ def initialize_mt5():
                 f"Initializing MT5 with credentials for account {login_int} on server {server}",
             )
             if not mt5.initialize(login=login_int, password=password, server=server):
-                logging.error("Failed to initialize MT5 with credentials")
-                error = mt5.last_error()
-                logging.error(f"MT5 initialization error: {error}")
-                return False
+                return _extracted_from_initialize_mt5_19(
+                    "Failed to initialize MT5 with credentials"
+                )
         except ValueError as e:
             logging.exception(
                 f"Invalid login format: {login}. Error: {sanitize_error_message(str(e))}",
@@ -52,13 +51,17 @@ def initialize_mt5():
         # Initialize without credentials
         logging.info("Initializing MT5 without credentials")
         if not mt5.initialize():
-            logging.error("Failed to initialize MT5")
-            error = mt5.last_error()
-            logging.error(f"MT5 initialization error: {error}")
-            return False
-
+            return _extracted_from_initialize_mt5_19("Failed to initialize MT5")
     logging.info("MT5 initialized successfully")
     return True
+
+
+# TODO Rename this here and in `initialize_mt5`
+def _extracted_from_initialize_mt5_19(arg0):
+    logging.error(arg0)
+    error = mt5.last_error()
+    logging.error(f"MT5 initialization error: {error}")
+    return False
 
 
 def initialize_mt5_connection(login: str, password: str, server: str, mt5_module=None):
@@ -109,6 +112,30 @@ STRATEGY_PERFORMANCE_MONITORING = True
 strategy_execution_times = []
 
 
+def _execute_with_performance_monitoring(func, *args, **kwargs):
+    """
+    Execute a function with performance monitoring.
+
+    Args:
+        func: Function to execute
+        *args: Arguments to pass to the function
+        **kwargs: Keyword arguments to pass to the function
+
+    Returns:
+        Result of the function execution
+    """
+    start_time = time.perf_counter()
+    try:
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        execution_time = end_time - start_time
+        return result, execution_time, None
+    except Exception as e:
+        end_time = time.perf_counter()
+        execution_time = end_time - start_time
+        return None, execution_time, e
+
+
 def strategy_performance_monitor(func):
     """Decorator to monitor strategy performance."""
 
@@ -116,17 +143,16 @@ def strategy_performance_monitor(func):
         if not STRATEGY_PERFORMANCE_MONITORING:
             return func(*args, **kwargs)
 
-        start_time = time.perf_counter()
-        try:
-            result = func(*args, **kwargs)
-            end_time = time.perf_counter()
-            execution_time = end_time - start_time
-            strategy_execution_times.append(execution_time)
-            logging.debug(
-                f"Strategy Performance: {func.__name__} executed in {execution_time:.4f} seconds",
-            )
+        result, execution_time, error = _execute_with_performance_monitoring(func, *args, **kwargs)
 
-            # Log average execution time every 10 executions
+        # Log execution time
+        logging.debug(
+            f"Strategy Performance: {func.__name__} executed in {execution_time:.4f} seconds",
+        )
+
+        # Log average execution time every 10 executions
+        if result is not None:  # Only log if successful
+            strategy_execution_times.append(execution_time)
             if len(strategy_execution_times) % 10 == 0:
                 avg_time = sum(strategy_execution_times[-10:]) / min(
                     10, len(strategy_execution_times),
@@ -135,14 +161,14 @@ def strategy_performance_monitor(func):
                     f"Average execution time (last 10): {avg_time:.4f} seconds",
                 )
 
-            return result
-        except Exception as e:
-            end_time = time.perf_counter()
-            execution_time = end_time - start_time
+        # Handle errors if they occurred
+        if error is not None:
             logging.debug(
-                f"Strategy Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {e}",
+                f"Strategy Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {error}",
             )
-            raise
+            raise error
+
+        return result
 
     return wrapper
 
@@ -167,22 +193,21 @@ def mt5_performance_monitor(func):
         if not PERFORMANCE_MONITORING_ENABLED:
             return func(*args, **kwargs)
 
-        start_time = time.perf_counter()
-        try:
-            result = func(*args, **kwargs)
-            end_time = time.perf_counter()
-            execution_time = end_time - start_time
+        result, execution_time, error = _execute_with_performance_monitoring(func, *args, **kwargs)
+
+        # Log execution time
+        logging.debug(
+            f"Performance: {func.__name__} executed in {execution_time:.4f} seconds",
+        )
+
+        # Handle errors if they occurred
+        if error is not None:
             logging.debug(
-                f"Performance: {func.__name__} executed in {execution_time:.4f} seconds",
+                f"Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {error}",
             )
-            return result
-        except Exception as e:
-            end_time = time.perf_counter()
-            execution_time = end_time - start_time
-            logging.debug(
-                f"Performance: {func.__name__} failed after {execution_time:.4f} seconds with error: {e}",
-            )
-            raise
+            raise error
+
+        return result
 
     return wrapper
 
@@ -296,64 +321,73 @@ def _adjust_sell_stops(entry_price, sl, tp, symbol, min_stop_distance, point, mt
     return adjusted_sl, adjusted_tp
 
 
-def _calculate_buy_stop_loss(sl, entry_price, symbol, min_stop_distance, point, mt5_module):
-    """Calculate adjusted stop loss for BUY orders."""
-    if sl is not None:
-        # Ensure SL is at least min_stop_distance below entry
-        min_sl = entry_price - (min_stop_distance * point)
-        # Make sure SL is not too close to current price
-        current_price = mt5_module.symbol_info_tick(symbol).ask
-        safe_sl = min_sl
-        if current_price - (min_stop_distance * point) < safe_sl:
-            safe_sl = current_price - (min_stop_distance * point)
-        return min(sl, safe_sl)  # SL further from entry is safer
+def _calculate_generic_stop_level(stop_level, entry_price, symbol, min_stop_distance, point, mt5_module,
+                                 is_buy_order, is_take_profit):
+    """
+    Generic function to calculate adjusted stop levels (SL or TP) for BUY or SELL orders.
+
+    Args:
+        stop_level: The stop level (SL or TP) to adjust
+        entry_price: Entry price for the order
+        symbol: Trading symbol
+        min_stop_distance: Minimum stop distance in points
+        point: Point size for the symbol
+        mt5_module: MT5 module instance
+        is_buy_order: True if it's a BUY order, False if SELL
+        is_take_profit: True if calculating TP, False if calculating SL
+
+    Returns:
+        Adjusted stop level or None if input was None
+    """
+    if stop_level is not None:
+        # Determine price type (ask for BUY, bid for SELL) and comparison operator
+        tick_info = mt5_module.symbol_info_tick(symbol)
+        current_price = tick_info.ask if is_buy_order else tick_info.bid
+
+        # Calculate minimum stop distance based on order type and whether it's SL or TP
+        if (
+            is_buy_order
+            and is_take_profit
+            or not is_buy_order
+            and not is_take_profit
+        ):  # BUY TP: must be above entry
+            min_level = entry_price + (min_stop_distance * point)
+            safe_level = min_level
+            if current_price + (min_stop_distance * point) > safe_level:
+                safe_level = current_price + (min_stop_distance * point)
+            return max(stop_level, safe_level)  # TP further from entry is better
+        else:  # BUY SL: must be below entry
+            min_level = entry_price - (min_stop_distance * point)
+            safe_level = min_level
+            if current_price - (min_stop_distance * point) < safe_level:
+                safe_level = current_price - (min_stop_distance * point)
+            return min(stop_level, safe_level)  # SL further from entry is safer
     else:
         return None
+
+
+def _calculate_buy_stop_loss(sl, entry_price, symbol, min_stop_distance, point, mt5_module):
+    """Calculate adjusted stop loss for BUY orders."""
+    return _calculate_generic_stop_level(sl, entry_price, symbol, min_stop_distance, point, mt5_module,
+                                        is_buy_order=True, is_take_profit=False)
 
 
 def _calculate_buy_take_profit(tp, entry_price, symbol, min_stop_distance, point, mt5_module):
     """Calculate adjusted take profit for BUY orders."""
-    if tp is not None:
-        # Ensure TP is at least min_stop_distance above entry
-        min_tp = entry_price + (min_stop_distance * point)
-        # Make sure TP is not too close to current price
-        current_price = mt5_module.symbol_info_tick(symbol).ask
-        safe_tp = min_tp
-        if current_price + (min_stop_distance * point) > safe_tp:
-            safe_tp = current_price + (min_stop_distance * point)
-        return max(tp, safe_tp)  # TP further from entry is better
-    else:
-        return None
+    return _calculate_generic_stop_level(tp, entry_price, symbol, min_stop_distance, point, mt5_module,
+                                        is_buy_order=True, is_take_profit=True)
 
 
 def _calculate_sell_stop_loss(sl, entry_price, symbol, min_stop_distance, point, mt5_module):
     """Calculate adjusted stop loss for SELL orders."""
-    if sl is not None:
-        # Ensure SL is at least min_stop_distance above entry
-        min_sl = entry_price + (min_stop_distance * point)
-        # Make sure SL is not too close to current price
-        current_price = mt5_module.symbol_info_tick(symbol).bid
-        safe_sl = min_sl
-        if current_price + (min_stop_distance * point) > safe_sl:
-            safe_sl = current_price + (min_stop_distance * point)
-        return max(sl, safe_sl)  # SL further from entry is safer
-    else:
-        return None
+    return _calculate_generic_stop_level(sl, entry_price, symbol, min_stop_distance, point, mt5_module,
+                                        is_buy_order=False, is_take_profit=False)
 
 
 def _calculate_sell_take_profit(tp, entry_price, symbol, min_stop_distance, point, mt5_module):
     """Calculate adjusted take profit for SELL orders."""
-    if tp is not None:
-        # Ensure TP is at least min_stop_distance below entry
-        min_tp = entry_price - (min_stop_distance * point)
-        # Make sure TP is not too close to current price
-        current_price = mt5_module.symbol_info_tick(symbol).bid
-        safe_tp = min_tp
-        if current_price - (min_stop_distance * point) < safe_tp:
-            safe_tp = current_price - (min_stop_distance * point)
-        return min(tp, safe_tp)  # TP further from entry is better
-    else:
-        return None
+    return _calculate_generic_stop_level(tp, entry_price, symbol, min_stop_distance, point, mt5_module,
+                                        is_buy_order=False, is_take_profit=True)
 
 
 def _finalize_adjusted_stops(adjusted_sl, adjusted_tp, digits, original_sl, original_tp):

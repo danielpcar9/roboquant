@@ -60,16 +60,9 @@ class DonchianStrategy:
 
         # Get risk percent from set file manager first, fallback to config_manager
         try:
-            from typing import Protocol
-
             from config.set_file_manager import get_set_manager
 
-            class _SetManager(Protocol):
-                def load_set_file(self, path: str) -> None: ...
-                def get(self, key: str, default: float) -> float: ...
-
-            cfg = get_set_manager()  # type: ignore[call-arg]
-            cfg = cfg  # type: _SetManager
+            cfg = get_set_manager()
 
             # Load default configuration if no env var is set
             set_file = os.getenv("ROBOQUANT_SET_FILE", "default.json")
@@ -105,7 +98,7 @@ class DonchianStrategy:
         reason: str
         is_valid, reason = self.position_manager.validate_market_conditions(symbol)
         if not is_valid:
-            logging.info(f"Market validation failed: {reason}")
+            logging.info("Market validation failed: %s", reason)
             return
 
         # Phase 2: Apply quantitative filter
@@ -217,11 +210,21 @@ class DonchianStrategy:
             self.mt5_gateway.shutdown()
 
     @handle_exception
+    def _get_account_balance(self) -> float | None:
+        """Helper method to get account balance."""
+        account_info = mt5.account_info()  # type: ignore
+        if account_info is None:
+            logging.error("Failed to get account info")
+            return None
+        return float(account_info.balance)
+
     def _log_market_conditions(self, symbol: str) -> None:
         """Log current market conditions."""
         try:
-            adx_data = self.market_data.calculate_adx(symbol, 14)  # type: ignore
-            if adx_data:
+            if adx_data_raw := self.market_data.calculate_adx(symbol, 14):
+                from typing import cast
+
+                adx_data = cast(dict[str, float], adx_data_raw)
                 logging.info(
                     "📊 Market Conditions - ADX: %.2f, DI+: %.2f, DI-: %.2f",
                     adx_data["adx"],
@@ -250,21 +253,17 @@ class DonchianStrategy:
             )
             return False
 
-        entry_score = float(quant_result.get("entry_score", 0.0))
+        entry_score = float(quant_result.get("entry_score", 0.0))  # type: ignore[arg-type]
         global CURRENT_ENTRY_SCORE
         CURRENT_ENTRY_SCORE = entry_score
         return True
 
     def _calculate_position_size(self, symbol: str, sl_distance: float) -> float | None:
         """Calculate position size based on risk management"""
-        account_info = mt5.account_info()  # type: ignore
-        if account_info is None:
-            logging.error("Failed to get account info")
+        balance = self._get_account_balance()
+        if balance is None:
             return None
 
-        from typing import cast
-
-        balance = float(cast(float, account_info.balance))
         lots = self.risk_validator.compute_lot_size(
             balance,
             self.risk_percent,
@@ -300,7 +299,6 @@ class DonchianStrategy:
         success = self.position_manager.execute_trade(
             symbol, order_type, lots, sl_points, tp_points
         )
-
         if success:
             logging.info(
                 "✅ Trade executed successfully: %s %s @ %s",
@@ -308,8 +306,6 @@ class DonchianStrategy:
                 symbol,
                 entry_price,
             )
-            # Track the trade for post-mortem analysis
-            # Note: Ticket association will be handled in mt5_utils monitor loop
         else:
             logging.error("❌ Trade execution failed")
 

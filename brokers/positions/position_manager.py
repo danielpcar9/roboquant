@@ -14,6 +14,19 @@ from brokers.mt5_core import (
 from services.error_handler import retry_with_exponential_backoff, safe_mt5_call
 
 
+def _get_mt5_module(mt5_module: Any = None) -> Any:
+    """
+    Helper function to get the appropriate MT5 module.
+
+    Args:
+        mt5_module: MT5 module instance or None
+
+    Returns:
+        MT5 module instance
+    """
+    return mt5_module if mt5_module is not None else mt5
+
+
 @performance_monitor
 @safe_mt5_call
 @retry_with_exponential_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)
@@ -33,8 +46,7 @@ def close_position_by_ticket(
         bool: True if successful, False otherwise
 
     """
-    if mt5_module is None:
-        mt5_module = mt5
+    mt5_module = _get_mt5_module(mt5_module)
 
     # Get position info
     positions = mt5_module.positions_get(ticket=ticket)
@@ -122,8 +134,7 @@ def get_open_positions(mt5_module: Any = None) -> list:
         list: List of open positions
 
     """
-    if mt5_module is None:
-        mt5_module = mt5
+    mt5_module = _get_mt5_module(mt5_module)
 
     positions = mt5_module.positions_get()
     if positions is None:
@@ -145,8 +156,7 @@ def close_all_positions(mt5_module: Any = None) -> tuple[int, int]:
         tuple: (closed_count, error_count)
 
     """
-    if mt5_module is None:
-        mt5_module = mt5
+    mt5_module = _get_mt5_module(mt5_module)
 
     positions = get_open_positions(mt5_module)
     if not positions:
@@ -186,15 +196,10 @@ def get_position_pnl(ticket: int, mt5_module: Any = None) -> float:
         float: Position P&L
 
     """
-    if mt5_module is None:
-        mt5_module = mt5
+    mt5_module = _get_mt5_module(mt5_module)
 
     positions = mt5_module.positions_get(ticket=ticket)
-    if not positions:
-        return 0.0
-
-    pos = positions[0]
-    return float(getattr(pos, "profit", 0.0))
+    return float(getattr(positions[0], "profit", 0.0)) if positions else 0.0
 
 
 @performance_monitor
@@ -210,8 +215,7 @@ def get_total_exposure(mt5_module: Any = None) -> float:
         float: Total exposure in lots
 
     """
-    if mt5_module is None:
-        mt5_module = mt5
+    mt5_module = _get_mt5_module(mt5_module)
 
     positions = get_open_positions(mt5_module)
     if not positions:
@@ -238,8 +242,7 @@ def get_net_position_by_symbol(symbol: str, mt5_module: Any = None) -> float:
         float: Net position volume (positive for long, negative for short)
 
     """
-    if mt5_module is None:
-        mt5_module = mt5
+    mt5_module = _get_mt5_module(mt5_module)
 
     positions = get_open_positions(mt5_module)
     if not positions:

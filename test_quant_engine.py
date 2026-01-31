@@ -4,12 +4,10 @@ Test script for the quantitative trading engine
 
 import numpy as np
 
-from core.quant_engine import (
-    PositionSizer,
-    QuantitativeAnalyzer,
-    QuantitativeEngine,
-    QuantitativeOptimizer,
-)
+from core.quant.analyzers.statistical_analyzer import QuantitativeAnalyzer
+from core.quant.engine import QuantitativeEngine
+from core.quant.optimizers.param_optimizer import QuantitativeOptimizer
+from core.quant.sizers.position_sizer import PositionSizer
 
 
 def test_quantitative_analyzer():
@@ -128,20 +126,24 @@ def run_all_tests():
     print("Starting Quantitative Engine Tests...\n")
 
     try:
-        test_quantitative_analyzer()
-        test_position_sizer()
-        test_optimizer()
-        test_full_engine()
-
-        print("\n✅ All tests passed successfully!")
-        return True
-
+        return _extracted_from_run_all_tests_6()
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")
         import traceback
 
         traceback.print_exc()
         return False
+
+
+# TODO Rename this here and in `run_all_tests`
+def _extracted_from_run_all_tests_6():
+    test_quantitative_analyzer()
+    test_position_sizer()
+    test_optimizer()
+    test_full_engine()
+
+    print("\n✅ All tests passed successfully!")
+    return True
 
 
 if __name__ == "__main__":

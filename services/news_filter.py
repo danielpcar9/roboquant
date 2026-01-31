@@ -48,7 +48,7 @@ class NewsFilter:
         if not self.enabled:
             return False
 
-        now = datetime.utcnow()
+        now = datetime.now(tz=datetime.timezone.utc)
 
         # Check different economic events
         if self._check_nfp_event(now):

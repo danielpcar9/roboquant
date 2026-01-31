@@ -450,7 +450,7 @@ class TradingMLModel:
         return pd.DataFrame(
             probabilities,
             index=features_df.index,
-            columns=["sell_prob", "hold_prob", "buy_prob"],
+            columns=pd.Index(["sell_prob", "hold_prob", "buy_prob"]),
         )
 
     def save_model(self, path: str) -> None:
@@ -489,8 +489,17 @@ class TradingMLModel:
             raise FileNotFoundError(f"Model file not found: {path}")
 
         if xgb is not None:
-            self.model = xgb.XGBClassifier()
-            self.model.load_model(path)
+            try:
+                model_instance = xgb.XGBClassifier()
+                model_instance.load_model(path)
+                self.model = model_instance
+            except AttributeError:
+                # Handle different XGBoost versions
+                import pickle
+                with open(path, 'rb') as f:
+                    self.model = pickle.load(f)
+        else:
+            raise RuntimeError("XGBoost is not available. Cannot load model.")
         self.is_trained = True
         self.model_path = path
         ml_logger.info("Model loaded from %s", path)

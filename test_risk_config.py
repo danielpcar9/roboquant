@@ -26,32 +26,36 @@ def test_risk_configuration():
     # Test set file manager
     print("\n2. SetFileManager values:")
     try:
-        cfg = get_set_manager()
-
-        # Check what set file is being used
-        set_file_env = os.getenv("ROBOQUANT_SET_FILE")
-        print(f"   ROBOQUANT_SET_FILE env var: {set_file_env}")
-
-        # Try to load default configuration
-        if set_file_env:
-            cfg.load_set_file(set_file_env)
-            print(f"   Loaded set file: {set_file_env}")
-        else:
-            # Try to load default.json
-            try:
-                cfg.load_set_file("default.json")
-                print("   Loaded set file: default.json")
-            except FileNotFoundError:
-                print("   default.json not found")
-
-        # Get risk configuration
-        risk_from_set = cfg.get("risk_management.risk_per_trade_pct", "NOT_FOUND")
-        print(f"   risk_management.risk_per_trade_pct: {risk_from_set}")
-
+        _extracted_from_test_risk_configuration_14()
     except Exception as e:
         print(f"   Error testing set manager: {e}")
 
     print("\n" + "=" * 50)
+
+
+# TODO Rename this here and in `test_risk_configuration`
+def _extracted_from_test_risk_configuration_14():
+    cfg = get_set_manager()
+
+    # Check what set file is being used
+    set_file_env = os.getenv("ROBOQUANT_SET_FILE")
+    print(f"   ROBOQUANT_SET_FILE env var: {set_file_env}")
+
+    # Try to load default configuration
+    if set_file_env:
+        cfg.load_set_file(set_file_env)
+        print(f"   Loaded set file: {set_file_env}")
+    else:
+        # Try to load default.json
+        try:
+            cfg.load_set_file("default.json")
+            print("   Loaded set file: default.json")
+        except FileNotFoundError:
+            print("   default.json not found")
+
+    # Get risk configuration
+    risk_from_set = cfg.get("risk_management.risk_per_trade_pct", "NOT_FOUND")
+    print(f"   risk_management.risk_per_trade_pct: {risk_from_set}")
 
 if __name__ == "__main__":
     test_risk_configuration()

@@ -1,11 +1,14 @@
 """Quick ADX Filter Test"""
 
+
 import MetaTrader5 as mt5
 
 from core.market_regime import market_regime_detector
 
 # Initialize MT5
-mt5.initialize()
+if not mt5.initialize():
+    print("Failed to initialize MT5")
+    exit()
 
 # Test current market regime
 regime, adx, slope = market_regime_detector.detect_regime(
@@ -30,9 +33,7 @@ else:
     print(f"   Market is RANGING (ADX {adx:.2f} < 18)")
     print("   Strategy will skip trades to avoid false breakouts")
 
-# Get current price
-tick = mt5.symbol_info_tick("XAUUSD")
-if tick:
+if tick := mt5.symbol_info_tick("XAUUSD"):
     print("\nCurrent Price:")
     print(f"   BID: {tick.bid:.2f}")
     print(f"   ASK: {tick.ask:.2f}")

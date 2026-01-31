@@ -12,7 +12,7 @@ try:
 
     MT5_AVAILABLE = True
 except ImportError:
-    mt5 = None
+    mt5 = None  # type: ignore
     MT5_AVAILABLE = False
 
 TRADE_COLUMNS = [
@@ -68,22 +68,17 @@ def log_trade(trade_dict: dict[str, Any]) -> None:
 
     # Create a complete row with all columns, filling missing values with None
     complete_row = []
-    for col in TRADE_COLUMNS:
-        complete_row.append(trade_dict.get(col, None))
-
+    complete_row.extend(trade_dict.get(col) for col in TRADE_COLUMNS)
     # Create DataFrame with proper column structure
     df = pd.DataFrame(data=[complete_row], columns=pd.Index(TRADE_COLUMNS))
 
-    # Check if file exists to determine if we need to write headers
-    file_exists = os.path.exists(TRADES_FILE)
-
-    if not file_exists:
-        # If file doesn't exist, create it with headers
-        df.to_csv(TRADES_FILE, index=False)
-    else:
+    if os.path.exists(TRADES_FILE):
         # If file exists, append without headers
         df.to_csv(TRADES_FILE, mode="a", header=False, index=False)
 
+    else:
+        # If file doesn't exist, create it with headers
+        df.to_csv(TRADES_FILE, index=False)
     logging.info("Trade %s registered in %s", trade_dict.get("ticket"), TRADES_FILE)
 
 
@@ -219,7 +214,7 @@ def analyze_recent_trades(n: int = 100) -> dict[str, Any]:
     logging.info(
         "POST-MORTEM: %d trades, Win Rate: %.1f%%, PnL: $%.2f, Profit Factor: %.2f",
         metrics["n_trades"],
-        metrics["win_rate"] * 100,
+        float(str(metrics["win_rate"])) * 100,
         metrics["total_pnl"],
         metrics["profit_factor"],
     )
@@ -305,7 +300,7 @@ def get_mt5_trade_history(days_back=30, magic_number=None, mt5_module=None):
 
     """
     # Use provided MT5 module or global one
-    mt5_to_use = mt5_module if mt5_module else mt5
+    mt5_to_use = mt5_module or mt5
 
     # Check if MT5 is available
     if not mt5_to_use or not MT5_AVAILABLE:
@@ -345,6 +340,21 @@ def get_mt5_trade_history(days_back=30, magic_number=None, mt5_module=None):
     return trades
 
 
+def _calculate_gross_values_from_trades(trades):
+    """
+    Helper function to calculate gross profit and gross loss from trades.
+
+    Args:
+        trades: List of trades with profit field
+
+    Returns:
+        tuple: (gross_profit, gross_loss)
+    """
+    gross_profit = sum(t["profit"] for t in trades if t["profit"] > 0)
+    gross_loss = abs(sum(t["profit"] for t in trades if t["profit"] < 0))
+    return gross_profit, gross_loss
+
+
 def calculate_profit_factor_from_trades(trades):
     """
     Calculate Profit Factor from trades
@@ -360,14 +370,12 @@ def calculate_profit_factor_from_trades(trades):
     if not trades:
         return 0.0
 
-    gross_profit = sum(t["profit"] for t in trades if t["profit"] > 0)
-    gross_loss = abs(sum(t["profit"] for t in trades if t["profit"] < 0))
+    gross_profit, gross_loss = _calculate_gross_values_from_trades(trades)
 
     if gross_loss == 0:
         return float("inf") if gross_profit > 0 else 0.0
 
-    profit_factor = gross_profit / gross_loss
-    return profit_factor
+    return gross_profit / gross_loss
 
 
 def calculate_sharpe_ratio_from_trades(trades, risk_free_rate=0.02):
@@ -400,10 +408,7 @@ def calculate_sharpe_ratio_from_trades(trades, risk_free_rate=0.02):
     trading_days = len(trades)
     annual_factor = np.sqrt(252 / trading_days) if trading_days > 0 else 1
 
-    # Calculate Sharpe Ratio
-    sharpe = (mean_return - risk_free_rate / 252) / std_return * annual_factor
-
-    return sharpe
+    return (mean_return - risk_free_rate / 252) / std_return * annual_factor
 
 
 def calculate_win_rate_from_trades(trades):
@@ -411,10 +416,28 @@ def calculate_win_rate_from_trades(trades):
     if not trades:
         return 0.0
 
-    winning_trades = sum(1 for t in trades if t["profit"] > 0)
+    winning_trades = sum(t["profit"] > 0 for t in trades)
     total_trades = len(trades)
 
     return (winning_trades / total_trades) * 100 if total_trades > 0 else 0.0
+
+
+def _calculate_returns_statistics(returns):
+    """
+    Helper function to calculate basic statistics from returns.
+
+    Args:
+        returns: List of returns/profits
+
+    Returns:
+        tuple: (mean_return, std_return)
+    """
+    if not returns:
+        return 0.0, 0.0
+
+    mean_return = np.mean(returns)
+    std_return = np.std(returns)
+    return mean_return, std_return
 
 
 def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None):
@@ -449,6 +472,8 @@ def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None)
     avg_win = np.mean(wins) if wins else 0.0
     avg_loss = np.mean(losses) if losses else 0.0
 
+    max_dd = 0
+
     # Calculate maximum drawdown
     if trades:
         # Sort trades by time
@@ -463,22 +488,16 @@ def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None)
 
         # Calculate drawdown
         peak = cumulative[0] if cumulative else 0
-        max_dd = 0
-
         for value in cumulative:
             if value > peak:
                 peak = value
             dd = peak - value
             if dd > max_dd:
                 max_dd = dd
-    else:
-        max_dd = 0
-
     # Total profit
     total_profit = sum(t["profit"] for t in trades)
 
-    # Build report
-    report = {
+    return {
         "period": f"Last {days_back} days",
         "total_trades": len(trades),
         "total_profit": round(total_profit, 2),
@@ -491,8 +510,6 @@ def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None)
         "trades": trades,
     }
 
-    return report
-
 
 def rate_pf(pf: float) -> str:
     """Rate the profit factor."""
@@ -500,9 +517,7 @@ def rate_pf(pf: float) -> str:
         return "EXCELLENT"
     if pf >= 1.5:
         return "GOOD"
-    if pf >= 1.0:
-        return "ACCEPTABLE"
-    return "POOR"
+    return "ACCEPTABLE" if pf >= 1.0 else "POOR"
 
 
 def rate_sharpe(sr: float) -> str:
@@ -511,14 +526,17 @@ def rate_sharpe(sr: float) -> str:
         return "EXCELLENT"
     if sr >= 2.0:
         return "VERY GOOD"
-    if sr >= 1.0:
-        return "GOOD"
-    return "SUBOPTIMAL"
+    return "GOOD" if sr >= 1.0 else "SUBOPTIMAL"
+
+
+def _print_section_header(section_name: str) -> None:
+    """Helper function to print section headers."""
+    print(f"\n{section_name}:")
 
 
 def print_trading_activity(report: dict[str, Any]) -> None:
     """Print trading activity section."""
-    print("\nTRADING ACTIVITY:")
+    _print_section_header("TRADING ACTIVITY")
     print(f"  Total Trades: {report['total_trades']}")
     print(f"  Total Profit: ${report['total_profit']:.2f}")
     print(f"  Win Rate: {report['win_rate']:.2f}%")
@@ -526,7 +544,7 @@ def print_trading_activity(report: dict[str, Any]) -> None:
 
 def print_key_metrics(report):
     """Print key metrics section"""
-    print("\nKEY METRICS:")
+    _print_section_header("KEY METRICS")
     pf_rating = rate_pf(report["profit_factor"])
     print(f"  Profit Factor: {report['profit_factor']:.2f} ({pf_rating})")
 
@@ -536,7 +554,7 @@ def print_key_metrics(report):
 
 def print_risk_metrics(report):
     """Print risk metrics section"""
-    print("\nRISK METRICS:")
+    _print_section_header("RISK METRICS")
     print(f"  Max Drawdown: ${report['max_drawdown']:.2f}")
     print(f"  Average Win: ${report['average_win']:.2f}")
     print(f"  Average Loss: ${report['average_loss']:.2f}")
