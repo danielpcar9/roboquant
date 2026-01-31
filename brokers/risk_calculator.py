@@ -9,7 +9,13 @@ from typing import Any
 import MetaTrader5 as mt5  # type: ignore
 
 
-def estimate_lots_by_risk(symbol: str, entry_price: float, stop_price: float, risk_pct: float, mt5_module: Any = None):
+def estimate_lots_by_risk(
+    symbol: str,
+    entry_price: float,
+    stop_price: float,
+    risk_pct: float,
+    mt5_module: Any = None,
+) -> float:
     """Calculate position size based on risk percentage."""
     if mt5_module is None:
         mt5_module = mt5
@@ -39,7 +45,7 @@ def estimate_lots_by_risk(symbol: str, entry_price: float, stop_price: float, ri
     return final_lots
 
 
-def _get_account_info(mt5_module):
+def _get_account_info(mt5_module: Any):
     """Get MT5 account information."""
     account_info = mt5_module.account_info()  # type: ignore
     if not account_info:
@@ -47,7 +53,7 @@ def _get_account_info(mt5_module):
     return account_info
 
 
-def _get_default_volume(symbol, mt5_module):
+def _get_default_volume(symbol: str, mt5_module: Any) -> float:
     """Get default volume when account info is unavailable."""
     sym_info = mt5_module.symbol_info(symbol)  # type: ignore
     return sym_info.volume_min if sym_info else 0.01

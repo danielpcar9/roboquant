@@ -56,7 +56,7 @@ def _process_positions_for_trailing_stops(positions, mt5_module):
 def _update_single_position_trailing_stop(pos, mt5_module):
     """Update trailing stop for a single position."""
     # Get symbol information
-    symbol_info = _get_symbol_info_for_position(pos.symbol, mt5_module)
+    symbol_info = _get_symbol_info_for_position_monitoring(pos.symbol, mt5_module)
     if not symbol_info:
         return
 
@@ -72,8 +72,8 @@ def _update_single_position_trailing_stop(pos, mt5_module):
     _calculate_and_update_stop_loss(pos, current_price, trailing_distance, mt5_module)
 
 
-def _get_symbol_info_for_position(symbol, mt5_module):
-    """Get symbol information for a position."""
+def _get_symbol_info_for_position_monitoring(symbol, mt5_module):
+    """Get symbol information for a position (stop monitoring)."""
     symbol_info = mt5_module.symbol_info(symbol)  # type: ignore
     if not symbol_info:
         return None
@@ -181,7 +181,7 @@ def _process_single_position_stop_update(pos, mt5_module):
         return 0, 0
 
     # Calculate point value
-    point = _calculate_point_value(pos.symbol, symbol_info)
+    point = _calculate_point_value_monitoring(pos.symbol, symbol_info)
 
     # Get current price based on position type
     current_price = _get_current_price_by_position_type(pos, tick, mt5_module)
@@ -218,8 +218,8 @@ def _get_tick_data_for_position(symbol, mt5_module):
     return tick
 
 
-def _calculate_point_value(symbol, symbol_info):
-    """Calculate point value for the symbol."""
+def _calculate_point_value_monitoring(symbol, symbol_info):
+    """Calculate point value for the symbol (stop monitoring)."""
     point = symbol_info.point
     # Adjust point value for NASDAQ
     if "NASDAQ" in symbol.upper():
@@ -338,8 +338,14 @@ def _modify_position_sl(
 
 @performance_monitor
 @safe_mt5_call
-def _create_modification_request(ticket: int, symbol: str, sl_price: float | None, tp_price: float | None, mt5_module: Any) -> dict:
-    """Create the modification request for adding SL/TP to position"""
+def _create_modification_request(
+    ticket: int,
+    symbol: str,
+    sl_price: float | None,
+    tp_price: float | None,
+    mt5_module: Any,
+) -> dict:
+    """Create the modification request for adding SL/TP to position."""
     modification_request = {
         "action": mt5_module.TRADE_ACTION_SLTP,  # type: ignore
         "symbol": symbol,
@@ -510,6 +516,7 @@ def add_sl_tp_to_position(
                 # Wait before retrying
                 if attempt < max_retries:
                     import time
+
                     time.sleep(0.5 * (2 ** (attempt - 1)))  # Exponential backoff
 
         logging.error(

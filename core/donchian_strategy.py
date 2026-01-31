@@ -204,11 +204,16 @@ class DonchianStrategy:
 
     @handle_exception
     def _log_market_conditions(self, symbol: str) -> None:
-        """Log current market conditions"""
+        """Log current market conditions."""
         try:
             adx_data = self.market_data.calculate_adx(symbol, 14)  # type: ignore
             if adx_data:
-                logging.info(f"📊 Market Conditions - ADX: {adx_data['adx']:.2f}, DI+: {adx_data['di_plus']:.2f}, DI-: {adx_data['di_minus']:.2f}")
+                logging.info(
+                    "📊 Market Conditions - ADX: %.2f, DI+: %.2f, DI-: %.2f",
+                    adx_data["adx"],
+                    adx_data["di_plus"],
+                    adx_data["di_minus"],
+                )
         except AttributeError:
             # Method may not exist, skip logging
             pass

@@ -51,7 +51,7 @@ TRADES_FILE = os.path.join(os.path.dirname(__file__), "logs", "trades.csv")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
-def ensure_logs_dir():
+def ensure_logs_dir() -> None:
     """Ensure the logs directory exists."""
     os.makedirs(os.path.join(os.path.dirname(__file__), "logs"), exist_ok=True)
 
@@ -494,8 +494,8 @@ def get_mt5_performance_report(days_back=30, magic_number=None, mt5_module=None)
     return report
 
 
-def rate_pf(pf):
-    """Rate the profit factor"""
+def rate_pf(pf: float) -> str:
+    """Rate the profit factor."""
     if pf >= 2.0:
         return "EXCELLENT"
     if pf >= 1.5:
@@ -505,8 +505,8 @@ def rate_pf(pf):
     return "POOR"
 
 
-def rate_sharpe(sr):
-    """Rate the sharpe ratio"""
+def rate_sharpe(sr: float) -> str:
+    """Rate the sharpe ratio."""
     if sr >= 3.0:
         return "EXCELLENT"
     if sr >= 2.0:
@@ -516,8 +516,8 @@ def rate_sharpe(sr):
     return "SUBOPTIMAL"
 
 
-def print_trading_activity(report):
-    """Print trading activity section"""
+def print_trading_activity(report: dict[str, Any]) -> None:
+    """Print trading activity section."""
     print("\nTRADING ACTIVITY:")
     print(f"  Total Trades: {report['total_trades']}")
     print(f"  Total Profit: ${report['total_profit']:.2f}")

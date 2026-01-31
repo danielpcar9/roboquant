@@ -2,14 +2,14 @@
 """Análisis de estructura de donchian_strategy.py"""
 
 
-def read_file_lines(file_path):
-    """Read file lines"""
+def read_file_lines(file_path: str) -> list[str]:
+    """Read file lines."""
     with open(file_path, encoding="utf-8") as f:
         return f.readlines()
 
 
-def calculate_general_stats(lines):
-    """Calculate general statistics for the file"""
+def calculate_general_stats(lines: list[str]) -> tuple[int, int, int, int]:
+    """Calculate general statistics for the file."""
     total_lines = len(lines)
     code_lines = len([line for line in lines if line.strip() and not line.strip().startswith('#')])
     blank_lines = len([line for line in lines if not line.strip()])
@@ -27,8 +27,8 @@ def print_general_stats(total_lines, code_lines, blank_lines, comment_lines):
     print(f"Comentarios: {comment_lines}")
 
 
-def find_classes(lines):
-    """Find classes in the file"""
+def find_classes(lines: list[str]) -> list[tuple[int, str, str]]:
+    """Find classes in the file."""
     classes = []
     for i, line in enumerate(lines):
         if line.strip().startswith("class "):
