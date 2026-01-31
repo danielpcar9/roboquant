@@ -16,6 +16,11 @@ from services.security_manager import SecureCredentialManager, sanitize_error_me
 credential_manager = SecureCredentialManager()
 
 
+class MT5InitializationError(Exception):
+    """Custom exception for MT5 initialization errors."""
+    pass
+
+
 def initialize_mt5():
     """Initialize MT5 connection with credentials from secure credential manager"""
     # Add more detailed initialization info
@@ -59,7 +64,7 @@ def initialize_mt5():
 def initialize_mt5_connection(login: str, password: str, server: str, mt5_module=None):
     """
     Initialize MT5 connection with provided credentials.
-    
+
     Args:
         login: MT5 account login
         password: MT5 account password
@@ -73,7 +78,7 @@ def initialize_mt5_connection(login: str, password: str, server: str, mt5_module
     try:
         login_int = int(login)
     except ValueError:
-        raise ValueError(f"Invalid login format: {login}")
+        raise ValueError(f"Invalid login format: {login}") from None
 
     # Attempt connection
     if not mt5_module.initialize(
