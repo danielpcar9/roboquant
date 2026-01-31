@@ -362,7 +362,7 @@ def build_and_send_order(
             except Exception:
                 logging.exception(
                     "Exception en order_send (modo=%s, intento %d)",
-                    filling_mode,
+                    _filling_mode,
                     attempt_in_mode,
                 )
                 result = None
@@ -384,7 +384,7 @@ def build_and_send_order(
                 "Intento %d/%d (modo=%s) fallo: retcode=%s, comment=%s",
                 attempts_made,
                 max_total_attempts,
-                filling_mode,
+                _filling_mode,
                 retcode,
                 comment,
             )
@@ -593,13 +593,13 @@ def close_position_by_ticket(ticket, deviation=30, retries=1, mt5_module=None):
             comment = getattr(result, "comment", "N/A") if result else "N/A"
             logging.warning(
                 "Intento con modo=%s fallo: retcode=%s, comment=%s",
-                filling_mode,
+                _filling_mode,
                 retcode,
                 comment,
             )
         except Exception:
             logging.exception(
-                "Exception al cerrar posicion %s con modo=%s", ticket, filling_mode,
+                "Exception al cerrar posicion %s con modo=%s", ticket, _filling_mode,
             )
 
     logging.error(

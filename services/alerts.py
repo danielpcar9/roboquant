@@ -148,7 +148,7 @@ Balance: ${:.2f}
 Fecha: {}
 """.format(
                 account_info.balance if account_info else 0,
-                datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                datetime.now(UTC).strftime("%Y-%m-%d"),
             )
         else:
             msg = """

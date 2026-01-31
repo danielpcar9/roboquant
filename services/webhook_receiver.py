@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 # Import MetaTrader5 (official package name)
 import MetaTrader5 as mt5
@@ -31,6 +31,10 @@ from services.security_manager import (
 # Initialize market data service for ATR calculation
 market_data_service = MarketDataService()
 
+# Default ATR-based SL/TP multipliers
+DEFAULT_SL_ATR_MULTIPLIER = 3.0
+DEFAULT_TP_ATR_MULTIPLIER = 6.0
+
 # Set up module-level logger; configuration of handlers/formatters
 # should be done by the hosting application or in a __main__ entrypoint.
 logger = logging.getLogger(__name__)
@@ -38,12 +42,18 @@ logger = logging.getLogger(__name__)
 
 class WebhookHandler:
     """Handles webhook trade signal processing with security and validation.
-    Follows Single Responsibility Principle for webhook-specific logic.
+
+    Follows the Single Responsibility Principle for webhook-specific logic.
     """
 
-    def __init__(self, mt5_gateway=None):
-        """Initialize with dependency injection for testability"""
-        self.mt5_gateway = mt5_gateway or MT5Gateway()
+    def __init__(self, mt5_gateway: MT5Gateway | None = None) -> None:
+        """Initialize webhook handler.
+
+        Args:
+            mt5_gateway: Optional gateway instance for MetaTrader5 integration.
+                         If not provided, a default ``MT5Gateway`` is created.
+        """
+        self.mt5_gateway: MT5Gateway = mt5_gateway or MT5Gateway()
         self.credential_manager = SecureCredentialManager()
         self.rate_limiter = RateLimiter(max_requests=10, time_window=60)
         self.secret_key = self.credential_manager.get_credential("WEBHOOK_SECRET_KEY")
@@ -56,8 +66,21 @@ class WebhookHandler:
         self.default_magic = config_manager.get("MAGIC_NUMBER")
         self.allowed_ips = os.getenv("WEBHOOK_ALLOWED_IPS", "127.0.0.1,::1").split(",")
 
-    def verify_signature(self, signature, body):
-        """Verify HMAC signature with constant-time comparison"""
+    def verify_signature(
+        self,
+        signature: str | None,
+        body: bytes,
+    ) -> tuple[bool, str | None]:
+        """Verify HMAC signature with constant-time comparison.
+
+        Args:
+            signature: Signature value from the ``X-Webhook-Signature`` header.
+            body: Raw request body used to recompute the HMAC.
+
+        Returns:
+            A tuple ``(is_valid, error_message)``. If ``is_valid`` is ``True``,
+            ``error_message`` will be ``None``.
+        """
         if not signature:
             return False, "Missing signature"
 
@@ -68,7 +91,9 @@ class WebhookHandler:
             return False, "Server not configured securely"
 
         expected_signature = hmac.new(
-            self.secret_key.encode(), body, hashlib.sha256,
+            self.secret_key.encode(),
+            body,
+            hashlib.sha256,
         ).hexdigest()
 
         if not constant_time_compare(signature, expected_signature):
@@ -76,8 +101,19 @@ class WebhookHandler:
 
         return True, None
 
-    def _extract_and_validate_signal_data(self, signal_data):
-        """Extract and validate signal data from input"""
+    def _extract_and_validate_signal_data(
+        self,
+        signal_data: dict,
+    ) -> dict | None:
+        """Extract and validate signal data from input.
+
+        Args:
+            signal_data: Raw signal payload from the webhook request.
+
+        Returns:
+            A dictionary with normalized and validated parameters, or ``None``
+            if validation fails.
+        """
         # Sanitize input data
         signal_data = InputValidator.sanitize_input(signal_data)
 
@@ -108,11 +144,11 @@ class WebhookHandler:
             "volume": volume,
             "sl_points": sl_points,
             "tp_points": tp_points,
-            "magic": magic
+            "magic": magic,
         }
 
-    def _initialize_mt5_connection(self):
-        """Initialize MT5 connection if not already connected"""
+    def _initialize_mt5_connection(self) -> bool:
+        """Initialize MT5 connection if not already connected."""
         if not self.mt5_connected:
             if not initialize_mt5():
                 logger.error("Failed to initialize MT5 for trade execution")
@@ -120,8 +156,12 @@ class WebhookHandler:
             self.mt5_connected = True  # Update connection status
         return True
 
-    def _get_market_data(self, symbol, order_type):
-        """Get current market data for symbol"""
+    def _get_market_data(
+        self,
+        symbol: str,
+        order_type: str,
+    ) -> dict | None:
+        """Get current market data for symbol."""
         # Select symbol
         if not mt5.symbol_select(symbol, True):  # type: ignore
             logger.error(f"Failed to select symbol {symbol}")
@@ -149,16 +189,24 @@ class WebhookHandler:
         return {
             "price": price,
             "point": symbol_info.point,
-            "symbol_info": symbol_info
+            "symbol_info": symbol_info,
         }
 
-    def _calculate_sl_tp(self, order_type, price, point, sl_points, tp_points, symbol):
-        """Calculate stop loss and take profit levels"""
+    def _calculate_sl_tp(
+        self,
+        order_type: str,
+        price: float,
+        point: float,
+        sl_points: float,
+        tp_points: float,
+        symbol: str,
+    ) -> tuple[float, float]:
+        """Calculate stop loss and take profit levels."""
         if sl_points == 0 or tp_points == 0:
             # Use ATR-based calculation
             atr = market_data_service.calculate_atr(symbol)
-            sl_multiplier = 3.0
-            tp_multiplier = 6.0
+            sl_multiplier = DEFAULT_SL_ATR_MULTIPLIER
+            tp_multiplier = DEFAULT_TP_ATR_MULTIPLIER
 
             if sl_points == 0:
                 sl_distance = sl_multiplier * atr
@@ -187,8 +235,8 @@ class WebhookHandler:
 
         return sl, tp
 
-    def process_trade_signal(self, signal_data):
-        """Process a trade signal received from webhook"""
+    def process_trade_signal(self, signal_data: dict) -> bool:
+        """Process a trade signal received from webhook."""
         try:
             # Extract and validate signal data
             signal_params = self._extract_and_validate_signal_data(signal_data)
@@ -200,7 +248,10 @@ class WebhookHandler:
                 return False
 
             # Get market data
-            market_data = self._get_market_data(signal_params["symbol"], signal_params["order_type"])
+            market_data = self._get_market_data(
+                signal_params["symbol"],
+                signal_params["order_type"],
+            )
             if market_data is None:
                 return False
 
@@ -211,7 +262,7 @@ class WebhookHandler:
                 market_data["point"],
                 signal_params["sl_points"],
                 signal_params["tp_points"],
-                signal_params["symbol"]
+                signal_params["symbol"],
             )
 
             # Validate calculated prices
@@ -259,7 +310,7 @@ WEBHOOK_ALLOWED_IPS = webhook_handler.allowed_ips
 @app.route("/webhook", methods=["POST"])
 @ip_whitelist(WEBHOOK_ALLOWED_IPS)
 def webhook():
-    """Webhook endpoint with HMAC authentication, rate limiting, and IP whitelisting"""
+    """Webhook endpoint with HMAC authentication, rate limiting, and IP whitelisting."""
     try:
         # Apply rate limiting
         if not webhook_handler.rate_limiter.is_allowed():
@@ -313,11 +364,11 @@ def webhook():
 
 @app.route("/health", methods=["GET"])
 def health_check():
-    """Health check endpoint"""
+    """Health check endpoint."""
     return jsonify(
         {
             "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "mt5_connected": webhook_handler.mt5_connected,
         },
     )
@@ -325,11 +376,14 @@ def health_check():
 
 @app.route("/", methods=["GET"])
 def index():
-    """Index endpoint"""
+    """Index endpoint."""
     return jsonify(
         {
             "message": "Webhook Receiver for Trading Signals",
-            "endpoints": {"webhook": "/webhook (POST)", "health": "/health (GET)"},
+            "endpoints": {
+                "webhook": "/webhook (POST)",
+                "health": "/health (GET)",
+            },
         },
     )
 

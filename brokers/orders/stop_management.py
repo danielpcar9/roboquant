@@ -22,7 +22,7 @@ from services.error_handler import safe_mt5_call
 def update_trailing_stops(mt5_module: Any = None) -> None:
     """
     Update trailing stops for all open positions.
-    
+
     Args:
         mt5_module: MT5 module instance
     """

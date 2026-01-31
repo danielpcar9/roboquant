@@ -138,10 +138,10 @@ class MLStrategyValidator:
 
     def validate_signal(self, features_dict: dict[str, float]) -> tuple[bool, float, str]:
         """Validate trading signal using ML model
-        
+
         Args:
             features_dict: Dictionary with all required features
-            
+
         Returns:
             Tuple of (should_trade, confidence, predicted_action)
         """
@@ -177,12 +177,12 @@ class MLStrategyValidator:
 
     def create_labels(self, prices: np.ndarray, window: int = 5, threshold: float = 0.005) -> np.ndarray:
         """Create training labels based on future price movement
-        
+
         Args:
             prices: Array of historical prices
             window: Number of periods to look forward
             threshold: Minimum price change to consider (0.5% default)
-            
+
         Returns:
             Array of labels: 1 (BUY), -1 (SELL), 0 (HOLD)
         """
@@ -208,11 +208,11 @@ class MLStrategyValidator:
 
     def train_from_history(self, symbol: str = "XAUUSD", n_days: int = 90) -> dict[str, Any]:
         """Train ML model using historical data
-        
+
         Args:
             symbol: Trading symbol
             n_days: Number of days of historical data to use
-            
+
         Returns:
             Dictionary with training results and metrics
         """
@@ -244,7 +244,6 @@ class MLStrategyValidator:
                     continue
 
                 temp_prices = np.array([rate[4] for rate in temp_rates]).astype(np.float64)
-                temp_volumes = np.array([rate[5] for rate in temp_rates])
 
                 # Calculate features using temporary data
                 momentum_score = float(self.analyzer.calculate_momentum_score(temp_prices))

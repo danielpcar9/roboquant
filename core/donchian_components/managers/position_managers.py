@@ -16,6 +16,10 @@ from brokers.mt5_core import normalize_volume
 from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
 from config.config_manager import config_manager
 from config.set_file_manager import get_set_manager
+from core.donchian_components.calculators.technical_indicators import (
+    TechnicalIndicatorsCalculator,
+)
+from core.donchian_components.validators.risk_market_validators import RiskValidator
 from core.market_regime import market_regime_detector
 from core.utils.dispatch_functions import (
     calculate_stop_loss,
@@ -43,10 +47,6 @@ class _MockMarketRegimeDetector:
         return "TRENDING", 25.0, 1.0
 
 
-from core.donchian_components.calculators.technical_indicators import (
-    TechnicalIndicatorsCalculator,
-)
-from core.donchian_components.validators.risk_market_validators import RiskValidator
 
 
 class PositionManager:
@@ -88,6 +88,128 @@ class PositionManager:
 
         return in_hours
 
+    def _validate_trade_inputs(self, symbol: str, order_type: str, lots: float, sl_points: float, tp_points: float) -> tuple[bool, str]:
+        """Validate trade inputs"""
+        # Validate inputs
+        if not InputValidator.validate_symbol(symbol):
+            return False, f"Invalid symbol: {symbol}"
+
+        if not InputValidator.validate_order_type(order_type):
+            return False, f"Invalid order type: {order_type}"
+
+        if not InputValidator.validate_volume(lots):
+            return False, f"Invalid volume: {lots}"
+
+        if sl_points <= 0 or tp_points <= 0:
+            return False, f"Invalid SL/TP points: SL={sl_points}, TP={tp_points}"
+
+        return True, ""
+
+    def _get_and_validate_price_info(self, symbol: str, order_type: str):
+        """Get and validate price and symbol information"""
+        price = self.market_data.get_current_price(symbol, order_type)
+        if price is None:
+            return None, "Failed to get current price"
+
+        # Validate price
+        if not InputValidator.validate_price(price):
+            return None, f"Invalid price: {price}"
+
+        # Get symbol info for point value
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            return None, f"Failed to get symbol info for {symbol}"
+
+        point = symbol_info.point
+        logging.debug(f"Symbol point value: {point}")
+
+        return (price, point), ""
+
+    def _calculate_and_validate_sl_tp(self, order_type: str, price: float, sl_points: float, tp_points: float, point: float):
+        """Calculate and validate SL/TP values"""
+        # Calculate SL/TP using dispatcher functions
+        try:
+            sl = calculate_stop_loss(order_type, price, sl_points, point)
+            tp = calculate_take_profit(order_type, price, tp_points, point)
+        except ValueError as e:
+            return None, f"Invalid order type for SL/TP calculation: {e}"
+
+        # Validate calculated prices
+        if not InputValidator.validate_price(sl) or not InputValidator.validate_price(tp):
+            return None, f"Invalid calculated SL/TP prices: SL={sl}, TP={tp}"
+
+        return (sl, tp), ""
+
+    def _apply_risk_management(self, symbol: str, price: float, sl: float) -> float:
+        """Apply risk management and return adjusted lots"""
+        if not self.config["use_risk_management"]:
+            return self.config["initial_lots"]
+
+        account_info = mt5.account_info()
+        is_valid, message = handle_account_validation(account_info)
+        if not is_valid:
+            logging.error(message)
+            return self.config["initial_lots"]
+
+        # Apply adaptive risk scaling based on current drawdown
+        try:
+            from risk.ftmo_manager import ftmo_manager
+
+            risk_scale = ftmo_manager.get_risk_scale_factor()
+            scaled_risk = self.config["risk_percent"] * risk_scale
+            if risk_scale < 1.0:
+                logging.info(
+                    f"Risk scaled down: {self.config['risk_percent']}% → {scaled_risk:.2f}% (factor: {risk_scale:.2f})",
+                )
+        except Exception as e:
+            logging.warning(
+                f"Failed to get risk scale factor, using full risk: {e}",
+            )
+            scaled_risk = self.config["risk_percent"]
+
+        calculated_lots = estimate_lots_by_risk(
+            symbol=symbol,
+            entry_price=price,
+            stop_price=sl,
+            risk_pct=scaled_risk,
+            mt5_module=mt5,
+        )
+        logging.info(
+            f"Risk: {scaled_risk:.2f}% = ${account_info.balance * scaled_risk / 100:.2f}, Lots: {calculated_lots}",
+        )
+
+        return calculated_lots
+
+    def _execute_order(self, symbol: str, order_type: str, lots: float, sl: float, tp: float):
+        """Execute the actual order"""
+        # Normalize volume to ensure it meets broker requirements
+        original_lots = lots
+        lots = normalize_volume(symbol, lots)
+        if lots != original_lots:
+            logging.info(f"Volume normalized from {original_lots} to {lots}")
+
+        logging.info(
+            f"Calling build_and_send_order with parameters: symbol={symbol}, side={order_type}, volume={lots}, sl={sl}, tp={tp}",
+        )
+        result = build_and_send_order(
+            symbol=symbol,
+            side=order_type,
+            volume=lots,
+            sl=sl,
+            tp=tp,
+            magic=self.config["magic_number"],
+        )
+
+        success, message = handle_trade_execution(result)
+        if success:
+            logging.info(
+                f"{order_type} executed: Price={self.market_data.get_current_price(symbol, order_type):.5f} SL={sl:.5f} TP={tp:.5f}",
+            )
+            logging.info(f"Order result: {result}")
+            return True
+        logging.error(message)
+        return False
+
     @handle_exception
     def execute_trade(
         self,
@@ -98,130 +220,45 @@ class PositionManager:
         tp_points: float,
     ) -> bool:
         """Execute a trade with given parameters"""
-        # Validate inputs
-        if not InputValidator.validate_symbol(symbol):
-            logging.error(f"Invalid symbol: {symbol}")
-            return False
-
-        if not InputValidator.validate_order_type(order_type):
-            logging.error(f"Invalid order type: {order_type}")
-            return False
-
-        if not InputValidator.validate_volume(lots):
-            logging.error(f"Invalid volume: {lots}")
-            return False
-
-        if sl_points <= 0 or tp_points <= 0:
-            logging.error(f"Invalid SL/TP points: SL={sl_points}, TP={tp_points}")
-            return False
 
         logging.info(f"Attempting to execute {order_type} trade for {symbol}")
-        price = self.market_data.get_current_price(symbol, order_type)
-        if price is None:
-            logging.error("Failed to get current price")
+
+        # Validate inputs
+        is_valid, error_msg = self._validate_trade_inputs(symbol, order_type, lots, sl_points, tp_points)
+        if not is_valid:
+            logging.error(error_msg)
             return False
 
-        # Validate price
-        if not InputValidator.validate_price(price):
-            logging.error(f"Invalid price: {price}")
+        # Get and validate price info
+        price_info, error_msg = self._get_and_validate_price_info(symbol, order_type)
+        if price_info is None:
+            logging.error(error_msg)
             return False
 
-        # Get symbol info for point value
-        symbol_info = mt5.symbol_info(symbol)
-        if symbol_info is None:
-            logging.error(f"Failed to get symbol info for {symbol}")
+        price, point = price_info
+
+        # Calculate and validate SL/TP
+        sl_tp_info, error_msg = self._calculate_and_validate_sl_tp(order_type, price, sl_points, tp_points, point)
+        if sl_tp_info is None:
+            logging.error(error_msg)
             return False
 
-        point = symbol_info.point
-        logging.debug(f"Symbol point value: {point}")
+        sl, tp = sl_tp_info
 
-        # Calculate SL/TP using dispatcher functions
-        try:
-            sl = calculate_stop_loss(order_type, price, sl_points, point)
-            tp = calculate_take_profit(order_type, price, tp_points, point)
-        except ValueError as e:
-            logging.exception(f"Invalid order type for SL/TP calculation: {e}")
-            return False
-
-        # Validate calculated prices
-        if not InputValidator.validate_price(sl) or not InputValidator.validate_price(
-            tp,
-        ):
-            logging.error(f"Invalid calculated SL/TP prices: SL={sl}, TP={tp}")
-            return False
-
-        if self.config["use_risk_management"]:
-            account_info = mt5.account_info()
-            is_valid, message = handle_account_validation(account_info)
-            if not is_valid:
-                logging.error(message)
-                return False
-            # Apply adaptive risk scaling based on current drawdown
-            try:
-                from risk.ftmo_manager import ftmo_manager
-
-                risk_scale = ftmo_manager.get_risk_scale_factor()
-                scaled_risk = self.config["risk_percent"] * risk_scale
-                if risk_scale < 1.0:
-                    logging.info(
-                        f"Risk scaled down: {self.config['risk_percent']}% → {scaled_risk:.2f}% (factor: {risk_scale:.2f})",
-                    )
-            except Exception as e:
-                logging.warning(
-                    f"Failed to get risk scale factor, using full risk: {e}",
-                )
-                scaled_risk = self.config["risk_percent"]
-
-            calculated_lots = estimate_lots_by_risk(
-                symbol=symbol,
-                entry_price=price,
-                stop_price=sl,
-                risk_pct=scaled_risk,
-                mt5_module=mt5,
-            )
-            logging.info(
-                f"Risk: {scaled_risk:.2f}% = ${account_info.balance * scaled_risk / 100:.2f}, Lots: {calculated_lots}",
-            )
-            lots = calculated_lots
+        # Apply risk management
+        adjusted_lots = self._apply_risk_management(symbol, price, sl)
 
         # Validate final volume
-        if not InputValidator.validate_volume(lots):
-            logging.error(f"Invalid final volume: {lots}")
+        if not InputValidator.validate_volume(adjusted_lots):
+            logging.error(f"Invalid final volume: {adjusted_lots}")
             return False
 
         logging.info(
-            f"Trade parameters - Price: {price}, SL: {sl}, TP: {tp}, Volume: {lots}",
+            f"Trade parameters - Price: {price}, SL: {sl}, TP: {tp}, Volume: {adjusted_lots}",
         )
 
         try:
-            # Normalize volume to ensure it meets broker requirements
-            original_lots = lots
-            lots = normalize_volume(symbol, lots)
-            if lots != original_lots:
-                logging.info(f"Volume normalized from {original_lots} to {lots}")
-
-            logging.info(
-                f"Calling build_and_send_order with parameters: symbol={symbol}, side={order_type}, volume={lots}, sl={sl}, tp={tp}",
-            )
-            result = build_and_send_order(
-                symbol=symbol,
-                side=order_type,
-                volume=lots,
-                sl=sl,
-                tp=tp,
-                magic=self.config["magic_number"],
-            )
-
-            success, message = handle_trade_execution(result)
-            if success:
-                logging.info(
-                    f"{order_type} executed: Price={price:.5f} SL={sl:.5f} TP={tp:.5f}",
-                )
-                logging.info(f"Order result: {result}")
-                return True
-            logging.error(message)
-            return False
-
+            return self._execute_order(symbol, order_type, adjusted_lots, sl, tp)
         except Exception as e:
             logging.error(f"Error executing trade: {e!s}", exc_info=True)
             return False

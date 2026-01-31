@@ -89,7 +89,6 @@ class RealTimeMonitor:
 
         if total_curr > total_prev:
             # Nuevo análisis detectado
-            new_decisions = total_curr - total_prev
 
             # Verificar si hay aprobaciones
             new_approvals = current_metrics['trades_aprobados'] - self.previous_metrics['trades_aprobados']

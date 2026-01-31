@@ -1,7 +1,7 @@
 """Quantitative integration for the Donchian strategy"""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -277,7 +277,6 @@ class QuantitativeIntegration:
             }
 
 # Backward compatibility - Alias for legacy code
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .engine import QuantitativeEngine
