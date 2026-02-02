@@ -1,23 +1,22 @@
 import calendar
 import logging
-from datetime import datetime, timedelta, timezone
-# Set up logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+from datetime import UTC, datetime, timedelta
+
 logger = logging.getLogger(__name__)
 
 
 class NewsFilter:
-    """News filter to avoid trading during major economic events"""
+    """News filter to avoid trading during major economic events."""
 
-    def __init__(self):
-        """Initialize news filter with default configuration"""
-        self.enabled = True
-        self.major_events_only = True
-        self.avoid_events = ["NFP", "CPI", "PPI", "FOMC"]
-        self.buffer_minutes = 30
+    def __init__(self) -> None:
+        """Initialize news filter with default configuration."""
+        self.enabled: bool = True
+        self.major_events_only: bool = True
+        self.avoid_events: list[str] = ["NFP", "CPI", "PPI", "FOMC"]
+        self.buffer_minutes: int = 30
 
-    def load_config(self, config):
-        """Load configuration from set file"""
+    def load_config(self, config: dict) -> None:
+        """Load configuration from set file."""
         try:
             if "news_filter" in config:
                 nf_config = config["news_filter"]
@@ -31,15 +30,15 @@ class NewsFilter:
         except Exception as e:
             logger.warning(f"Failed to load news filter configuration: {e}")
 
-    def is_first_friday(self, date):
-        """Check if date is the first Friday of the month"""
+    def is_first_friday(self, date: datetime) -> bool:
+        """Check if date is the first Friday of the month."""
         # First day of month
         first_day = date.replace(day=1)
         # Find first Friday
         first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
         return date.date() == first_friday.date()
 
-    def is_news_time(self):
+    def is_news_time(self) -> bool:
         """
         Check if current time is near a major economic event
         Returns True if there's an important event within buffer_minutes
@@ -47,7 +46,7 @@ class NewsFilter:
         if not self.enabled:
             return False
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Check different economic events
         if self._check_nfp_event(now):
@@ -59,12 +58,9 @@ class NewsFilter:
         if self._check_ppi_event(now):
             return True
 
-        if self._check_fomc_event(now):
-            return True
+        return bool(self._check_fomc_event(now))
 
-        return False
-
-    def _check_nfp_event(self, now):
+    def _check_nfp_event(self, now: datetime) -> bool:
         """Check for Non-Farm Payrolls event."""
         if "NFP" not in self.avoid_events or not self.is_first_friday(now):
             return False

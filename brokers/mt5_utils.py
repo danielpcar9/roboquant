@@ -34,24 +34,24 @@ class MT5Gateway:
     Preserves existing behavior by delegating to module-level functions.
     """
 
-    def initialize(self):
-        """Initialize MT5 connection"""
+    def initialize(self) -> bool:
+        """Initialize MT5 connection."""
         return initialize_mt5()
 
-    def shutdown(self):
-        """Shutdown MT5 connection"""
+    def shutdown(self) -> None:
+        """Shutdown MT5 connection."""
         mt5.shutdown()  # type: ignore
 
     def build_and_send_order(
         self,
-        symbol,
-        side,
-        volume,
-        sl=None,
-        tp=None,
-        deviation=30,
-        retries=1,
-        magic=123456,
+        symbol: str,
+        side: str,
+        volume: float,
+        sl: float | None = None,
+        tp: float | None = None,
+        deviation: int = 30,
+        retries: int = 1,
+        magic: int = 123456,
         mt5_module=None,
     ):
         return build_and_send_order(
@@ -103,9 +103,7 @@ class MT5Gateway:
         if mt5_module is None:
             mt5_module = mt5
         positions = mt5_module.positions_get()
-        if positions is None:
-            return []
-        return positions
+        return [] if positions is None else positions
 
     def close_all_positions(self, mt5_module=None):
         """Close all open positions. Returns (closed_count, error_count)"""

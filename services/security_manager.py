@@ -4,6 +4,8 @@ Security manager for RoboQuant trading system with credential management,
 input validation, rate limiting, and error sanitization.
 """
 
+
+import contextlib
 import hmac
 import ipaddress
 import logging
@@ -81,7 +83,7 @@ class SecureCredentialManager:
             for key in credential_keys:
                 if self._use_encryption and keyring:
                     # Try to get from encrypted storage first
-                    try:
+                    with contextlib.suppress(Exception):
                         value = keyring.get_password("roboquant", key)
                         if value is not None:
                             # Store only non-sensitive information about credentials
@@ -93,9 +95,6 @@ class SecureCredentialManager:
                                 else None,
                             }
                             continue
-                    except Exception:
-                        pass  # Fall back to environment variables
-
                 # Fall back to environment variables
                 value = os.getenv(key)
                 if value is not None:
@@ -128,13 +127,10 @@ class SecureCredentialManager:
         """
         if self._use_encryption and keyring:
             # Try to get from encrypted storage first
-            try:
+            with contextlib.suppress(Exception):
                 value = keyring.get_password("roboquant", key)
                 if value is not None:
                     return value
-            except Exception:
-                pass  # Fall back to environment variables
-
         # Fall back to environment variables
         return os.getenv(key)
 
@@ -224,10 +220,7 @@ class InputValidator:
         if not symbol or not isinstance(symbol, str):
             return False
 
-        if len(symbol) > 20:  # Reasonable limit for symbol length
-            return False
-
-        return bool(cls.SYMBOL_PATTERN.match(symbol))
+        return False if len(symbol) > 20 else bool(cls.SYMBOL_PATTERN.match(symbol))
 
     @classmethod
     def validate_volume(cls, volume: float | int | str) -> bool:
@@ -279,7 +272,7 @@ class InputValidator:
         """
         if not order_type or not isinstance(order_type, str):
             return False
-        return order_type.upper() in ["BUY", "SELL"]
+        return order_type.upper() in {"BUY", "SELL"}
 
     @classmethod
     def sanitize_input(cls, data: Any) -> Any:
@@ -434,7 +427,10 @@ def constant_time_compare(a: str, b: str) -> bool:
     )
 
 
-def ip_whitelist(allowed_ips: list):
+from collections.abc import Callable
+
+
+def ip_whitelist(allowed_ips: list[str]) -> Callable:
     """
     Decorator to restrict access based on IP whitelist.
 
@@ -460,7 +456,7 @@ def ip_whitelist(allowed_ips: list):
                         {"error": "Unable to determine client IP"},
                     ), 403
 
-                try:
+                with contextlib.suppress(ValueError):
                     client_ip_obj = ipaddress.ip_address(client_ip)
                     for allowed_ip in allowed_ips:
                         try:
@@ -473,9 +469,6 @@ def ip_whitelist(allowed_ips: list):
                             # If it's not a network, check if it's a single IP
                             if client_ip == allowed_ip:
                                 return func(*args, **kwargs)
-                except ValueError:
-                    pass  # Invalid IP address
-
                 security_logger.warning(f"Access denied from IP: {client_ip}")
                 return flask.jsonify({"error": "Access denied"}), 403
 
