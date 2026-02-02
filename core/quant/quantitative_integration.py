@@ -23,8 +23,15 @@ class QuantitativeIntegration:
         self.behavior_logger = get_behavior_logger()  # Initialize behavior logger
         logging.info("QuantitativeIntegration initialized")
 
-    def _should_trade_adaptive(self, recommendation: str, ml_confidence: float,
-                              entry_score: float, adx_value: float, di_diff: float) -> bool:
+    def _should_trade_adaptive(
+        self,
+        recommendation: str,
+        ml_confidence: float,
+        entry_score: float,
+        adx_value: float,
+        di_diff: float,
+        ml_action: str,
+    ) -> bool:
         """Determina si debe operar usando sistema de votación flexible y umbrales adaptativos"""
         # Verificar que sea una recomendación válida para trading
         valid_recommendations = ["STRONG_BUY", "BUY", "STRONG_SELL", "SELL"]
@@ -50,10 +57,10 @@ class QuantitativeIntegration:
             regime = "LATERAL"
 
         # DETECCIÓN DE TENDENCIA FUERTE: Permitir SELL si DI- > DI+ por 15+ puntos
-        strong_sell_condition = di_diff < -15 and recommendation in {
-            "SELL",
-            "STRONG_SELL",
-        }
+        strong_sell_condition = (
+            (di_diff < -10 and ml_action == "SELL") or  # ML SELL + tendencia bajista
+            (di_diff < -15 and recommendation in {"SELL", "STRONG_SELL"})
+        )
 
         # Sistema de votación ponderada en lugar de AND estricto - CAMBIADO A OR
         # Calcular puntuación combinada
@@ -67,8 +74,20 @@ class QuantitativeIntegration:
         ml_approval = ml_confidence > ml_threshold
         quant_approval = entry_score > quant_threshold
 
+        # OVERRIDE: Conflicto direccional - permitir operaciones cuando ML y mercado coinciden
+        directional_conflict_override = (
+            (ml_action == "SELL" and di_diff < -5) or  # ML bajista + mercado bajista
+            (ml_action == "BUY" and di_diff > 5)       # ML alcista + mercado alcista
+        )
+
         # Aprobación final: ML O análisis cuantitativo aprueban, o tendencia fuerte detectada
-        meets_criteria = ml_approval or quant_approval or strong_sell_condition or (combined_score > min_combined_threshold)
+        meets_criteria = (
+            ml_approval or
+            quant_approval or
+            strong_sell_condition or
+            directional_conflict_override or
+            (combined_score > min_combined_threshold)
+        )
 
         # Logging detallado para monitoreo
         logging.debug(
@@ -188,7 +207,6 @@ class QuantitativeIntegration:
 
             # Extract closing prices
             prices = [rate[4] for rate in rates]  # close price is at index 4
-            import numpy as np
             price_array = np.array(prices)
 
             # Calculate ADX and DI using existing market data service
@@ -230,7 +248,7 @@ class QuantitativeIntegration:
             # Both quantitative analysis AND ML validation must approve the trade
             di_diff = di_plus - di_minus
             should_trade = self._should_trade_adaptive(
-                recommendation, ml_confidence, entry_score, adx_value, di_diff
+                recommendation, ml_confidence, entry_score, adx_value, di_diff, ml_action
             )
 
             result = {
