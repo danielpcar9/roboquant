@@ -1,7 +1,6 @@
 import calendar
 import logging
-from datetime import datetime, timedelta
-
+from datetime import datetime, timedelta, timezone
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -48,7 +47,7 @@ class NewsFilter:
         if not self.enabled:
             return False
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Check different economic events
         if self._check_nfp_event(now):

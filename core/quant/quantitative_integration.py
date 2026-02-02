@@ -50,12 +50,15 @@ class QuantitativeIntegration:
             regime = "LATERAL"
 
         # DETECCIÓN DE TENDENCIA FUERTE: Permitir SELL si DI- > DI+ por 15+ puntos
-        strong_sell_condition = (di_diff < -15 and recommendation in ["SELL", "STRONG_SELL"])
+        strong_sell_condition = di_diff < -15 and recommendation in {
+            "SELL",
+            "STRONG_SELL",
+        }
 
         # Sistema de votación ponderada en lugar de AND estricto - CAMBIADO A OR
         # Calcular puntuación combinada
-        ml_weight = 0.6 if ml_confidence > 0.5 else 0.4
-        quant_weight = 0.4 if entry_score > 0.3 else 0.2
+        ml_weight = 0.5
+        quant_weight = 0.5
 
         combined_score = (ml_confidence * ml_weight) + (entry_score * quant_weight)
         min_combined_threshold = 0.25  # Reducido de 0.35
