@@ -32,40 +32,40 @@ class QuantitativeIntegration:
             return False
 
         # Sistema de votación flexible basado en regímenes de mercado
-        # Ajustar umbrales según fuerza de tendencia (ADX)
+        # Ajustar umbrales según fuerza de tendencia (ADX) - REDUCIDOS PARA MÁS OPERACIONES
         if adx_value > 40:
             # Tendencia fuerte - umbrales más permisivos
-            ml_threshold = 0.40
-            quant_threshold = 0.25
+            ml_threshold = 0.25  # Reducido de 0.40
+            quant_threshold = 0.15  # Reducido de 0.25
             regime = "FUERTE"
         elif adx_value > 30:
             # Tendencia moderada - umbrales intermedios
-            ml_threshold = 0.50
-            quant_threshold = 0.35
+            ml_threshold = 0.35  # Reducido de 0.50
+            quant_threshold = 0.25  # Reducido de 0.35
             regime = "MODERADA"
         else:
             # Rango lateral/débil - umbrales más estrictos
-            ml_threshold = 0.65
-            quant_threshold = 0.45
+            ml_threshold = 0.45  # Reducido de 0.65
+            quant_threshold = 0.30  # Reducido de 0.45
             regime = "LATERAL"
 
-        # Sistema de votación ponderada en lugar de AND estricto
+        # DETECCIÓN DE TENDENCIA FUERTE: Permitir SELL si DI- > DI+ por 15+ puntos
+        strong_sell_condition = (di_diff < -15 and recommendation in ["SELL", "STRONG_SELL"])
+
+        # Sistema de votación ponderada en lugar de AND estricto - CAMBIADO A OR
         # Calcular puntuación combinada
         ml_weight = 0.6 if ml_confidence > 0.5 else 0.4
         quant_weight = 0.4 if entry_score > 0.3 else 0.2
 
         combined_score = (ml_confidence * ml_weight) + (entry_score * quant_weight)
-        min_combined_threshold = 0.35  # Umbral mínimo para votación combinada
+        min_combined_threshold = 0.25  # Reducido de 0.35
 
-        # Validación tradicional AND (para comparación)
-        traditional_approval = (ml_confidence > ml_threshold and entry_score > quant_threshold)
+        # Validación con OR lógico en lugar de AND
+        ml_approval = ml_confidence > ml_threshold
+        quant_approval = entry_score > quant_threshold
 
-        # Nueva lógica: aprobar si cualquiera de los dos sistemas da señal fuerte
-        # O si la votación combinada supera el umbral
-        voting_approval = combined_score > min_combined_threshold
-
-        # Aprobación final: cualquiera de las dos condiciones
-        meets_criteria = traditional_approval or voting_approval
+        # Aprobación final: ML O análisis cuantitativo aprueban, o tendencia fuerte detectada
+        meets_criteria = ml_approval or quant_approval or strong_sell_condition or (combined_score > min_combined_threshold)
 
         # Logging detallado para monitoreo
         logging.debug(
@@ -75,7 +75,8 @@ class QuantitativeIntegration:
             f"  Ponderación -> ML Weight: {ml_weight:.2f}, Quant Weight: {quant_weight:.2f}\n"
             f"  Scores -> ML: {ml_confidence:.3f}, Quant: {entry_score:.3f}\n"
             f"  Combined Score: {combined_score:.3f} (threshold: {min_combined_threshold})\n"
-            f"  Traditional Approval: {traditional_approval}, Voting Approval: {voting_approval}\n"
+            f"  ML Approval: {ml_approval}, Quant Approval: {quant_approval}\n"
+            f"  Strong Sell Condition: {strong_sell_condition}\n"
             f"  Final Decision: {meets_criteria}"
         )
 
