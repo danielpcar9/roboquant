@@ -49,6 +49,7 @@ Repository = "https://github.com/danielpcar9/roboquant.git"
 [project.scripts]
 roboquant-donchian = "core.donchian_strategy:main"
 roboquant-backtest = "scripts.backtest_apex_vectorbt:main"
+roboquant-backtest-improved = "scripts.backtest_improved:main"
 roboquant-export = "scripts.export_mt5_data:main"
 roboquant-webhook = "services.webhook_receiver:main"
 
