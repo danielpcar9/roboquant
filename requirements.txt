@@ -1,11 +1,12 @@
-metatrader5==5.0.45
+metatrader5>=5.0.45; sys_platform == 'win32'
 python-dotenv==1.0.0
-pandas==2.1.0
-numpy==1.24.3
+pandas>=2.2.2,<3.0.0
+numpy>=1.26.4,<2.0.0
 requests==2.31.0
 flask==3.0.0
-vectorbt==0.26.0
-ta-lib==0.4.28
+vectorbt>=0.28.0
 plotly==5.17.0
 xgboost>=2.0.0
 keyring==24.2.0
+scikit-learn==1.4.2
+joblib==1.4.2
