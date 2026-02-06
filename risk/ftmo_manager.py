@@ -4,7 +4,7 @@ import os
 from datetime import datetime, time, timedelta
 
 # Import MetaTrader5 (official package name)
-import MetaTrader5 as mt5  # type: ignore
+from core.mt5_compat import mt5, MT5_AVAILABLE
 import pytz
 
 

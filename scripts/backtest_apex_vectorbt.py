@@ -149,19 +149,29 @@ def generate_signals(
     )
     df["adx"] = df["dx"].ewm(alpha=alpha, adjust=False).mean()
 
-    # 3. ENTRY SIGNALS (Donchian + Regime filter)
-    close_series = df["close"].fillna(method="ffill")
-    donchian_upper_series = df["donchian_upper"].fillna(method="ffill")
-    donchian_lower_series = df["donchian_lower"].fillna(method="ffill")
+    # 3. RSI Calculation
+    delta = df["close"].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    df["rsi"] = 100 - (100 / (1 + rs))
+
+    # 4. ENTRY SIGNALS (Donchian + Regime filter + RSI)
+    close_series = df["close"].ffill()
+    donchian_upper_series = df["donchian_upper"].ffill()
+    donchian_lower_series = df["donchian_lower"].ffill()
 
     trending_mask = (df["adx"] > adx_threshold) & (
         np.maximum(df["plus_di"], df["minus_di"]) >= di_threshold
     )
+    
+    rsi_long = df["rsi"] > 50
+    rsi_short = df["rsi"] < 50
 
-    df["long_entry"] = (close_series > donchian_upper_series) & trending_mask
-    df["short_entry"] = (close_series < donchian_lower_series) & trending_mask
+    df["long_entry"] = (close_series > donchian_upper_series) & trending_mask & rsi_long
+    df["short_entry"] = (close_series < donchian_lower_series) & trending_mask & rsi_short
 
-    # 4. SL/TP como FRACCIONES (método correcto para vectorbt)
+    # 5. SL/TP como FRACCIONES (método correcto para vectorbt)
     point_value = 0.01  # Para XAUUSD: 1 punto = $0.01
     sl_distance = sl_points * point_value
     tp_distance = tp_points * point_value
@@ -228,9 +238,10 @@ def run_backtest(
             entries=df["long_entry"],
             short_entries=df["short_entry"],
             sl_stop=df["sl_stop"],  # ✅ Stop Loss como fracción
-            tp_stop=df["tp_stop"],  # ✅ Take Profit como fracción
+            # tp_stop=df["tp_stop"],  # ❌ DISABLE TP for Trend Following
+            sl_trail=True,          # ✅ ENABLE Trailing Stop
             init_cash=initial_capital,
-            fees=0.002,  # 0.2% comisión por operación (Exness Pro típico)
+            fees=0.0001,  # 0.01% (aprox $7/lot commissions + margin)
             slippage=0.0003,  # 3 pips de slippage realista (XAUUSD spread 2-5 pips)
             size=lot_size,
             size_type="amount",  # Tamaño fijo en lotes

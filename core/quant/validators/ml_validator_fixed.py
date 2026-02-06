@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix

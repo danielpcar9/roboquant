@@ -2,6 +2,35 @@
 
 This repository contains a Python implementation of a Donchian Breakout trading strategy for MetaTrader 5.
 
+## ⚠️ Current Status
+
+**The strategy is currently under optimization and is NOT ready for live trading.** 
+See `ANALYSIS_REPORT.md` for detailed analysis and recommendations.
+
+## Quick Start
+
+### macOS/Linux (Development/Backtesting)
+```bash
+# Setup
+./setup_mac.sh
+
+# Run backtest
+./run_backtest_mac.sh
+
+# Run improved backtest with dynamic stops
+source .venv/bin/activate
+PYTHONPATH=$(pwd):$PYTHONPATH python scripts/backtest_improved.py
+```
+
+### Windows (Live Trading)
+```batch
+# Setup
+pip install -r requirements.txt
+
+# Run strategy
+run_donchian.bat
+```
+
 ## Strategy Overview
 
 The Donchian Breakout strategy is based on the classic trend-following system developed by Richard Donchian. This implementation includes additional filters based on momentum to reduce false breakouts.
@@ -9,11 +38,12 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 ### Key Features:
 - Donchian Channel breakout detection
 - Momentum filter to avoid trading in low volatility conditions
+- **Cross-platform compatibility** (macOS/Linux for development, Windows for live trading)
 - Configurable trading hours
-- Risk management with Stop Loss and Take Profit levels
+- Risk management with **dynamic ATR-based Stop Loss and Take Profit**
 - Integration with existing safety checks
 - Webhook receiver for external signals
-- Backtesting capabilities
+- Backtesting capabilities with walk-forward validation
 - Performance dashboard
 - Enhanced security with encrypted credential storage
 - Comprehensive error handling with circuit breaker pattern
@@ -24,6 +54,18 @@ The Donchian Breakout strategy is based on the classic trend-following system de
 - Market regime detection (trending/ranging) using ADX and slope
 - Adaptive risk management with dynamic SL/TP based on ATR
 - Session filtering based on historical performance
+
+## Cross-Platform Support
+
+RoboQuant now supports development and backtesting on macOS/Linux, with live trading on Windows:
+
+| Platform | Supported Features |
+|----------|-------------------|
+| **Windows** | Full MT5 integration, live trading, backtesting |
+| **macOS** | Backtesting, development, ML training (MT5 mocked) |
+| **Linux** | Backtesting, development, ML training (MT5 mocked) |
+
+The cross-platform compatibility is achieved through `core/mt5_compat.py`, which provides a mock MT5 implementation for non-Windows platforms.
 
 ## Files
 

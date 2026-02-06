@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Debug MT5 symbol availability"""
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 
 
 def debug_symbol_access():

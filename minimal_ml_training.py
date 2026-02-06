@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimal training script to isolate the error"""
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split

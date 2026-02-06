@@ -125,12 +125,12 @@ def backtest_with_regime_filter(
     # Calculate technical indicators
     df = _calculate_technical_indicators(df, donchian_period)
 
-    # Apply ADX+DI filter if enabled
+    # Generate trading signals FIRST (before applying filter)
+    df = _generate_trading_signals(df)
+
+    # Apply ADX+DI filter if enabled (AFTER signals are generated)
     if use_adx_filter:
         df = _apply_adx_filter(df, adx_threshold, di_threshold)
-
-    # Generate trading signals
-    df = _generate_trading_signals(df)
 
     # Simulate trades and calculate results
     return _simulate_trades_and_calculate_metrics(df)

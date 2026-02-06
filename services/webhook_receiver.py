@@ -5,7 +5,7 @@ import os
 from datetime import UTC, datetime
 
 # Import MetaTrader5 (official package name)
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 from flask import Flask, jsonify, request
 
 # Import consolidated MT5 functions

@@ -15,7 +15,7 @@ except Exception as e:
 
 # Import MetaTrader5 (official package name)
 try:
-    import MetaTrader5 as mt5
+    from core.mt5_compat import mt5, MT5_AVAILABLE
 except ImportError:
     mt5 = None  # type: ignore
 

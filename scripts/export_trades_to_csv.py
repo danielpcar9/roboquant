@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 import pandas as pd
 
 # Configure logging

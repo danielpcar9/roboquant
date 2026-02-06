@@ -47,9 +47,9 @@ class ConfigManager:
                 "SL_ATR_MULTIPLIER": float(os.getenv("SL_ATR_MULTIPLIER", "3.0")),
                 "TP_ATR_MULTIPLIER": float(os.getenv("TP_ATR_MULTIPLIER", "6.0")),
                 "TRADING_HOUR_START": int(
-                    os.getenv("TRADING_HOUR_START", "0"),
-                ),  # Extended hours 0-23
-                "TRADING_HOUR_END": int(os.getenv("TRADING_HOUR_END", "23")),
+                    os.getenv("TRADING_HOUR_START", "8"),
+                ),  # London/NY overlap 08-17 UTC
+                "TRADING_HOUR_END": int(os.getenv("TRADING_HOUR_END", "17")),
                 "MAGIC_NUMBER": int(os.getenv("MAGIC_NUMBER", "123456")),
                 "TIMEFRAME": os.getenv("TIMEFRAME", "M5"),
                 "BREAKOUT_THRESHOLD": float(

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Debug script to isolate ML training error"""
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 import numpy as np
 
 from core.quant.validators.ml_validator import MLStrategyValidator

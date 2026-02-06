@@ -12,14 +12,12 @@ import pytest
 # Añadir el directorio raíz al path para imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / "core"))
-sys.path.insert(0, str(project_root / "utils"))
 
 
 @pytest.fixture
 def mock_mt5():
     """Mock de MetaTrader5 para tests"""
-    import MetaTrader5 as mt5
+    from core.mt5_compat import mt5, MT5_AVAILABLE
 
     with patch.object(mt5, "initialize", return_value=True):
         with patch.object(mt5, "terminal_info", return_value=Mock()):
@@ -118,8 +116,10 @@ def sample_price_data():
 @pytest.fixture
 def mock_config_manager():
     """Mock del administrador de configuración"""
-    with patch("config.config_manager.config_manager") as mock_config:
-        mock_config.get.side_effect = lambda key, default=None: {
+    from config.config_manager import config_manager
+
+    with patch.object(config_manager, "get") as mock_get:
+        mock_get.side_effect = lambda key, default=None: {
             "SYMBOL": "XAUUSD",
             "TIMEFRAME": "H1",
             "PERIOD": 50,
@@ -133,7 +133,7 @@ def mock_config_manager():
             "SL_ATR_MULTIPLIER": 3.0,
             "TP_ATR_MULTIPLIER": 6.0,
         }.get(key, default)
-        yield mock_config
+        yield config_manager
 
 
 @pytest.fixture

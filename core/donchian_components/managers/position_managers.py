@@ -10,7 +10,7 @@ Extraído de DonchianStrategy de donchian_strategy.py
 import logging
 from datetime import UTC, datetime
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 
 from brokers.mt5_core import normalize_volume
 from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
@@ -315,6 +315,82 @@ class PositionManager:
             )
 
         return True, "OK"
+
+    @handle_exception
+    def manage_active_positions(self, symbol: str):
+        """Manage active positions: Trailing Stop, Break-Even, and Partial TP"""
+        positions = mt5.positions_get(symbol=symbol)
+        if not positions:
+            return
+
+        # Load management config
+        be_enabled = config_manager.get("BREAK_EVEN_ENABLED", True)
+        be_trigger_atr = config_manager.get("BREAK_EVEN_TRIGGER_ATR", 2.0)
+
+        trailing_enabled = config_manager.get("TRAILING_ENABLED", True)
+        trailing_distance_atr = config_manager.get("TRAILING_DISTANCE_ATR", 1.5)
+
+        partial_tp_enabled = config_manager.get("PARTIAL_TP_ENABLED", False)
+        partial_tp_trigger_atr = config_manager.get("PARTIAL_TP_TRIGGER_ATR", 3.0)
+
+        atr = self.market_data.calculate_atr(symbol, 14)
+        if atr is None:
+            return
+
+        for pos in positions:
+            ticket = pos.ticket
+            pos_type = pos.type
+            entry_price = pos.price_open
+            current_price = pos.price_current
+            sl = pos.sl
+            tp = pos.tp
+            volume = pos.volume
+
+            # Calculate profit in points and ATR
+            if pos_type == mt5.POSITION_TYPE_BUY:
+                profit_points = (current_price - entry_price)
+                is_long = True
+            else:
+                profit_points = (entry_price - current_price)
+                is_long = False
+
+            profit_atr = profit_points / atr if atr > 0 else 0
+
+            # 1. Break-Even
+            if be_enabled and profit_atr >= be_trigger_atr:
+                # If SL is not yet at entry (or better)
+                if (is_long and sl < entry_price) or (not is_long and (sl > entry_price or sl == 0)):
+                    new_sl = entry_price + (0.0001 if is_long else -0.0001) # Small buffer
+                    logging.info(f"Moving to Break-Even for ticket {ticket}: {new_sl}")
+                    self._modify_position(ticket, new_sl, tp)
+
+            # 2. Trailing Stop
+            if trailing_enabled and profit_atr >= 1.0: # Start trailing after 1 ATR profit
+                target_sl = (current_price - (atr * trailing_distance_atr)) if is_long else (current_price + (atr * trailing_distance_atr))
+                if (is_long and target_sl > sl) or (not is_long and (target_sl < sl or sl == 0)):
+                    logging.info(f"Trailing SL for ticket {ticket}: {target_sl}")
+                    self._modify_position(ticket, target_sl, tp)
+
+            # 3. Partial TP
+            # This requires tracking if partial TP was already executed for this ticket
+            # For simplicity, we can check if the volume is the original volume
+            # (assuming original volume is known or checking a comment/tag)
+            if partial_tp_enabled and profit_atr >= partial_tp_trigger_atr:
+                # This is a stub - real implementation would check a tracker
+                pass
+
+    def _modify_position(self, ticket: int, sl: float, tp: float):
+        """Internal helper to modify position SL/TP"""
+        request = {
+            "action": mt5.TRADE_ACTION_SLTP,
+            "position": ticket,
+            "sl": sl,
+            "tp": tp,
+        }
+        result = mt5.order_send(request)
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            logging.error(f"Failed to modify position {ticket}: {result.comment}")
+        return result
 
 
 class TradeTracker:

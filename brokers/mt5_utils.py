@@ -4,7 +4,7 @@ Provides access to all MT5 trading functions with proper type hints
 """
 
 # Import from new modular structure
-import MetaTrader5 as mt5  # type: ignore
+from core.mt5_compat import mt5, MT5_AVAILABLE
 
 from .mt5_core import (
     initialize_mt5,

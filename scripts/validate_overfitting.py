@@ -72,8 +72,8 @@ def walk_forward_analysis(df, n_splits=5, optimization_ratio=0.7):
             donchian_period=20,
             momentum_period=40,
             sample_period=200,  # Reduced from 1000 for more signals
-            sl_points=150,
-            tp_points=300,
+            sl_points=700,
+            tp_points=1000,
         )
 
         # Run backtest on Out-of-Sample
@@ -84,8 +84,8 @@ def walk_forward_analysis(df, n_splits=5, optimization_ratio=0.7):
             donchian_period=20,
             momentum_period=40,
             sample_period=200,  # Reduced from 1000 for more signals
-            sl_points=150,
-            tp_points=300,
+            sl_points=700,
+            tp_points=1000,
         )
 
         if is_portfolio and oos_portfolio:
@@ -313,8 +313,8 @@ def period_stability_test(df, years_back=5):
             donchian_period=20,
             momentum_period=40,
             sample_period=200,
-            sl_points=150,
-            tp_points=300,
+            sl_points=700,
+            tp_points=1000,
         )
 
         if portfolio:
@@ -382,7 +382,7 @@ def main():
     walk_forward_analysis(df, n_splits=5)
 
     # Test 2: Parameter Robustness
-    robustness_test(df, {"donchian_period": 20, "sl_points": 150, "tp_points": 300})
+    robustness_test(df, {"donchian_period": 20, "sl_points": 700, "tp_points": 1000})
 
     # Test 3: Period Stability
     period_stability_test(df, years_back=5)

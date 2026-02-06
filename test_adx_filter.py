@@ -1,7 +1,7 @@
 """Quick ADX Filter Test"""
 
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 
 from core.market_regime import market_regime_detector
 

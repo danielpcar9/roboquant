@@ -6,7 +6,7 @@ Handles position closing and management operations
 import logging
 from typing import Any
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 
 from brokers.mt5_core import (
     mt5_performance_monitor as performance_monitor,

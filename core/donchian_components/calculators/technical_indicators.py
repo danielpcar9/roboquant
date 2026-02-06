@@ -9,10 +9,13 @@ Extraído de MarketDataService de donchian_strategy.py
 
 import logging
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 
 from config.config_manager import config_manager
 from utils.decorators import handle_exception, performance_monitor
+
+import numpy as np
+import pandas as pd
 
 
 class TechnicalIndicatorsCalculator:
@@ -168,7 +171,48 @@ class TechnicalIndicatorsCalculator:
 
         atr = sum(atr_values) / len(atr_values) if atr_values else 0
         logging.debug(f"ATR for {symbol}: {atr:.5f}")
-        return atr
+        return float(atr)
+
+    @handle_exception
+    @performance_monitor
+    def calculate_rsi(self, symbol: str, period: int = 14) -> float | None:
+        """Calculate Relative Strength Index"""
+        rates = self.mt5.copy_rates_from_pos(symbol, self.timeframe, 1, period * 2)
+        if rates is None or len(rates) < period + 1:
+            return None
+
+        df = pd.DataFrame(rates)
+        delta = df["close"].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return float(rsi.iloc[-1])
+
+    @handle_exception
+    @performance_monitor
+    def calculate_slope(self, symbol: str, period: int = 30) -> float | None:
+        """Calculate price slope using linear regression"""
+        rates = self.mt5.copy_rates_from_pos(symbol, self.timeframe, 1, period)
+        if rates is None or len(rates) < period:
+            return None
+
+        closes = np.array([rate["close"] for rate in rates])
+        x = np.arange(len(closes))
+        slope, _ = np.polyfit(x, closes, 1)
+        return float(slope)
+
+    @handle_exception
+    @performance_monitor
+    def calculate_sma(self, symbol: str, period: int) -> float | None:
+        """Calculate Simple Moving Average"""
+        rates = self.mt5.copy_rates_from_pos(symbol, self.timeframe, 1, period)
+        if rates is None or len(rates) < period:
+            return None
+
+        closes = [rate["close"] for rate in rates]
+        return sum(closes) / len(closes)
 
     @handle_exception
     @performance_monitor

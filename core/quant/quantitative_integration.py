@@ -188,7 +188,7 @@ class QuantitativeIntegration:
         """
         try:
             # Get market data for quantitative analysis
-            import MetaTrader5 as mt5
+            from core.mt5_compat import mt5, MT5_AVAILABLE
 
             from core.donchian_components.calculators.technical_indicators import (
                 TechnicalIndicatorsCalculator,

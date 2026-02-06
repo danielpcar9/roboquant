@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 import pytz
 
 OUTPUT_PATH = os.path.expanduser(r"C:\Users\edgar\MT5_statement.html")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test para diagnosticar por qué no se abren trades"""
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 import numpy as np
 
 from core.donchian_components.calculators.technical_indicators import (

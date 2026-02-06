@@ -9,7 +9,7 @@ Extraído de RiskCalculator y partes de SessionManager de donchian_strategy.py
 
 import logging
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 
 from config.config_manager import config_manager
 
@@ -344,58 +344,96 @@ class MarketValidator:
         self.last_session = None  # Track the last session
 
     @handle_exception
-    def validate_trading_conditions(self, symbol: str) -> bool:
-        """Validar condiciones generales de trading"""
-        try:
-            # Verificar que el símbolo esté disponible
-            symbol_info = mt5.symbol_info(symbol)
-            if not symbol_info or not symbol_info.visible:
-                logging.warning(f"Symbol {symbol} not visible or unavailable")
-                return False
+    def is_trading_session_active(self) -> tuple[bool, str]:
+        """Check if current time is within allowed trading hours"""
+        import datetime
+        import time
 
-            # Verificar que haya conectividad
-            if not mt5.terminal_info():
-                logging.warning("MT5 terminal not connected")
-                return False
+        current_time = int(time.time())
+        hour = datetime.datetime.fromtimestamp(current_time).hour
 
-            return True
-        except Exception as e:
-            logging.exception(f"Error validating trading conditions: {e}")
-            return False
+        trading_start = config_manager.get("TRADING_HOUR_START", 0)
+        trading_end = config_manager.get("TRADING_HOUR_END", 23)
+
+        if not (trading_start <= hour <= trading_end):
+            return False, f"Outside trading hours: {hour}:00 (Allowed: {trading_start}-{trading_end})"
+
+        return True, "Trading session active"
 
     @handle_exception
-    def validate_session_conditions(self, symbol: str) -> tuple[bool, str]:
-        """Validar condiciones específicas de sesión"""
-        try:
-            import time
+    def check_spread(self, symbol: str) -> tuple[bool, str]:
+        """Check if current spread is within acceptable limits"""
+        spread = self.market_data.get_spread(symbol)
+        if spread is None:
+            return False, "Failed to get spread data"
 
-            current_time = int(time.time())
-            # Convertir timestamp a hora local
-            import datetime
+        max_spread = config_manager.get("MAX_SPREAD_POINTS", 300)
+        if spread > max_spread:
+            return False, f"Spread too wide: {spread:.1f} > {max_spread}"
 
-            hour = datetime.datetime.fromtimestamp(current_time).hour
+        return True, f"Spread acceptable: {spread:.1f}"
 
-            # Horario de trading (ajustable según mercado)
-            trading_start = 0  # 00:00 UTC
-            trading_end = 23  # 23:59 UTC
+    @handle_exception
+    def is_market_volatile(self, symbol: str, atr_threshold: float) -> tuple[bool, str]:
+        """Check if market volatility is within limits using ATR"""
+        atr = self.market_data.calculate_atr(symbol)
+        if atr is None:
+            return True, "Insufficient data for volatility check, assuming OK"
 
-            if not (trading_start <= hour <= trading_end):
-                return False, f"Outside trading hours: {hour}:00 UTC"
+        if atr > atr_threshold:
+            return False, f"Market too volatile: ATR {atr:.5f} > {atr_threshold}"
 
-            # Validar volatilidad mínima
-            current_volume, avg_volume = self.market_data.get_volume_stats(symbol, 20)
-            if current_volume is not None and avg_volume is not None:
-                volume_ratio = current_volume / avg_volume if avg_volume > 0 else 0
-                min_volume_ratio = config_manager.get("MIN_VOLUME_RATIO", 0.5)
+        return True, f"Market volatility acceptable: ATR {atr:.5f}"
 
-                if volume_ratio < min_volume_ratio:
-                    return (
-                        False,
-                        f"Low volume ratio: {volume_ratio:.2f} < {min_volume_ratio}",
-                    )
+    @handle_exception
+    def has_recent_news_events(self, symbol: str) -> tuple[bool, str]:
+        """Check for high impact news events (Stub)"""
+        # This is a stub - real implementation would check an economic calendar
+        return False, "No high impact news detected"
 
-            return True, "OK"
+    @handle_exception
+    def validate_price_action(self, symbol: str, lookback: int = 20) -> tuple[bool, str]:
+        """Validate recent price action (look for spikes, gaps, etc.)"""
+        rates = self.mt5.copy_rates_from_pos(symbol, self.market_data.timeframe, 1, lookback)
+        if rates is None or len(rates) < 2:
+            return True, "Insufficient data for price action validation"
 
-        except Exception as e:
-            logging.exception(f"Error validating session conditions: {e}")
-            return False, f"Validation error: {e!s}"
+        # Calculate average body size for comparison
+        bodies = [abs(rate["close"] - rate["open"]) for rate in rates]
+        avg_body = sum(bodies) / len(bodies)
+
+        # Check for extreme candle size (relative to average and absolute)
+        for i, rate in enumerate(rates):
+            body = bodies[i]
+            # If body is more than 3x the average OR more than 1% of price
+            if (body > avg_body * 2.5 and body > 0) or body > 0.01 * rate["open"]:
+                return False, f"Extreme price movement detected: {body:.2f} points"
+
+        return True, "Price action normal"
+
+    @handle_exception
+    def is_liquidity_sufficient(
+        self, symbol: str, lookback: int = 20, min_avg_volume: float = 10.0,
+    ) -> tuple[bool, str]:
+        """Check if trading volume is sufficient for liquidity"""
+        _, avg_volume = self.market_data.get_volume_stats(symbol, lookback)
+        if avg_volume is None:
+            return True, "Insufficient data for liquidity check"
+
+        if avg_volume < min_avg_volume:
+            return False, f"Insufficient liquidity: Avg Volume {avg_volume:.1f} < {min_avg_volume}"
+
+        return True, f"Liquidity sufficient: Avg Volume {avg_volume:.1f}"
+
+    @handle_exception
+    def get_market_regime(self, symbol: str, period: int = 50) -> tuple[str, float]:
+        """Get current market regime and volatility"""
+        # Very basic regime detection
+        atr = self.market_data.calculate_atr(symbol, period) or 0.0
+
+        # Simple logic: higher than usual ATR = volatile
+        if atr > 0.002: # Crude threshold
+            return "volatile", atr
+
+        # This could be much more sophisticated
+        return "ranging", atr

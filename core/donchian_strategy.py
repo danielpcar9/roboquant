@@ -17,7 +17,7 @@ import logging
 import os
 import time
 
-import MetaTrader5 as mt5
+from core.mt5_compat import mt5, MT5_AVAILABLE
 
 from brokers.mt5_utils import MT5Gateway
 from config.config_manager import config_manager
@@ -124,6 +124,10 @@ class DonchianStrategy:
         # Phase 6: Execute trade
         self._execute_trade(symbol, order_type, lots, entry_price, sl_distance, tp_price)
 
+    def manage_positions(self, symbol: str) -> None:
+        """Manage active positions (Trailing Stop, Break-Even, etc.)"""
+        self.position_manager.manage_active_positions(symbol)
+
 
     def _generate_signal_with_risk(self, symbol: str) -> tuple[str, float, float, float] | None:
         """Generate trading signal and calculate risk parameters in one call"""
@@ -136,26 +140,39 @@ class DonchianStrategy:
             logging.info("Failed to calculate Donchian channels")
             return None
 
-        # Get current price for BUY (we'll check both directions)
+        # Get current price
         current_price = self.market_data.get_current_price(symbol, "BUY")
         if current_price is None:
             logging.info("Failed to get current price")
             return None
 
+        # Check Trend Regime (ADX)
+        adx_period = config_manager.get("ADX_PERIOD", 14)
+        adx_threshold = config_manager.get("ADX_THRESHOLD", 20)
+        adx_data = self.market_data.calculate_adx(symbol, adx_period)
+
+        if adx_data and adx_data["adx"] < adx_threshold:
+            logging.info(f"Market ranging (ADX: {adx_data['adx']:.2f} < {adx_threshold}), skipping breakout")
+            return None
+
+        # RSI Momentum Confirmation
+        rsi_value = self.market_data.calculate_rsi(symbol, 14)
+        rsi_confirm_buy = rsi_value > 50 if rsi_value else True
+        rsi_confirm_sell = rsi_value < 50 if rsi_value else True
+
         # Generate signals
-        buy_signal = current_price > upper_channel
-        sell_signal = current_price < lower_channel
+        buy_signal = current_price > upper_channel and rsi_confirm_buy
+        sell_signal = current_price < lower_channel and rsi_confirm_sell
 
         if buy_signal:
             order_type = "BUY"
             entry_price = current_price
-            reason = "Price above upper channel"
+            reason = f"Price above upper channel ({upper_channel:.2f}) with RSI confirmation"
         elif sell_signal:
             order_type = "SELL"
             entry_price = current_price
-            reason = "Price below lower channel"
+            reason = f"Price below lower channel ({lower_channel:.2f}) with RSI confirmation"
         else:
-            logging.info("No breakout signal")
             return None
 
         logging.info(f"Signal generated: {order_type} - {reason}")
@@ -195,16 +212,21 @@ class DonchianStrategy:
         try:
             while True:
                 try:
+                    # Manage existing positions first
+                    self.manage_positions(self.symbol)
+
+                    # Look for new trades
                     self.run_strategy(self.symbol)
+
                     # Add delay to prevent excessive execution
-                    time.sleep(180)  # Wait 3 minutes between iterations
+                    time.sleep(60)  # Reduced to 1 minute for better management
                 except KeyboardInterrupt:
                     logging.info("Strategy stopped by user")
                     break
                 except Exception as e:
                     logging.exception(f"Strategy iteration error: {e}")
                     # Add delay even on error to prevent spamming
-                    time.sleep(180)
+                    time.sleep(60)
 
         finally:
             self.mt5_gateway.shutdown()

@@ -124,7 +124,7 @@ def alert_daily_summary():
     """Envía resumen diario automático al final del día"""
     try:
         # Import MetaTrader5 (official package name)
-        import MetaTrader5 as mt5
+        from core.mt5_compat import mt5, MT5_AVAILABLE
 
         from analysis.post_mortem import analyze_recent_trades
 
