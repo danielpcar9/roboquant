@@ -29,18 +29,29 @@ logging.basicConfig(
 )
 
 
-def load_data(filepath: str = "data/XAUUSD_H1.csv", years: int = 5) -> pd.DataFrame | None:
+def load_data(filepath: str = None, years: int = 5) -> pd.DataFrame | None:
     """
     Load and prepare historical data.
     
     Args:
-        filepath: Path to CSV file
+        filepath: Path to CSV file (defaults to data/XAUUSD_H1.csv relative to root)
         years: Number of years to load
         
     Returns:
         Prepared DataFrame or None if failed
     """
+    if filepath is None:
+        # Resolve path relative to this script: scripts/../data/XAUUSD_H1.csv
+        root = Path(__file__).resolve().parents[1]
+        filepath = str(root / "data" / "XAUUSD_H1.csv")
+
     try:
+        if not Path(filepath).exists():
+            logging.error(f"Data file not found at: {filepath}")
+            print(f"\n❌ Error: No se encontró el archivo de datos en {filepath}")
+            print("👉 Asegúrate de que el archivo 'data/XAUUSD_H1.csv' existe en la raíz del proyecto.")
+            return None
+            
         df = pd.read_csv(filepath)
         df["time"] = pd.to_datetime(df["time"])
         df.set_index("time", inplace=True)
