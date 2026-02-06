@@ -55,7 +55,8 @@ class DonchianStrategy:
         # Load configuration directly in __init__
         self.symbol: str = config_manager.get("SYMBOL", "XAUUSD")
         self.timeframe: str = config_manager.get("TIMEFRAME", "H1")
-        self.period: int = config_manager.get("PERIOD", 50)
+        # Prefer DONCHIAN_PERIOD; fallback to legacy PERIOD for backward compatibility
+        self.period: int = config_manager.get("DONCHIAN_PERIOD", config_manager.get("PERIOD", 50))
         self.lookback: int = config_manager.get("LOOKBACK", 10)
 
         # Get risk percent from set file manager first, fallback to config_manager
@@ -340,5 +341,11 @@ TRADE_ENTRY_SCORES: dict[int, float] = {}
 
 
 if __name__ == "__main__":
+    strategy = DonchianStrategy()
+    strategy.main()
+
+
+def main() -> None:
+    """Entry point for console scripts."""
     strategy = DonchianStrategy()
     strategy.main()

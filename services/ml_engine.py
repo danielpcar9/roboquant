@@ -332,10 +332,9 @@ class TradingMLModel:
         y_train = targets.iloc[:split_idx]
         y_test = targets.iloc[split_idx:]
 
-        # Handle class imbalance
-        pos_count = len(y_train[y_train == 1])
-        neg_count = len(y_train[y_train == -1])
-        scale_pos_weight = float(neg_count) / pos_count if pos_count > 0 else 1
+        # Map targets from {-1, 0, 1} to {0, 1, 2} for XGBoost multiclass
+        y_train_mapped = y_train.map({-1: 0, 0: 1, 1: 2})
+        y_test_mapped = y_test.map({-1: 0, 0: 1, 1: 2})
 
         # Create XGBoost classifier
         if xgb is not None:
@@ -345,7 +344,6 @@ class TradingMLModel:
                 learning_rate=0.1,
                 subsample=0.8,
                 colsample_bytree=0.8,
-                scale_pos_weight=scale_pos_weight,
                 random_state=random_state,
                 objective="multi:softprob",
                 num_class=3,  # Buy, Sell, Hold
@@ -358,13 +356,15 @@ class TradingMLModel:
             len(X_train.columns),
         )
         if self.model is not None:
-            self.model.fit(X_train, y_train)
+            self.model.fit(X_train, y_train_mapped)
 
         # Evaluate model
         train_score = (
-            self.model.score(X_train, y_train) if self.model is not None else 0
+            self.model.score(X_train, y_train_mapped) if self.model is not None else 0
         )
-        test_score = self.model.score(X_test, y_test) if self.model is not None else 0
+        test_score = (
+            self.model.score(X_test, y_test_mapped) if self.model is not None else 0
+        )
 
         # Get feature importance
         if self.model is not None:
@@ -418,9 +418,12 @@ class TradingMLModel:
 
         # Make predictions
         predictions = self.model.predict(features_df)
+        # Map back to {-1, 0, 1}
+        reverse_map = {0: -1, 1: 0, 2: 1}
+        mapped = [reverse_map.get(int(p), 0) for p in predictions]
 
         # Return as pandas Series with same index
-        return pd.Series(predictions, index=features_df.index)
+        return pd.Series(mapped, index=features_df.index)
 
     def predict_proba(self, df: pd.DataFrame):
         """

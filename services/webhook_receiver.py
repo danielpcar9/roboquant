@@ -64,7 +64,11 @@ class WebhookHandler:
         self.default_sl_points = config_manager.get("STOP_LOSS_POINTS")
         self.default_tp_points = config_manager.get("TAKE_PROFIT_POINTS")
         self.default_magic = config_manager.get("MAGIC_NUMBER")
-        self.allowed_ips = os.getenv("WEBHOOK_ALLOWED_IPS", "127.0.0.1,::1").split(",")
+        self.allowed_ips = [
+            ip.strip()
+            for ip in os.getenv("WEBHOOK_ALLOWED_IPS", "127.0.0.1,::1").split(",")
+            if ip.strip()
+        ]
 
     def verify_signature(
         self,
@@ -205,6 +209,17 @@ class WebhookHandler:
         if sl_points == 0 or tp_points == 0:
             # Use ATR-based calculation
             atr = market_data_service.calculate_atr(symbol)
+            if atr is None or atr <= 0:
+                # Fallback to fixed points if ATR unavailable
+                sl_points = sl_points or self.default_sl_points
+                tp_points = tp_points or self.default_tp_points
+                if order_type == "BUY":
+                    sl = price - sl_points * point
+                    tp = price + tp_points * point
+                else:  # SELL
+                    sl = price + sl_points * point
+                    tp = price - tp_points * point
+                return sl, tp
             sl_multiplier = DEFAULT_SL_ATR_MULTIPLIER
             tp_multiplier = DEFAULT_TP_ATR_MULTIPLIER
 
@@ -313,7 +328,7 @@ def webhook():
     """Webhook endpoint with HMAC authentication, rate limiting, and IP whitelisting."""
     try:
         # Apply rate limiting
-        if not webhook_handler.rate_limiter.is_allowed():
+        if not webhook_handler.rate_limiter.is_allowed(request.remote_addr):
             retry_after = webhook_handler.rate_limiter.get_retry_after()
             logger.warning("Rate limit exceeded from %s", request.remote_addr)
             return jsonify(
@@ -394,3 +409,13 @@ if __name__ == "__main__":
 
     # Run the Flask app
     app.run(host="0.0.0.0", port=5000, debug=False)
+
+
+def main() -> None:
+    """Console script entry point."""
+    initialize_mt5()
+    app.run(
+        host=config_manager.get("WEBHOOK_HOST", "0.0.0.0"),
+        port=config_manager.get("WEBHOOK_PORT", 5000),
+        debug=False,
+    )

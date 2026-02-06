@@ -25,9 +25,10 @@ class MLStrategyValidator:
 
     def __init__(self) -> None:
         """Initialize ML validator and load model if available."""
-        # Initialize MT5 if not already initialized
-        if not mt5.initialize():
-            raise RuntimeError("Failed to initialize MT5")
+        # Initialize MT5 only when available
+        if MT5_AVAILABLE:
+            if not mt5.initialize():
+                raise RuntimeError("Failed to initialize MT5")
 
         self.model = None
         self.feature_names = [
@@ -49,9 +50,8 @@ class MLStrategyValidator:
         logging.info("MLStrategyValidator initialized")
 
     def __del__(self):
-        """Cleanup MT5 connection"""
-        with contextlib.suppress(Exception):
-            if mt5.initialize():  # Check if MT5 is initialized
+        if MT5_AVAILABLE:
+            with contextlib.suppress(Exception):
                 mt5.shutdown()
 
     def _load_model(self) -> None:
@@ -77,6 +77,10 @@ class MLStrategyValidator:
     def extract_features(self, symbol: str) -> dict[str, float]:
         """Extract all required features for ML prediction"""
         try:
+            if not MT5_AVAILABLE:
+                logging.warning("MT5 not available; skipping feature extraction")
+                return {}
+
             # Get price data
             rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, 100)  # type: ignore
             if rates is None or len(rates) < 50:
@@ -231,6 +235,9 @@ class MLStrategyValidator:
     def _train_model_from_history(self, symbol: str, n_days: int) -> dict[str, Any]:
         logging.info(f"Training ML validator for {symbol} using {n_days} days of data")
 
+        if not MT5_AVAILABLE:
+            raise RuntimeError("MT5 not available; cannot train from live history on this platform")
+
         # Get historical data
         rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, n_days * 24)  # type: ignore
         logging.info(f"Requested {n_days * 24} bars, got {len(rates) if rates is not None else 0} bars")
@@ -250,8 +257,8 @@ class MLStrategyValidator:
 
         # We need to align features with labels (labels are shorter due to window)
         for i in range(len(labels)):
-            # Get features using data up to point i
-            temp_rates = rates[:i+50]  # Use data up to current point + buffer
+            # Get features using data up to point i only (avoid look-ahead)
+            temp_rates = rates[: i + 1]
             if len(temp_rates) < 50:
                 continue
 
@@ -262,11 +269,26 @@ class MLStrategyValidator:
             volatility_score = float(self.analyzer.calculate_volatility_score(temp_prices))
             trend_strength = float(self.analyzer.calculate_trend_strength(temp_prices))
 
-            # For simplicity, use fixed indicator values during training
-            adx, di_plus, di_minus = 25.0, 25.0, 25.0
-            channel_position = 0.5
-            atr_normalized = 0.001
-            volume_ratio = 1.0
+            # Compute indicators from historical window (no MT5 dependency)
+            temp_df = self._rates_to_df(temp_rates)
+            adx, di_plus, di_minus, atr = self._calculate_adx_di_atr(temp_df)
+
+            upper_channel = temp_df["high"].rolling(50).max().iloc[-1]
+            lower_channel = temp_df["low"].rolling(50).min().iloc[-1]
+            current_price = temp_df["close"].iloc[-1]
+
+            channel_width = upper_channel - lower_channel
+            channel_position = (
+                (current_price - lower_channel) / channel_width if channel_width > 0 else 0.5
+            )
+
+            atr_normalized = (atr / current_price) if atr and current_price else 0.001
+            if "tick_volume" in temp_df.columns:
+                current_volume = float(temp_df["tick_volume"].iloc[-1])
+                avg_volume = float(temp_df["tick_volume"].iloc[-20:].mean())
+                volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+            else:
+                volume_ratio = 1.0
 
             features = [
                 momentum_score, volatility_score, trend_strength,
@@ -330,6 +352,41 @@ class MLStrategyValidator:
         logging.info(f"Feature Importances: {feature_importance}")
 
         return results
+
+    @staticmethod
+    def _rates_to_df(rates) -> pd.DataFrame:
+        return pd.DataFrame(rates)
+
+    @staticmethod
+    def _calculate_adx_di_atr(df: pd.DataFrame, period: int = 14) -> tuple[float, float, float, float]:
+        """Calculate ADX, +DI, -DI, ATR from historical data."""
+        high_low = df["high"] - df["low"]
+        high_close = np.abs(df["high"] - df["close"].shift())
+        low_close = np.abs(df["low"] - df["close"].shift())
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        atr = tr.ewm(alpha=1 / period, adjust=False).mean()
+
+        up_move = df["high"] - df["high"].shift()
+        down_move = df["low"].shift() - df["low"]
+
+        plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
+        minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
+
+        plus_dm_smooth = pd.Series(plus_dm, index=df.index).ewm(alpha=1 / period, adjust=False).mean()
+        minus_dm_smooth = pd.Series(minus_dm, index=df.index).ewm(alpha=1 / period, adjust=False).mean()
+
+        plus_di = 100 * (plus_dm_smooth / atr.replace(0, np.nan))
+        minus_di = 100 * (minus_dm_smooth / atr.replace(0, np.nan))
+
+        dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, np.nan)
+        adx = dx.ewm(alpha=1 / period, adjust=False).mean()
+
+        adx_val = float(adx.iloc[-1]) if not pd.isna(adx.iloc[-1]) else 25.0
+        plus_val = float(plus_di.iloc[-1]) if not pd.isna(plus_di.iloc[-1]) else 25.0
+        minus_val = float(minus_di.iloc[-1]) if not pd.isna(minus_di.iloc[-1]) else 25.0
+        atr_val = float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else 0.0
+
+        return adx_val, plus_val, minus_val, atr_val
 
 # Backward compatibility
 MLValidator = MLStrategyValidator

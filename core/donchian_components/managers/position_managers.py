@@ -70,6 +70,7 @@ class PositionManager:
             "risk_percent": config_manager.get("RISK_PERCENT", 1.0),
             "max_spread_points": config_manager.get("MAX_SPREAD_POINTS", 20),
             "magic_number": config_manager.get("MAGIC_NUMBER", 123456),
+            "initial_lots": config_manager.get("LOTS", 0.1),
         }
 
     def validate_trading_hours(self) -> bool:

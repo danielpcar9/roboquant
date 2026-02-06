@@ -18,7 +18,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import sys
 # Import consolidated indicators
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from indicators import TechnicalIndicators
 
 logging.basicConfig(
@@ -141,6 +143,8 @@ def backtest_dynamic_stops(
     risk_per_trade: float = 0.01,  # 1% risk per trade
     commission: float = 0.0002,  # 0.02% per side
     slippage: float = 0.0001,  # 0.01%
+    spread: float = 0.0002,  # 0.02% spread
+    execute_on_next_bar: bool = True,
 ) -> dict:
     """
     Run backtest with dynamic ATR-based stops.
@@ -168,14 +172,21 @@ def backtest_dynamic_stops(
     equity_curve = [capital]
     
     for i in range(len(df)):
+        if execute_on_next_bar and i == len(df) - 1:
+            # Can't enter on next bar if we're at the end
+            break
+
         current_close = df["close"].iloc[i]
+        current_open = df["open"].iloc[i]
         current_atr = df["atr"].iloc[i] if not pd.isna(df["atr"].iloc[i]) else 0
         
         if position == 0:
             # Check for new entry signals
             if df["long_signal"].iloc[i] and current_atr > 0:
                 position = 1
-                entry_price = current_close * (1 + slippage)  # Slippage on entry
+                # Enter at next bar open to avoid look-ahead
+                raw_entry = df["open"].iloc[i + 1] if execute_on_next_bar else current_open
+                entry_price = raw_entry * (1 + slippage + spread)
                 
                 # Dynamic stops based on ATR
                 stop_loss = entry_price - (current_atr * atr_sl_multiplier)
@@ -191,7 +202,8 @@ def backtest_dynamic_stops(
                 
             elif df["short_signal"].iloc[i] and current_atr > 0:
                 position = -1
-                entry_price = current_close * (1 - slippage)  # Slippage on entry
+                raw_entry = df["open"].iloc[i + 1] if execute_on_next_bar else current_open
+                entry_price = raw_entry * (1 - slippage - spread)
                 
                 # Dynamic stops based on ATR
                 stop_loss = entry_price + (current_atr * atr_sl_multiplier)
@@ -209,17 +221,21 @@ def backtest_dynamic_stops(
             exit_price = 0
             exit_reason = ""
             
-            # Check stop loss
-            if df["low"].iloc[i] <= stop_loss:
-                exit_price = stop_loss * (1 - slippage)
+            # Check stop loss / take profit (conservative if both hit)
+            low = df["low"].iloc[i]
+            high = df["high"].iloc[i]
+            if low <= stop_loss and high >= take_profit:
+                exit_price = stop_loss * (1 - slippage - spread)
                 exit_reason = "SL"
-            # Check take profit
-            elif df["high"].iloc[i] >= take_profit:
-                exit_price = take_profit * (1 - slippage)
+            elif low <= stop_loss:
+                exit_price = stop_loss * (1 - slippage - spread)
+                exit_reason = "SL"
+            elif high >= take_profit:
+                exit_price = take_profit * (1 - slippage - spread)
                 exit_reason = "TP"
             # Check for reversal signal
             elif df["short_signal"].iloc[i]:
-                exit_price = current_close * (1 - slippage)
+                exit_price = current_close * (1 - slippage - spread)
                 exit_reason = "REVERSE"
                 
             if exit_price > 0:
@@ -242,17 +258,20 @@ def backtest_dynamic_stops(
             exit_price = 0
             exit_reason = ""
             
-            # Check stop loss
-            if df["high"].iloc[i] >= stop_loss:
-                exit_price = stop_loss * (1 + slippage)
+            high = df["high"].iloc[i]
+            low = df["low"].iloc[i]
+            if high >= stop_loss and low <= take_profit:
+                exit_price = stop_loss * (1 + slippage + spread)
                 exit_reason = "SL"
-            # Check take profit
-            elif df["low"].iloc[i] <= take_profit:
-                exit_price = take_profit * (1 + slippage)
+            elif high >= stop_loss:
+                exit_price = stop_loss * (1 + slippage + spread)
+                exit_reason = "SL"
+            elif low <= take_profit:
+                exit_price = take_profit * (1 + slippage + spread)
                 exit_reason = "TP"
             # Check for reversal signal
             elif df["long_signal"].iloc[i]:
-                exit_price = current_close * (1 + slippage)
+                exit_price = current_close * (1 + slippage + spread)
                 exit_reason = "REVERSE"
                 
             if exit_price > 0:
@@ -489,6 +508,28 @@ def optimize_parameters(df: pd.DataFrame) -> dict:
     return best_params
 
 
+def run_adverse_scenarios(df: pd.DataFrame, base_results: dict) -> None:
+    """Run adverse market simulations (higher costs, worse liquidity)."""
+    scenarios = [
+        ("HIGH_VOL_COSTS", {"commission": 0.0004, "slippage": 0.0003, "spread": 0.0004}),
+        ("LOW_LIQUIDITY", {"commission": 0.0003, "slippage": 0.0004, "spread": 0.0006}),
+        ("STRESS_TEST", {"commission": 0.0006, "slippage": 0.0006, "spread": 0.0010}),
+    ]
+
+    for name, params in scenarios:
+        results = backtest_dynamic_stops(
+            df,
+            atr_sl_multiplier=2.0,
+            atr_tp_multiplier=4.0,
+            initial_capital=10000.0,
+            risk_per_trade=0.01,
+            commission=params["commission"],
+            slippage=params["slippage"],
+            spread=params["spread"],
+        )
+        print_results(results, f"{name} SCENARIO")
+
+
 def main():
     """Main execution function."""
     print("=" * 70)
@@ -520,12 +561,17 @@ def main():
         atr_sl_multiplier=2.0,
         atr_tp_multiplier=4.0,
         initial_capital=10000.0,
-        risk_per_trade=0.01
+        risk_per_trade=0.01,
+        execute_on_next_bar=True,
     )
     
     # Print results
     print_results(results, "MAIN BACKTEST RESULTS")
-    
+
+    # Adverse market scenarios
+    print("\n⚠️ Running adverse market scenarios...")
+    run_adverse_scenarios(signals_df, results)
+
     # Compare with no trend filter
     print("\n📊 Comparison: Without trend filter...")
     signals_no_filter = generate_signals(df, require_trend=False)
