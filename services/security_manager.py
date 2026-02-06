@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
@@ -427,7 +428,7 @@ def constant_time_compare(a: str, b: str) -> bool:
     )
 
 
-from collections.abc import Callable
+
 
 
 def ip_whitelist(allowed_ips: list[str]) -> Callable:

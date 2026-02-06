@@ -7,8 +7,7 @@ import logging
 from typing import Optional
 
 # Import MetaTrader5 (official package name)
-from core.mt5_compat import mt5, MT5_AVAILABLE
-
+from core.mt5_compat import mt5
 from services.error_handler import MT5ConnectionError, handle_exception
 from services.security_manager import SecureCredentialManager, sanitize_error_message
 

@@ -2,8 +2,6 @@
 import logging
 from datetime import datetime
 
-# Import MetaTrader5 (official package name)
-from core.mt5_compat import mt5, MT5_AVAILABLE
 from dotenv import load_dotenv
 
 from analysis.post_mortem import log_trade
@@ -16,6 +14,9 @@ from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
 from core.donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator as MarketDataService,
 )
+
+# Import MetaTrader5 (official package name)
+from core.mt5_compat import mt5
 from risk.safety import Safety
 from services.alerts import alert_safety_violation, alert_trade_opened
 

@@ -99,7 +99,8 @@ class NewsFilter:
     def _is_event_time(self, now, event_time_str, event_name):
         """Check if current time is near the specified event time."""
         event_time = datetime.strptime(event_time_str, "%H:%M").time()
-        event_datetime = datetime.combine(now.date(), event_time)
+        # Ensure event_datetime has the same timezone as 'now'
+        event_datetime = datetime.combine(now.date(), event_time).replace(tzinfo=now.tzinfo)
         time_diff = abs((now - event_datetime).total_seconds() / 60)
 
         if time_diff <= self.buffer_minutes:

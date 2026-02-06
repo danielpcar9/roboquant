@@ -2,7 +2,7 @@ import logging
 from datetime import UTC, datetime
 
 # Import MetaTrader5 (official package name)
-from core.mt5_compat import mt5, MT5_AVAILABLE
+from core.mt5_compat import mt5
 
 
 class SessionFilter:

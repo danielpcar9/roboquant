@@ -4,10 +4,11 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-# Import MetaTrader5 (official package name)
-from core.mt5_compat import mt5, MT5_AVAILABLE
 import numpy as np
 import pandas as pd
+
+# Import MetaTrader5 (official package name)
+from core.mt5_compat import mt5
 
 KILL_SWITCH_FILE = os.path.join(os.path.dirname(__file__), "config", "kill_switch.flag")
 

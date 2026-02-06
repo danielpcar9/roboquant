@@ -11,8 +11,9 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from core.mt5_compat import mt5, MT5_AVAILABLE
 import pandas as pd
+
+from core.mt5_compat import mt5
 
 # Configure logging
 logging.basicConfig(

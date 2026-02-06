@@ -7,11 +7,10 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from core.mt5_compat import mt5, MT5_AVAILABLE
-
 from brokers.mt5_core import (
     mt5_performance_monitor as performance_monitor,
 )
+from core.mt5_compat import mt5
 from services.error_handler import retry_with_exponential_backoff, safe_mt5_call
 
 

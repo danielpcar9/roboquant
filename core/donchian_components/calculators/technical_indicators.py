@@ -9,13 +9,12 @@ Extraído de MarketDataService de donchian_strategy.py
 
 import logging
 
-from core.mt5_compat import mt5, MT5_AVAILABLE
-
-from config.config_manager import config_manager
-from utils.decorators import handle_exception, performance_monitor
-
 import numpy as np
 import pandas as pd
+
+from config.config_manager import config_manager
+from core.mt5_compat import mt5
+from utils.decorators import handle_exception, performance_monitor
 
 
 class TechnicalIndicatorsCalculator:

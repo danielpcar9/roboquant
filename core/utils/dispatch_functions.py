@@ -118,7 +118,7 @@ def risk_management_dispatcher(
             False,
             "News event detected, skipping trade execution",
         ),
-        "OUTSIDE_HOURS": lambda data: (False, "Outside trading hours"),
+        "OUTSIDE_HOURS": lambda data: (True, "Trading hours check disabled (24/7 mode)"),
         "ACCOUNT_ERROR": lambda data: (False, "Failed to get account info"),
         "OK": lambda data: (True, "Risk conditions satisfied"),
         "default": lambda data: (True, "Risk check passed"),

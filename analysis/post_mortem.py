@@ -8,12 +8,11 @@ import pandas as pd
 
 # Try to import MT5, but make it optional to avoid issues in environments without MT5
 try:
-    from core.mt5_compat import mt5, MT5_AVAILABLE
-
-    MT5_AVAILABLE = True
+    from core.mt5_compat import MT5_AVAILABLE
+    from core.mt5_compat import mt5
 except ImportError:
-    mt5 = None  # type: ignore
-    MT5_AVAILABLE = False
+    mt5 = None
+    MT5_AVAILABLE = False  # noqa: F811
 
 TRADE_COLUMNS = [
     "timestamp_open",

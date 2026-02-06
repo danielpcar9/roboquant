@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-from core.mt5_compat import mt5, MT5_AVAILABLE
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
+
+from core.mt5_compat import mt5
 
 from ...donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator,

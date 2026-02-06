@@ -1,8 +1,9 @@
 import os
 from datetime import datetime, timedelta
 
-from core.mt5_compat import mt5, MT5_AVAILABLE
 import pytz
+
+from core.mt5_compat import mt5
 
 OUTPUT_PATH = os.path.expanduser(r"C:\Users\edgar\MT5_statement.html")
 DAYS_BACK = int(os.getenv("MT5_EXPORT_DAYS_BACK", "90"))

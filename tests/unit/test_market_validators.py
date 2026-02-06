@@ -53,7 +53,7 @@ class TestMarketValidator:
     def test_is_trading_session_active_outside_hours(
         self, market_validator, mock_config_manager,
     ):
-        """Test de sesión de trading fuera de horas permitidas"""
+        """Test de sesión de trading fuera de horas permitidas (debe ser True en modo 24/7)"""
 
         # Mock configuración para horas restringidas
         with patch.object(
@@ -65,13 +65,12 @@ class TestMarketValidator:
             }.get(key, default),
         ):
             # Mock time para simular hora fuera de rango (10:00 AM)
-            # El código usa datetime.fromtimestamp(time.time())
-            with patch("time.time", return_value=1738749600): # timestamp for 10:00 AM some day
+            with patch("time.time", return_value=1738749600):
                 is_active, message = market_validator.is_trading_session_active()
 
-                assert is_active is False
+                assert is_active is True
                 assert isinstance(message, str)
-                assert "outside" in message.lower()
+                assert "24/7 mode" in message.lower()
 
     def test_check_spread_acceptable_normal_spread(self, market_validator, mock_mt5):
         """Test de verificación de spread aceptable"""

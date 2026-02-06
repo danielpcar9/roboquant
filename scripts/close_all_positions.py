@@ -5,10 +5,9 @@ Script to close all open positions in MetaTrader 5
 
 import logging
 
-from core.mt5_compat import mt5, MT5_AVAILABLE
-
 from brokers.mt5_core import initialize_mt5
 from brokers.mt5_utils import MT5Gateway
+from core.mt5_compat import mt5
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

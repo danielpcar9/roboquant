@@ -17,7 +17,7 @@ sys.path.insert(0, str(project_root))
 @pytest.fixture
 def mock_mt5():
     """Mock de MetaTrader5 para tests"""
-    from core.mt5_compat import mt5, MT5_AVAILABLE
+    from core.mt5_compat import mt5
 
     with patch.object(mt5, "initialize", return_value=True):
         with patch.object(mt5, "terminal_info", return_value=Mock()):

@@ -4,8 +4,6 @@ import logging
 import os
 from datetime import UTC, datetime
 
-# Import MetaTrader5 (official package name)
-from core.mt5_compat import mt5, MT5_AVAILABLE
 from flask import Flask, jsonify, request
 
 # Import consolidated MT5 functions
@@ -19,6 +17,9 @@ from config.config_manager import config_manager
 from core.donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator as MarketDataService,
 )
+
+# Import MetaTrader5 (official package name)
+from core.mt5_compat import mt5
 from services.security_manager import (
     InputValidator,
     RateLimiter,

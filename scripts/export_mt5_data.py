@@ -2,12 +2,13 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-# Import MetaTrader5 (official package name)
-from core.mt5_compat import mt5, MT5_AVAILABLE
 import pandas as pd
 
 # Import consolidated MT5 functions
 from brokers.mt5_core import initialize_mt5, timeframe_to_string
+
+# Import MetaTrader5 (official package name)
+from core.mt5_compat import mt5
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

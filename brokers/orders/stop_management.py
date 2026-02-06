@@ -8,14 +8,13 @@ import itertools
 import logging
 from typing import Any
 
-from core.mt5_compat import mt5, MT5_AVAILABLE
-
 from brokers.mt5_core import (
     mt5_performance_monitor as performance_monitor,
 )
 from brokers.mt5_core import (
     validate_and_adjust_stops,
 )
+from core.mt5_compat import mt5
 from services.error_handler import safe_mt5_call
 
 

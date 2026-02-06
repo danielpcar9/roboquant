@@ -9,14 +9,13 @@ Extraído de RiskCalculator y partes de SessionManager de donchian_strategy.py
 
 import logging
 
-from core.mt5_compat import mt5, MT5_AVAILABLE
-
 from config.config_manager import config_manager
 
 # from core.brokers.mt5_gateway import MT5Gateway  # Comentado temporalmente
 from core.donchian_components.calculators.technical_indicators import (
     TechnicalIndicatorsCalculator,
 )
+from core.mt5_compat import mt5
 from utils.decorators import handle_exception
 
 
@@ -346,19 +345,8 @@ class MarketValidator:
     @handle_exception
     def is_trading_session_active(self) -> tuple[bool, str]:
         """Check if current time is within allowed trading hours"""
-        import datetime
-        import time
-
-        current_time = int(time.time())
-        hour = datetime.datetime.fromtimestamp(current_time).hour
-
-        trading_start = config_manager.get("TRADING_HOUR_START", 0)
-        trading_end = config_manager.get("TRADING_HOUR_END", 23)
-
-        if not (trading_start <= hour <= trading_end):
-            return False, f"Outside trading hours: {hour}:00 (Allowed: {trading_start}-{trading_end})"
-
-        return True, "Trading session active"
+        # Trading hours restriction DISABLED - bot operates 24/7
+        return True, "Trading session active (24/7 mode)"
 
     @handle_exception
     def check_spread(self, symbol: str) -> tuple[bool, str]:

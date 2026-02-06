@@ -164,7 +164,7 @@ def generate_signals(
     trending_mask = (df["adx"] > adx_threshold) & (
         np.maximum(df["plus_di"], df["minus_di"]) >= di_threshold
     )
-    
+
     rsi_long = df["rsi"] > 50
     rsi_short = df["rsi"] < 50
 

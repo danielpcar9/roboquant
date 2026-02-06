@@ -6,7 +6,7 @@ Provides risk-based lot calculation functions
 import logging
 from typing import Any
 
-from core.mt5_compat import mt5, MT5_AVAILABLE
+from core.mt5_compat import mt5
 
 
 def estimate_lots_by_risk(

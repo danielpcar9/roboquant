@@ -17,8 +17,6 @@ import logging
 import os
 import time
 
-from core.mt5_compat import mt5, MT5_AVAILABLE
-
 from brokers.mt5_utils import MT5Gateway
 from config.config_manager import config_manager
 from core.donchian_components.calculators.technical_indicators import (
@@ -32,6 +30,7 @@ from core.donchian_components.validators.risk_market_validators import (
     MarketValidator,
     RiskValidator,
 )
+from core.mt5_compat import mt5
 from core.quant.quantitative_integration import QuantitativeIntegration
 from utils.decorators import handle_exception
 

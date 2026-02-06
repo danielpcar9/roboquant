@@ -8,9 +8,7 @@ Extraído de DonchianStrategy de donchian_strategy.py
 """
 
 import logging
-from datetime import UTC, datetime
-
-from core.mt5_compat import mt5, MT5_AVAILABLE
+from datetime import datetime
 
 from brokers.mt5_core import normalize_volume
 from brokers.mt5_utils import build_and_send_order, estimate_lots_by_risk
@@ -21,6 +19,7 @@ from core.donchian_components.calculators.technical_indicators import (
 )
 from core.donchian_components.validators.risk_market_validators import RiskValidator
 from core.market_regime import market_regime_detector
+from core.mt5_compat import mt5
 from core.utils.dispatch_functions import (
     calculate_stop_loss,
     calculate_take_profit,
@@ -75,19 +74,8 @@ class PositionManager:
 
     def validate_trading_hours(self) -> bool:
         """Check if current time is within trading hours (GMT)"""
-        # Obtener hora UTC correctamente
-        current_hour_utc = datetime.now(UTC).hour
-        current_hour_local = datetime.now().hour
-
-        trading_start = self.config["trading_hour_start"]
-        trading_end = self.config["trading_hour_end"]
-        in_hours = trading_start <= current_hour_utc <= trading_end
-
-        logging.debug(
-            f"México: {current_hour_local}:00 | UTC: {current_hour_utc}:00 | Trading: {trading_start}-{trading_end} UTC | Active: {in_hours}",
-        )
-
-        return in_hours
+        # Trading hours restriction DISABLED - bot operates 24/7
+        return True
 
     def _validate_trade_inputs(self, symbol: str, order_type: str, lots: float, sl_points: float, tp_points: float) -> tuple[bool, str]:
         """Validate trade inputs"""
@@ -267,9 +255,7 @@ class PositionManager:
     @handle_exception
     def validate_market_conditions(self, symbol: str) -> tuple[bool, str]:
         """Validate general market conditions before trading"""
-        # Check if we're in trading hours
-        if not self.validate_trading_hours():
-            return False, "Outside trading hours"
+        # Trading hours check REMOVED - bot operates 24/7
 
         # Check for news events that might affect trading
         if news_filter.is_news_time():
@@ -345,7 +331,6 @@ class PositionManager:
             current_price = pos.price_current
             sl = pos.sl
             tp = pos.tp
-            volume = pos.volume
 
             # Calculate profit in points and ATR
             if pos_type == mt5.POSITION_TYPE_BUY:
